@@ -14,16 +14,62 @@ const Login = () => {
     const checkSession = async () => {
       const { data } = await supabase.auth.getSession();
       if (data.session) {
-        navigate("/");
+        // Verify email domain for existing sessions
+        try {
+          const response = await supabase.functions.invoke('verify-email-domain', {
+            method: 'GET',
+            headers: {
+              Authorization: `Bearer ${data.session.access_token}`
+            }
+          });
+          
+          if (response.error) {
+            // If domain verification fails, sign out the user
+            await supabase.auth.signOut();
+            toast({
+              title: "Access denied",
+              description: "Only @neu.edu.ph email addresses are allowed.",
+              variant: "destructive",
+            });
+          } else {
+            navigate("/");
+          }
+        } catch (error) {
+          console.error("Error verifying email domain:", error);
+          navigate("/");
+        }
       }
     };
     checkSession();
 
     // Set up auth state listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
+      async (event, session) => {
         if (event === "SIGNED_IN" && session) {
-          navigate("/");
+          try {
+            // Verify email domain immediately after sign in
+            const response = await supabase.functions.invoke('verify-email-domain', {
+              method: 'GET',
+              headers: {
+                Authorization: `Bearer ${session.access_token}`
+              }
+            });
+            
+            if (response.error) {
+              // If domain verification fails, sign out the user
+              await supabase.auth.signOut();
+              toast({
+                title: "Access denied",
+                description: "Only @neu.edu.ph email addresses are allowed.",
+                variant: "destructive",
+              });
+            } else {
+              navigate("/");
+            }
+          } catch (error) {
+            console.error("Error verifying email domain:", error);
+            navigate("/");
+          }
         }
       }
     );
