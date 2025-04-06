@@ -9,7 +9,7 @@ import {
 import { User, Session } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/components/ui/use-toast";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 
 type AuthContextType = {
   user: User | null;
@@ -27,6 +27,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
   const navigate = useNavigate();
+  const location = useLocation();
 
   const checkAdminStatus = async (currentSession: Session | null) => {
     if (!currentSession?.user) {
@@ -37,7 +38,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       console.log("Checking admin status for user:", currentSession.user.email);
       
-      // Don't assume NEU email is admin, check the database instead
       const { data: profileData, error: profileError } = await supabase
         .from('profiles')
         .select('role')
@@ -50,15 +50,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return;
       }
       
-      // Set admin status based on the role in the database
       console.log("User role from database:", profileData.role);
       setIsAdmin(profileData.role === 'admin');
       
-      // If it's an NEU email, verify the domain but don't override the role
       if (currentSession.user.email?.endsWith('@neu.edu.ph')) {
         console.log("NEU email detected, verifying domain but preserving role");
         
-        // Using setTimeout to avoid auth deadlock
         setTimeout(() => {
           supabase.functions.invoke('verify-email-domain', {
             method: 'GET',
@@ -79,39 +76,49 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     console.log("Setting up auth context");
     
-    // FIRST check for existing session
+    // First check for existing session
     supabase.auth.getSession().then(({ data: { session } }) => {
       console.log("Initial session check:", session ? "Session found" : "No session");
       setSession(session);
       setUser(session?.user ?? null);
       
       if (session) {
-        checkAdminStatus(session);
+        // Only check admin status if session exists
+        checkAdminStatus(session).then(() => {
+          setIsLoading(false);
+          // Only redirect if on login page and we have a session
+          if (location.pathname === '/login') {
+            navigate('/', { replace: true });
+          }
+        });
       } else {
-        // If no session is found, redirect to login
-        console.log("No session found, redirecting to login page");
-        navigate('/login');
+        setIsLoading(false);
+        // Only redirect to login if not already there and not on initial load
+        if (location.pathname !== '/login' && location.pathname !== '/') {
+          navigate('/login', { replace: true });
+        }
       }
-      
-      setIsLoading(false);
     });
     
-    // THEN set up auth state listener 
+    // Set up auth state listener 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         console.log("Auth state change:", event);
-        setSession(session);
-        setUser(session?.user ?? null);
         
-        if (session) {
+        if (event === 'SIGNED_IN' && session) {
+          setSession(session);
+          setUser(session.user);
           await checkAdminStatus(session);
-        } else {
-          setIsAdmin(false);
-          if (event === 'SIGNED_OUT') {
-            // Explicitly navigate to login page when signed out
-            console.log("User signed out, redirecting to login page");
-            navigate('/login', { replace: true });
+          
+          // Only navigate if on login page
+          if (location.pathname === '/login') {
+            navigate('/', { replace: true });
           }
+        } else if (event === 'SIGNED_OUT') {
+          setUser(null);
+          setSession(null);
+          setIsAdmin(false);
+          navigate('/login', { replace: true });
         }
         
         setIsLoading(false);
@@ -122,11 +129,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.log("Cleaning up auth context");
       subscription.unsubscribe();
     };
-  }, [navigate]);
+  }, [navigate, location.pathname]);
 
   const signOut = async () => {
     try {
-      // First navigate to login page, THEN sign out
+      setIsLoading(true); // Set loading state to prevent multiple clicks
       navigate('/login', { replace: true });
       
       // Delay the actual sign out to ensure navigation happens first
@@ -136,6 +143,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           title: "Signed out",
           description: "You have been successfully signed out.",
         });
+        setIsLoading(false);
       }, 100);
     } catch (error) {
       console.error("Error signing out:", error);
@@ -144,6 +152,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         description: "Failed to sign out. Please try again.",
         variant: "destructive",
       });
+      setIsLoading(false);
     }
   };
 

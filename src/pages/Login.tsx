@@ -4,10 +4,12 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/use-toast";
+import { Loader2 } from "lucide-react";
 
 const Login = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
+  const [initializing, setInitializing] = useState(true);
 
   useEffect(() => {
     // Handle URL hash parameters on page load (OAuth callback)
@@ -22,7 +24,7 @@ const Login = () => {
             console.log("Received session from OAuth callback");
             // If we have a session, clear the hash and navigate to home page
             window.location.hash = '';
-            navigate('/');
+            navigate('/', { replace: true });
           }
         } catch (error) {
           console.error("Error handling hash parameters:", error);
@@ -31,39 +33,34 @@ const Login = () => {
             description: "An error occurred while processing your login",
             variant: "destructive",
           });
-        } finally {
           setLoading(false);
         }
+        return;
       }
+      
+      // Check if user is already logged in
+      const checkSession = async () => {
+        try {
+          const { data } = await supabase.auth.getSession();
+          if (data.session) {
+            console.log("User already has a session");
+            navigate('/', { replace: true });
+            return;
+          }
+        } finally {
+          setInitializing(false);
+        }
+      };
+      
+      await checkSession();
     };
     
     handleHashParameters();
-    
-    // Check if user is already logged in
-    const checkSession = async () => {
-      const { data } = await supabase.auth.getSession();
-      if (data.session) {
-        console.log("User already has a session");
-        navigate('/');
-      }
+
+    // Clean up function
+    return () => {
+      // Cancel any pending operations if component unmounts
     };
-    
-    if (!window.location.hash) {
-      // Only check session if we're not handling hash parameters
-      checkSession();
-    }
-
-    // Set up auth state listener
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        console.log("Auth state change:", event);
-        if (event === "SIGNED_IN" && session) {
-          navigate('/');
-        }
-      }
-    );
-
-    return () => subscription.unsubscribe();
   }, [navigate]);
 
   const handleGoogleLogin = async () => {
@@ -88,6 +85,7 @@ const Login = () => {
           description: error.message,
           variant: "destructive",
         });
+        setLoading(false);
       }
     } catch (error) {
       console.error("Error logging in:", error);
@@ -96,10 +94,20 @@ const Login = () => {
         description: "An unexpected error occurred",
         variant: "destructive",
       });
-    } finally {
       setLoading(false);
     }
   };
+
+  if (initializing) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[rgba(233,233,233,1)]">
+        <div className="flex flex-col items-center gap-2">
+          <Loader2 className="h-8 w-8 animate-spin text-[rgba(49,159,67,1)]" />
+          <p className="text-lg font-medium">Checking login status...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex flex-col items-center bg-[rgba(233,233,233,1)]">
@@ -130,7 +138,14 @@ const Login = () => {
           disabled={loading}
           className="w-full bg-[rgba(49,159,67,1)] hover:bg-[rgba(39,139,57,1)] h-12 text-lg font-semibold"
         >
-          {loading ? "Signing in..." : "Sign in with Google"}
+          {loading ? (
+            <span className="flex items-center">
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" /> 
+              Signing in...
+            </span>
+          ) : (
+            "Sign in with Google"
+          )}
         </Button>
       </div>
     </div>
