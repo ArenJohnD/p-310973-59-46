@@ -23,7 +23,16 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { ChevronUp, ChevronDown, Trash, Plus } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { ChevronUp, ChevronDown, Trash, Plus, FileText } from "lucide-react";
+import { FileUploadManager } from "@/components/FileUploadManager";
 
 interface PolicyCategory {
   id: string;
@@ -32,6 +41,12 @@ interface PolicyCategory {
   display_order: number;
   created_at: string;
   updated_at: string;
+}
+
+interface PolicyDocument {
+  id: string;
+  file_name: string;
+  file_path: string;
 }
 
 interface AdminCategoryTableProps {
@@ -52,6 +67,8 @@ export const AdminCategoryTable = ({
   const [editTitleId, setEditTitleId] = useState<string | null>(null);
   const [newTitle, setNewTitle] = useState("");
   const [newCategoryTitle, setNewCategoryTitle] = useState("");
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
+  const [fileDialogOpen, setFileDialogOpen] = useState(false);
   const navigate = useNavigate();
 
   const handleTitleChange = (id: string, title: string) => {
@@ -98,6 +115,16 @@ export const AdminCategoryTable = ({
     }
   };
 
+  const openFileManager = (categoryId: string) => {
+    setSelectedCategoryId(categoryId);
+    setFileDialogOpen(true);
+  };
+
+  const handleFileDialogClose = () => {
+    setSelectedCategoryId(null);
+    setFileDialogOpen(false);
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center space-x-4 mb-6">
@@ -123,7 +150,7 @@ export const AdminCategoryTable = ({
               <TableHead className="w-[50px]">Order</TableHead>
               <TableHead>Title</TableHead>
               <TableHead className="w-[150px]">Visible</TableHead>
-              <TableHead className="w-[150px]">Actions</TableHead>
+              <TableHead className="w-[220px]">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -199,6 +226,13 @@ export const AdminCategoryTable = ({
                 </TableCell>
                 <TableCell>
                   <div className="flex gap-2">
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => openFileManager(category.id)}
+                    >
+                      <FileText className="h-4 w-4 mr-1" /> Manage Files
+                    </Button>
                     <AlertDialog>
                       <AlertDialogTrigger asChild>
                         <Button variant="destructive" size="sm">
@@ -237,6 +271,30 @@ export const AdminCategoryTable = ({
           </TableBody>
         </Table>
       </div>
+
+      {/* File Management Dialog */}
+      <Dialog open={fileDialogOpen} onOpenChange={setFileDialogOpen}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>
+              Manage Files - {categories.find(c => c.id === selectedCategoryId)?.title}
+            </DialogTitle>
+            <DialogDescription>
+              Upload, view, or delete PDF documents for this category.
+            </DialogDescription>
+          </DialogHeader>
+          
+          {selectedCategoryId && (
+            <div className="py-4">
+              <FileUploadManager 
+                categoryId={selectedCategoryId} 
+                onFileChange={handleFileDialogClose}
+                onCancel={handleFileDialogClose}
+              />
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

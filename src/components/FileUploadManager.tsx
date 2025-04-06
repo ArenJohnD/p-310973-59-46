@@ -1,18 +1,10 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/components/ui/use-toast";
 import { Button } from "@/components/ui/button";
-import { Loader2, Upload, Trash2 } from "lucide-react";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
+import { Loader2, Upload, Trash2, FileText, Download, Eye } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -25,25 +17,67 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 
+interface PolicyDocument {
+  id: string;
+  file_name: string;
+  file_path: string;
+  created_at: string;
+}
+
 interface FileUploadManagerProps {
   categoryId: string;
   onFileChange?: () => void;
+  onCancel?: () => void;
   existingDocument?: {
     id: string;
     file_name: string;
   } | null;
+  showTitle?: boolean;
 }
 
 export function FileUploadManager({ 
   categoryId, 
   onFileChange,
-  existingDocument 
+  onCancel,
+  existingDocument,
+  showTitle = true
 }: FileUploadManagerProps) {
   const { isAdmin } = useAuth();
   const [isUploading, setIsUploading] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [documents, setDocuments] = useState<PolicyDocument[]>([]);
+
+  useEffect(() => {
+    if (categoryId) {
+      fetchDocuments();
+    }
+  }, [categoryId]);
+
+  const fetchDocuments = async () => {
+    try {
+      setIsLoading(true);
+      
+      const { data, error } = await supabase
+        .from('policy_documents')
+        .select('id, file_name, file_path, created_at')
+        .eq('category_id', categoryId)
+        .order('created_at', { ascending: false });
+      
+      if (error) throw error;
+      setDocuments(data || []);
+    } catch (error) {
+      console.error('Error fetching documents:', error);
+      toast({
+        title: "Error",
+        description: "Could not fetch documents",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   if (!isAdmin) {
     return null; // Don't render anything for non-admin users
@@ -108,9 +142,11 @@ export function FileUploadManager({
         description: "Document uploaded successfully",
       });
 
-      // Close dialog and reset state
-      setUploadDialogOpen(false);
+      // Reset state
       setSelectedFile(null);
+      
+      // Refresh document list
+      fetchDocuments();
       
       // Notify parent component
       if (onFileChange) {
@@ -129,9 +165,7 @@ export function FileUploadManager({
     }
   };
 
-  const deleteDocument = async () => {
-    if (!existingDocument) return;
-
+  const deleteDocument = async (documentId: string) => {
     try {
       setIsDeleting(true);
 
@@ -139,7 +173,7 @@ export function FileUploadManager({
       const { data: docData, error: fetchError } = await supabase
         .from('policy_documents')
         .select('file_path')
-        .eq('id', existingDocument.id)
+        .eq('id', documentId)
         .single();
 
       if (fetchError) throw fetchError;
@@ -157,7 +191,7 @@ export function FileUploadManager({
       const { error: dbError } = await supabase
         .from('policy_documents')
         .delete()
-        .eq('id', existingDocument.id);
+        .eq('id', documentId);
 
       if (dbError) throw dbError;
 
@@ -165,6 +199,9 @@ export function FileUploadManager({
         title: "Success",
         description: "Document deleted successfully",
       });
+
+      // Refresh document list
+      fetchDocuments();
 
       // Notify parent component
       if (onFileChange) {
@@ -183,101 +220,142 @@ export function FileUploadManager({
     }
   };
 
+  const viewDocument = async (filePath: string) => {
+    try {
+      const { data, error } = await supabase.storage
+        .from('policy_documents')
+        .createSignedUrl(filePath, 3600); // 1 hour expiry
+        
+      if (error) throw error;
+      
+      if (data?.signedUrl) {
+        window.open(data.signedUrl, '_blank');
+      }
+    } catch (error) {
+      console.error('Error generating document URL:', error);
+      toast({
+        title: "Error",
+        description: "Could not open document",
+        variant: "destructive",
+      });
+    }
+  };
+
   return (
-    <div className="border rounded-md p-4 bg-gray-50 mb-6">
-      <h3 className="text-lg font-medium mb-4">Document Management</h3>
-      {existingDocument ? (
-        <div className="flex flex-col space-y-4">
-          <div className="flex items-center justify-between p-3 bg-white border rounded-md">
-            <div className="flex-1 truncate">
-              <p className="font-medium">{existingDocument.file_name}</p>
-            </div>
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button variant="destructive" size="sm" disabled={isDeleting}>
-                  {isDeleting ? (
+    <div className="border rounded-md p-4 bg-gray-50">
+      {showTitle && <h3 className="text-lg font-medium mb-4">Document Management</h3>}
+      
+      <div className="space-y-4">
+        {/* File input section */}
+        <div className="bg-white border rounded-md p-4">
+          <h4 className="font-medium mb-2">Upload New Document</h4>
+          <div className="flex flex-col gap-3">
+            <input
+              type="file"
+              accept="application/pdf"
+              onChange={handleFileChange}
+              className="border rounded-md p-2"
+            />
+            <div className="flex gap-2">
+              <Button 
+                onClick={uploadFile} 
+                disabled={!selectedFile || isUploading}
+                className="bg-[rgba(49,159,67,1)] hover:bg-[rgba(39,139,57,1)]"
+              >
+                {isUploading ? (
+                  <>
                     <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                  ) : (
-                    <Trash2 className="h-4 w-4 mr-2" />
-                  )}
-                  Delete
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    This will permanently delete the document. This action cannot be undone.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <AlertDialogAction onClick={deleteDocument}>
-                    Delete
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
-          </div>
-          <p className="text-sm text-gray-500">
-            To replace this document, please delete it first and then upload a new one.
-          </p>
-        </div>
-      ) : (
-        <div>
-          <Dialog open={uploadDialogOpen} onOpenChange={setUploadDialogOpen}>
-            <DialogTrigger asChild>
-              <Button className="bg-[rgba(49,159,67,1)] hover:bg-[rgba(39,139,57,1)]">
-                <Upload className="h-4 w-4 mr-2" />
-                Upload PDF Document
+                    Uploading...
+                  </>
+                ) : (
+                  <>
+                    <Upload className="h-4 w-4 mr-2" />
+                    Upload Document
+                  </>
+                )}
               </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Upload Policy Document</DialogTitle>
-                <DialogDescription>
-                  Upload a PDF document for this policy category. 
-                  Only PDF files are accepted.
-                </DialogDescription>
-              </DialogHeader>
-              <div className="grid gap-4 py-4">
-                <div className="grid gap-2">
-                  <label htmlFor="file-upload" className="text-sm font-medium">
-                    Select PDF file
-                  </label>
-                  <input
-                    id="file-upload"
-                    type="file"
-                    accept="application/pdf"
-                    onChange={handleFileChange}
-                    className="border rounded-md p-2"
-                  />
-                  {selectedFile && (
-                    <p className="text-sm text-gray-500">
-                      Selected file: {selectedFile.name} ({Math.round(selectedFile.size / 1024)} KB)
-                    </p>
-                  )}
+              {selectedFile && (
+                <p className="text-sm text-gray-500 my-auto">
+                  Selected: {selectedFile.name} ({Math.round(selectedFile.size / 1024)} KB)
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+        
+        {/* Documents list section */}
+        <div className="bg-white border rounded-md p-4">
+          <h4 className="font-medium mb-2">Existing Documents</h4>
+          
+          {isLoading ? (
+            <div className="flex justify-center py-4">
+              <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
+            </div>
+          ) : documents.length > 0 ? (
+            <div className="space-y-2">
+              {documents.map(doc => (
+                <div key={doc.id} className="flex justify-between items-center p-3 bg-gray-50 border rounded-md">
+                  <div className="flex items-center gap-2">
+                    <FileText className="h-5 w-5 text-gray-600" />
+                    <div className="truncate">
+                      <p className="font-medium truncate max-w-md">{doc.file_name}</p>
+                      <p className="text-xs text-gray-500">
+                        Uploaded: {new Date(doc.created_at).toLocaleDateString()}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={() => viewDocument(doc.file_path)}
+                    >
+                      <Eye className="h-4 w-4 mr-1" /> View
+                    </Button>
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button variant="destructive" size="sm" disabled={isDeleting}>
+                          {isDeleting ? (
+                            <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                          ) : (
+                            <Trash2 className="h-4 w-4 mr-1" />
+                          )}
+                          Delete
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Delete Document</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            Are you sure you want to delete "{doc.file_name}"? This action cannot be undone.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancel</AlertDialogCancel>
+                          <AlertDialogAction
+                            onClick={() => deleteDocument(doc.id)}
+                            className="bg-red-500 hover:bg-red-600"
+                          >
+                            Delete
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  </div>
                 </div>
-                <Button 
-                  onClick={uploadFile} 
-                  disabled={!selectedFile || isUploading}
-                  className="bg-[rgba(49,159,67,1)] hover:bg-[rgba(39,139,57,1)]"
-                >
-                  {isUploading ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                      Uploading...
-                    </>
-                  ) : (
-                    "Upload Document"
-                  )}
-                </Button>
-              </div>
-            </DialogContent>
-          </Dialog>
-          <p className="text-sm text-gray-500 mt-2">
-            No document uploaded for this category yet. Click the button above to upload a PDF document.
-          </p>
+              ))}
+            </div>
+          ) : (
+            <p className="text-gray-500 py-4 text-center">No documents uploaded for this category yet.</p>
+          )}
+        </div>
+      </div>
+      
+      {onCancel && (
+        <div className="mt-4 flex justify-end">
+          <Button variant="outline" onClick={onCancel}>
+            Close
+          </Button>
         </div>
       )}
     </div>

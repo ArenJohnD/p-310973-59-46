@@ -7,7 +7,6 @@ import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/use-toast";
 import { ArrowLeft, Loader2, FileText } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
-import { FileUploadManager } from "@/components/FileUploadManager";
 
 interface PolicyCategory {
   title: string;
@@ -115,18 +114,21 @@ const PDFViewer = () => {
               {isAdmin && (
                 <div className="mt-4">
                   <p className="text-sm text-green-600 bg-green-50 p-2 rounded inline-block">
-                    Admin Mode: You have access to manage documents
+                    Admin Mode: To manage files, go to Admin Dashboard
                   </p>
                 </div>
               )}
             </section>
             
             {isAdmin && (
-              <FileUploadManager 
-                categoryId={id || ''} 
-                onFileChange={fetchData}
-                existingDocument={document}
-              />
+              <div className="mb-4 flex justify-center">
+                <Button 
+                  onClick={() => navigate('/admin')}
+                  className="bg-[rgba(49,159,67,1)] hover:bg-[rgba(39,139,57,1)]"
+                >
+                  Go to Admin Dashboard
+                </Button>
+              </div>
             )}
             
             {pdfUrl ? (
@@ -156,7 +158,7 @@ const PDFViewer = () => {
                   <p className="text-xl font-medium text-gray-700 mb-4">No Document Available</p>
                   <p className="text-gray-500 max-w-md mx-auto">
                     {isAdmin 
-                      ? "Use the upload button above to add a PDF document for this category."
+                      ? "Go to the Admin Dashboard to upload a PDF document for this category."
                       : "There is no document available for this category yet."}
                   </p>
                 </div>
