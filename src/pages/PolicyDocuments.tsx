@@ -217,28 +217,6 @@ const PolicyDocuments = () => {
     else return (bytes / (1024 * 1024)).toFixed(2) + " MB";
   };
 
-  // Function to view a document directly
-  const handleViewDocument = async (document: PolicyDocument) => {
-    try {
-      // Get the public URL for the document
-      const { data } = supabase
-        .storage
-        .from('policy_documents')
-        .getPublicUrl(document.file_path);
-      
-      // Open the document in a new tab
-      window.open(data.publicUrl, '_blank');
-      
-    } catch (error) {
-      console.error("Error viewing document:", error);
-      toast({
-        title: "Error",
-        description: "Failed to open document. Please try again.",
-        variant: "destructive",
-      });
-    }
-  };
-
   return (
     <div className="min-h-screen flex flex-col bg-[rgba(233,233,233,1)]">
       <Header />
@@ -262,7 +240,7 @@ const PolicyDocuments = () => {
                 {category?.title} Documents
               </h1>
               <p className="text-gray-600">
-                {isAdmin ? "Manage policy documents for this category" : "View policy documents for this category"}
+                View and download policy documents for this category
               </p>
             </section>
             
@@ -297,64 +275,40 @@ const PolicyDocuments = () => {
             <section>
               <h2 className="text-xl font-semibold mb-4">Available Documents</h2>
               {documents.length > 0 ? (
-                <ul className="grid grid-cols-1 gap-3">
+                <ul className="space-y-3">
                   {documents.map((document) => (
                     <li 
                       key={document.id}
-                      className="p-4 border rounded-lg hover:bg-gray-50"
+                      className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50"
                     >
-                      {isAdmin ? (
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center">
-                            <FileText className="h-6 w-6 text-gray-500 mr-3" />
-                            <div>
-                              <p className="font-medium">{document.file_name}</p>
-                              <p className="text-sm text-gray-500">
-                                {formatFileSize(document.file_size)} • Added on {new Date(document.created_at).toLocaleDateString()}
-                              </p>
-                            </div>
-                          </div>
-                          <div className="flex space-x-2">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleViewDocument(document)}
-                            >
-                              <FileText className="h-4 w-4 mr-1" /> View
-                            </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleDownloadDocument(document)}
-                            >
-                              <Download className="h-4 w-4 mr-1" /> Download
-                            </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                              onClick={() => handleDeleteDocument(document)}
-                            >
-                              <Trash2 className="h-4 w-4 mr-1" /> Delete
-                            </Button>
-                          </div>
+                      <div className="flex items-center">
+                        <FileText className="h-6 w-6 text-gray-500 mr-3" />
+                        <div>
+                          <p className="font-medium">{document.file_name}</p>
+                          <p className="text-sm text-gray-500">
+                            {formatFileSize(document.file_size)} • Added on {new Date(document.created_at).toLocaleDateString()}
+                          </p>
                         </div>
-                      ) : (
-                        // Simplified view for regular users - just PDF viewer
-                        <button
-                          onClick={() => handleViewDocument(document)}
-                          className="w-full text-left flex items-center p-4 hover:bg-gray-100 rounded-lg transition-colors"
+                      </div>
+                      <div className="flex space-x-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleDownloadDocument(document)}
                         >
-                          <FileText className="h-8 w-8 text-red-500 mr-4" />
-                          <div className="flex-1">
-                            <p className="font-medium text-lg">{document.file_name}</p>
-                            <p className="text-sm text-gray-500">
-                              Click to view • {formatFileSize(document.file_size)}
-                            </p>
-                          </div>
-                          <FileText className="h-5 w-5 text-gray-400" />
-                        </button>
-                      )}
+                          <Download className="h-4 w-4 mr-1" /> Download
+                        </Button>
+                        {isAdmin && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                            onClick={() => handleDeleteDocument(document)}
+                          >
+                            <Trash2 className="h-4 w-4 mr-1" /> Delete
+                          </Button>
+                        )}
+                      </div>
                     </li>
                   ))}
                 </ul>
