@@ -50,48 +50,66 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   return user ? <>{children}</> : null;
 };
 
-// Admin route component
+// Admin route component with immediate redirect
 const AdminRoute = ({ children }: { children: React.ReactNode }) => {
-  const { user, isAdmin, isLoading } = useAuth();
+  const { user, isAdmin, isLoading, refreshAdminStatus } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   
   useEffect(() => {
-    // If not loading and no user, redirect to login
-    if (!isLoading && !user) {
-      navigate('/login', { replace: true, state: { from: location.pathname } });
-    } 
-    // If not loading, has user, but not admin, redirect to home
-    else if (!isLoading && user && !isAdmin) {
-      navigate('/', { replace: true });
+    // Refresh admin status on mount to ensure it's up-to-date
+    refreshAdminStatus();
+    
+    // If not loading and not admin, redirect immediately
+    if (!isLoading) {
+      if (!user) {
+        navigate('/login', { replace: true, state: { from: location.pathname } });
+      } 
+      else if (!isAdmin) {
+        console.log("User is not an admin, redirecting to home");
+        navigate('/', { replace: true });
+        toast({
+          title: "Access denied",
+          description: "You don't have admin privileges",
+          variant: "destructive"
+        });
+      }
     }
-  }, [user, isAdmin, isLoading, navigate, location]);
+  }, [user, isAdmin, isLoading, navigate, location, refreshAdminStatus]);
   
   if (isLoading) {
     return <LoadingPage />;
   }
   
+  // Only render children if user exists and is admin
   return (user && isAdmin) ? <>{children}</> : null;
 };
+
+// Import toast for admin route
+import { toast } from "@/components/ui/use-toast";
 
 // Main App component without routes
 function AppContent() {
   const { isLoading } = useAuth();
   const location = useLocation();
+  const navigate = useNavigate();
   
   // Immediately redirect to login page if at root
   useEffect(() => {
-    if (location.pathname === '/') {
-      const timeout = setTimeout(() => {
-        // Force a refresh if still on loading page after 2 seconds
-        if (document.querySelector('.animate-spin')) {
-          window.location.href = '/login';
-        }
-      }, 2000);
-      
-      return () => clearTimeout(timeout);
-    }
-  }, [location]);
+    const handleInitialNavigation = async () => {
+      if (location.pathname === '/') {
+        // Set a timeout to force navigate to login if still on loading after delay
+        const timeout = setTimeout(() => {
+          console.log("Timeout triggered, navigating to login");
+          navigate('/login', { replace: true });
+        }, 1500);
+        
+        return () => clearTimeout(timeout);
+      }
+    };
+    
+    handleInitialNavigation();
+  }, [location.pathname, navigate]);
 
   return (
     <Suspense fallback={<LoadingPage />}>

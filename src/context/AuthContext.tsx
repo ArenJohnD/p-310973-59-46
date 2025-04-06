@@ -17,6 +17,7 @@ type AuthContextType = {
   isLoading: boolean;
   isAdmin: boolean;
   signOut: () => Promise<void>;
+  refreshAdminStatus: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -38,6 +39,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       console.log("Checking admin status for user:", currentUser.email);
       
+      // Directly query the profiles table
       const { data: profileData, error: profileError } = await supabase
         .from('profiles')
         .select('role')
@@ -51,11 +53,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       
       console.log("User role from database:", profileData?.role);
-      setIsAdmin(profileData?.role === 'admin');
+      
+      // Explicitly set admin status based on role value
+      if (profileData?.role === 'admin') {
+        console.log("User is an admin");
+        setIsAdmin(true);
+      } else {
+        console.log("User is not an admin");
+        setIsAdmin(false);
+      }
     } catch (error) {
       console.error("Error in admin check:", error);
       setIsAdmin(false);
     }
+  };
+
+  const refreshAdminStatus = async () => {
+    await checkAdminStatus(user);
   };
 
   useEffect(() => {
@@ -77,7 +91,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             if (isActive) {
               checkAdminStatus(currentSession.user);
             }
-          }, 0);
+          }, 100);
           
           setIsLoading(false);
         } else if (event === 'SIGNED_OUT') {
@@ -113,7 +127,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             if (isActive) {
               checkAdminStatus(currentSession.user);
             }
-          }, 0);
+          }, 100);
         } 
         
         // Set loading to false regardless of whether session exists
@@ -186,6 +200,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     isLoading,
     isAdmin,
     signOut,
+    refreshAdminStatus,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

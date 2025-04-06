@@ -5,6 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Header } from "@/components/Header";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/use-toast";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ArrowLeft, FileText, Loader2, Upload } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 
@@ -21,7 +22,7 @@ interface PolicyCategory {
 const PDFViewer = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { isAdmin } = useAuth();
+  const { isAdmin, user, refreshAdminStatus } = useAuth();
   const [documents, setDocuments] = useState<PolicyDocument[]>([]);
   const [category, setCategory] = useState<PolicyCategory | null>(null);
   const [loading, setLoading] = useState(true);
@@ -29,6 +30,12 @@ const PDFViewer = () => {
   const [signedUrl, setSignedUrl] = useState<string | null>(null);
   const [urlError, setUrlError] = useState<string | null>(null);
   const [loadAttempt, setLoadAttempt] = useState(0);
+
+  useEffect(() => {
+    // When component mounts, refresh admin status
+    refreshAdminStatus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (!id) return;
@@ -46,6 +53,28 @@ const PDFViewer = () => {
     try {
       setUrlError(null);
       console.log("Getting signed URL for:", filePath);
+      
+      // First check if bucket exists
+      const { data: buckets, error: bucketsError } = await supabase
+        .storage
+        .listBuckets();
+        
+      if (bucketsError) {
+        console.error("Error listing buckets:", bucketsError);
+        setUrlError("Error checking storage buckets.");
+        return;
+      }
+      
+      const policyBucket = buckets.find(bucket => bucket.id === 'policy-documents');
+      if (!policyBucket) {
+        console.error("Policy documents bucket doesn't exist");
+        setUrlError("Storage bucket for policy documents doesn't exist.");
+        return;
+      }
+      
+      console.log("Found policy-documents bucket:", policyBucket.id);
+      
+      // Get signed URL
       const { data, error } = await supabase
         .storage
         .from('policy-documents')
@@ -141,6 +170,13 @@ const PDFViewer = () => {
               <p className="text-gray-600">
                 View policy documents for this category
               </p>
+              {isAdmin && (
+                <div className="mt-4">
+                  <p className="text-sm text-green-600 bg-green-50 p-2 rounded inline-block">
+                    Admin Mode: You have full access to manage documents
+                  </p>
+                </div>
+              )}
             </section>
             
             <div className="flex flex-col lg:flex-row gap-6">
@@ -191,35 +227,40 @@ const PDFViewer = () => {
                     src={signedUrl}
                     className="w-full h-[70vh] rounded-lg"
                     title="PDF Viewer"
+                    onError={() => setUrlError("Failed to load the PDF document")}
                   />
                 ) : selectedDocument && !signedUrl ? (
                   <div className="text-center p-8">
                     {urlError ? (
                       <>
-                        <div className="bg-red-100 text-red-600 p-4 rounded-lg mb-4">
-                          <p className="font-medium">{urlError}</p>
+                        <Alert variant="destructive" className="mb-4">
+                          <AlertDescription>
+                            {urlError}
+                          </AlertDescription>
+                        </Alert>
+                        <div className="mt-4 space-y-4">
+                          <Button 
+                            onClick={handleRetryLoad}
+                            variant="outline"
+                          >
+                            Retry Loading Document
+                          </Button>
+                          
+                          {isAdmin && (
+                            <div className="mt-6">
+                              <p className="text-sm text-gray-600 mb-2">
+                                As an admin, you can try one of the following:
+                              </p>
+                              <Button 
+                                variant="default"
+                                className="bg-[rgba(49,159,67,1)] hover:bg-[rgba(39,139,57,1)]"
+                                onClick={() => navigate('/admin')}
+                              >
+                                Manage Documents
+                              </Button>
+                            </div>
+                          )}
                         </div>
-                        <Button 
-                          onClick={handleRetryLoad}
-                          variant="outline"
-                          className="mt-3"
-                        >
-                          Retry Loading Document
-                        </Button>
-                        {isAdmin && (
-                          <div className="mt-6">
-                            <p className="text-sm text-gray-600 mb-2">
-                              As an admin, you can try one of the following:
-                            </p>
-                            <Button 
-                              variant="default"
-                              className="bg-[rgba(49,159,67,1)] hover:bg-[rgba(39,139,57,1)]"
-                              onClick={() => navigate('/admin')}
-                            >
-                              Manage Documents
-                            </Button>
-                          </div>
-                        )}
                       </>
                     ) : (
                       <>

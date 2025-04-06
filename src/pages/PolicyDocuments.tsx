@@ -5,8 +5,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { Header } from "@/components/Header";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/use-toast";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useAuth } from "@/context/AuthContext";
-import { Loader2 } from "lucide-react";
+import { Loader2, AlertCircle } from "lucide-react";
 
 interface PolicyDocument {
   id: string;
@@ -25,12 +26,20 @@ interface PolicyCategory {
 const PolicyDocuments = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { isAdmin } = useAuth();
+  const { isAdmin, refreshAdminStatus } = useAuth();
   const [policyDoc, setPolicyDoc] = useState<PolicyDocument | null>(null);
   const [category, setCategory] = useState<PolicyCategory | null>(null);
   const [loading, setLoading] = useState(true);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [urlLoading, setUrlLoading] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
+
+  useEffect(() => {
+    // When component mounts, refresh admin status
+    refreshAdminStatus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     const fetchPolicyDoc = async () => {
@@ -77,11 +86,35 @@ const PolicyDocuments = () => {
     };
     
     fetchPolicyDoc();
-  }, [id]);
+  }, [id, retryCount]);
 
   const getSignedUrl = async (filePath: string) => {
     try {
       console.log("Getting signed URL for:", filePath);
+      setLoadError(null);
+      
+      // First check if bucket exists
+      const { data: buckets, error: bucketsError } = await supabase
+        .storage
+        .listBuckets();
+        
+      if (bucketsError) {
+        console.error("Error listing buckets:", bucketsError);
+        setLoadError("Error checking storage buckets.");
+        setUrlLoading(false);
+        return;
+      }
+      
+      const policyBucket = buckets.find(bucket => bucket.id === 'policy-documents');
+      if (!policyBucket) {
+        console.error("Policy documents bucket doesn't exist");
+        setLoadError("Storage bucket for policy documents doesn't exist.");
+        setUrlLoading(false);
+        return;
+      }
+      
+      console.log("Found policy-documents bucket:", policyBucket.id);
+      
       const { data, error } = await supabase
         .storage
         .from('policy-documents')
@@ -89,11 +122,8 @@ const PolicyDocuments = () => {
       
       if (error) {
         console.error("Error getting signed URL:", error);
-        toast({
-          title: "Error",
-          description: "Failed to load document. The file may not exist or you do not have permission to view it.",
-          variant: "destructive",
-        });
+        setLoadError("Failed to load document. The file may not exist or you do not have permission to view it.");
+        setPdfUrl(null);
         setUrlLoading(false);
         return;
       }
@@ -103,12 +133,20 @@ const PolicyDocuments = () => {
       setUrlLoading(false);
     } catch (error) {
       console.error("Exception getting signed URL:", error);
-      toast({
-        title: "Error",
-        description: "An unexpected error occurred",
-        variant: "destructive",
-      });
+      setLoadError("An unexpected error occurred loading the document.");
+      setPdfUrl(null);
       setUrlLoading(false);
+    }
+  };
+
+  const handleRetry = () => {
+    setUrlLoading(true);
+    setRetryCount(prev => prev + 1);
+  };
+
+  const handleViewInFullScreen = () => {
+    if (id) {
+      navigate(`/policy-viewer/${id}`);
     }
   };
 
@@ -137,15 +175,31 @@ const PolicyDocuments = () => {
           <p className="text-black text-xl mt-2">
             {policyDoc ? "View the policy document below" : "No document available for this policy category"}
           </p>
+          {isAdmin && (
+            <div className="mt-4">
+              <p className="text-sm text-green-600 bg-green-50 p-2 rounded inline-block">
+                Admin Mode: You have full access to manage documents
+              </p>
+            </div>
+          )}
         </section>
         
-        <div className="flex justify-center mb-8">
+        <div className="flex justify-center mb-8 gap-4">
           <Button 
             onClick={() => navigate('/')}
-            className="bg-gray-500 hover:bg-gray-600 mr-4"
+            className="bg-gray-500 hover:bg-gray-600"
           >
             Back to Home
           </Button>
+          
+          {policyDoc && (
+            <Button
+              onClick={handleViewInFullScreen}
+              className="bg-blue-600 hover:bg-blue-700"
+            >
+              View Full Screen
+            </Button>
+          )}
           
           {isAdmin && (
             <Button 
@@ -180,12 +234,22 @@ const PolicyDocuments = () => {
                 />
               </div>
             ) : (
-              <div className="text-center p-10 border border-gray-200 rounded-lg">
-                <p className="text-red-500 font-medium mb-2">Failed to load policy document</p>
-                <p className="text-gray-600">The document could not be loaded. It may not exist or there might be permission issues.</p>
+              <div className="text-center p-10 border border-gray-200 rounded-lg w-full max-w-4xl">
+                <Alert variant="destructive" className="mb-6">
+                  <AlertCircle className="h-4 w-4 mr-2" />
+                  <AlertDescription>
+                    {loadError || "Failed to load policy document. The document could not be loaded."}
+                  </AlertDescription>
+                </Alert>
+                
+                <Button onClick={handleRetry} variant="outline" className="mb-4">
+                  Retry Loading Document
+                </Button>
+                
                 {isAdmin && (
-                  <p className="text-sm text-gray-500 mt-4">
+                  <p className="text-sm text-gray-600 mt-4 bg-yellow-50 p-3 rounded border border-yellow-200">
                     As an admin, you can check the document or upload a new one from the Admin Dashboard.
+                    Make sure the file exists in the policy-documents storage bucket.
                   </p>
                 )}
               </div>
