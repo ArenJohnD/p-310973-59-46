@@ -44,7 +44,12 @@ export function ReferenceDocumentManager() {
         .order('created_at', { ascending: false });
       
       if (error) throw error;
-      setDocuments(data || []);
+      
+      if (data) {
+        setDocuments(data);
+      } else {
+        setDocuments([]);
+      }
     } catch (error) {
       console.error('Error fetching documents:', error);
       toast({
@@ -137,7 +142,7 @@ export function ReferenceDocumentManager() {
       setIsDeleting(true);
 
       // 1. Get the file path from database
-      const { data: docData, error: fetchError } = await supabase
+      const { data, error: fetchError } = await supabase
         .from('reference_documents')
         .select('file_path')
         .eq('id', documentId)
@@ -146,10 +151,10 @@ export function ReferenceDocumentManager() {
       if (fetchError) throw fetchError;
 
       // 2. Delete file from storage
-      if (docData?.file_path) {
+      if (data && data.file_path) {
         const { error: storageError } = await supabase.storage
           .from('policy_documents')
-          .remove([docData.file_path]);
+          .remove([data.file_path]);
 
         if (storageError) throw storageError;
       }

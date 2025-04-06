@@ -1,4 +1,3 @@
-
 import { useState, useRef, useEffect } from "react";
 import { Send, Loader2, FileText, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -54,7 +53,7 @@ export const ChatBot = () => {
       
       if (error) throw error;
       
-      if (data && data.length > 0) {
+      if (data) {
         // Fetch the content of each document
         const docsWithContent = await Promise.all(
           data.map(async (doc) => {
