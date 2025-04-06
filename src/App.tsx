@@ -1,3 +1,4 @@
+
 import {
   BrowserRouter,
   Routes,
@@ -10,6 +11,7 @@ import NotFound from "@/pages/NotFound";
 import { AuthProvider } from "@/context/AuthContext";
 import { Toaster } from "@/components/ui/toaster"
 import PolicyDocuments from "@/pages/PolicyDocuments";
+import PDFViewer from "@/pages/PDFViewer";
 
 function App() {
   return (
@@ -20,6 +22,7 @@ function App() {
           <Route path="/login" element={<Login />} />
           <Route path="/admin" element={<Admin />} />
           <Route path="/policy/:id" element={<PolicyDocuments />} />
+          <Route path="/policy-viewer/:id" element={<PDFViewer />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
         <Toaster />
