@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { 
   Table, 
@@ -22,10 +21,16 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Tables } from "@/integrations/supabase/types";
 import { ChevronUp, ChevronDown, Trash, Plus } from "lucide-react";
 
-type PolicyCategory = Tables<"policy_categories">;
+interface PolicyCategory {
+  id: string;
+  title: string;
+  is_active: boolean;
+  display_order: number;
+  created_at: string;
+  updated_at: string;
+}
 
 interface AdminCategoryTableProps {
   categories: PolicyCategory[];

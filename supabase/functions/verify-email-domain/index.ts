@@ -67,6 +67,19 @@ serve(async (req) => {
       );
     }
 
+    // If they have a neu.edu.ph email, set them as admin
+    try {
+      // Use RPC to call the set_user_as_admin function
+      await supabaseClient.rpc('set_user_as_admin', {
+        _email: user.email
+      });
+      
+      console.log(`User ${user.email} has been granted admin privileges`);
+    } catch (adminError) {
+      console.error(`Failed to set user as admin: ${adminError.message}`);
+      // Continue with the flow even if setting admin role fails
+    }
+
     return new Response(
       JSON.stringify({ 
         message: "Email verification successful", 

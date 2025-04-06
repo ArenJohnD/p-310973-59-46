@@ -2,9 +2,15 @@
 import { useEffect, useState } from "react";
 import { PolicyCard } from "./PolicyCard";
 import { supabase } from "@/integrations/supabase/client";
-import { Tables } from "@/integrations/supabase/types";
 
-type PolicyCategory = Tables<"policy_categories">;
+interface PolicyCategory {
+  id: string;
+  title: string;
+  is_active: boolean;
+  display_order: number;
+  created_at: string;
+  updated_at: string;
+}
 
 export const PolicyGrid = () => {
   const [categories, setCategories] = useState<PolicyCategory[]>([]);

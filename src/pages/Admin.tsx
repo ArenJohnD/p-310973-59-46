@@ -1,12 +1,17 @@
-
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/components/ui/use-toast";
 import { Header } from "@/components/Header";
 import { AdminCategoryTable } from "@/components/AdminCategoryTable";
-import { Tables } from "@/integrations/supabase/types";
 
-type PolicyCategory = Tables<"policy_categories">;
+interface PolicyCategory {
+  id: string;
+  title: string;
+  is_active: boolean;
+  display_order: number;
+  created_at: string;
+  updated_at: string;
+}
 
 const Admin = () => {
   const [categories, setCategories] = useState<PolicyCategory[]>([]);
@@ -29,7 +34,7 @@ const Admin = () => {
           return;
         }
 
-        setIsAdmin(data);
+        setIsAdmin(!!data);
         
         if (!data) {
           toast({
@@ -155,7 +160,7 @@ const Admin = () => {
       
       // Update local state
       if (data && data.length > 0) {
-        setCategories([...categories, data[0]]);
+        setCategories([...categories, data[0] as PolicyCategory]);
       }
     } catch (error) {
       console.error("Error creating category:", error);
@@ -229,7 +234,7 @@ const Admin = () => {
               You don't have admin privileges to access this page.
             </p>
             <p className="text-gray-500 mt-2">
-              Only accounts with @admin.neu.edu.ph email addresses can access the admin panel.
+              Only accounts with @neu.edu.ph email addresses can access the admin panel.
             </p>
           </div>
         </main>

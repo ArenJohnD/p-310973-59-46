@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -38,7 +37,7 @@ const Login = () => {
             } else {
               // Clear the hash and navigate to home page
               window.location.hash = '';
-              window.location.href = '/'; // Using direct navigation instead of React Router to ensure a clean state
+              navigate('/');
             }
           }
         } catch (error) {
@@ -78,11 +77,11 @@ const Login = () => {
               variant: "destructive",
             });
           } else {
-            window.location.href = '/'; // Using direct navigation
+            navigate('/');
           }
         } catch (error) {
           console.error("Error verifying email domain:", error);
-          window.location.href = '/';
+          navigate('/');
         }
       }
     };
@@ -114,11 +113,11 @@ const Login = () => {
                 variant: "destructive",
               });
             } else {
-              window.location.href = '/';
+              navigate('/');
             }
           } catch (error) {
             console.error("Error verifying email domain:", error);
-            window.location.href = '/';
+            navigate('/');
           }
         }
       }
@@ -137,7 +136,7 @@ const Login = () => {
             access_type: "offline",
             prompt: "consent",
           },
-          redirectTo: window.location.origin + "/login", // Explicitly add the /login path
+          redirectTo: window.location.origin + "/login",
         },
       });
 

@@ -1,4 +1,3 @@
-
 import { Link } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import {
@@ -26,7 +25,7 @@ export const Header = () => {
           console.error("Error checking admin status:", error);
           return;
         }
-        setIsAdmin(data);
+        setIsAdmin(!!data);
       } catch (error) {
         console.error("Error checking admin status:", error);
       }
