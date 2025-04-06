@@ -29,19 +29,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const checkAdminStatus = async (currentSession: Session | null) => {
-    if (!currentSession?.user) {
+  const checkAdminStatus = async (currentUser: User | null) => {
+    if (!currentUser) {
       setIsAdmin(false);
       return;
     }
 
     try {
-      console.log("Checking admin status for user:", currentSession.user.email);
+      console.log("Checking admin status for user:", currentUser.email);
       
       const { data: profileData, error: profileError } = await supabase
         .from('profiles')
         .select('role')
-        .eq('id', currentSession.user.id)
+        .eq('id', currentUser.id)
         .single();
       
       if (profileError) {
@@ -50,23 +50,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return;
       }
       
-      console.log("User role from database:", profileData.role);
-      setIsAdmin(profileData.role === 'admin');
-      
-      if (currentSession.user.email?.endsWith('@neu.edu.ph')) {
-        console.log("NEU email detected, verifying domain but preserving role");
-        
-        setTimeout(() => {
-          supabase.functions.invoke('verify-email-domain', {
-            method: 'GET',
-            headers: {
-              Authorization: `Bearer ${currentSession.access_token}`
-            }
-          }).catch(error => {
-            console.error("Error verifying email domain:", error);
-          });
-        }, 500);
-      }
+      console.log("User role from database:", profileData?.role);
+      setIsAdmin(profileData?.role === 'admin');
     } catch (error) {
       console.error("Error in admin check:", error);
       setIsAdmin(false);
@@ -77,60 +62,86 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     console.log("Setting up auth context");
     let isActive = true; // Flag to prevent state updates after unmount
     
-    // First check for existing session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (!isActive) return;
-      console.log("Initial session check:", session ? "Session found" : "No session");
-      
-      if (session) {
-        // Only update state if component is still mounted
-        setSession(session);
-        setUser(session?.user ?? null);
-        
-        // Only check admin status if session exists
-        checkAdminStatus(session).then(() => {
-          if (!isActive) return;
-          setIsLoading(false);
-        });
-      } else {
-        setIsLoading(false);
-        // Only redirect to login if not already there and not on initial load
-        if (location.pathname !== '/login' && location.pathname !== '/' && location.pathname !== '/*') {
-          navigate('/login', { replace: true });
-        }
-      }
-    });
-    
-    // Set up auth state listener 
+    // Set up auth state listener first
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
+      async (event, currentSession) => {
         if (!isActive) return;
         console.log("Auth state change:", event);
         
-        if (event === 'SIGNED_IN' && session) {
-          setSession(session);
-          setUser(session.user);
-          await checkAdminStatus(session);
+        if (event === 'SIGNED_IN' && currentSession) {
+          setSession(currentSession);
+          setUser(currentSession.user);
           
-          // Only navigate if on login page
-          if (location.pathname === '/login') {
-            navigate('/', { replace: true });
-          }
+          // Use setTimeout to avoid Supabase auth deadlocks
+          setTimeout(() => {
+            if (isActive) {
+              checkAdminStatus(currentSession.user);
+            }
+          }, 0);
+          
+          setIsLoading(false);
         } else if (event === 'SIGNED_OUT') {
           setUser(null);
           setSession(null);
           setIsAdmin(false);
-          navigate('/login', { replace: true });
+          setIsLoading(false);
+          
+          if (location.pathname !== '/login') {
+            navigate('/login', { replace: true });
+          }
+        } else if (event === 'TOKEN_REFRESHED') {
+          setSession(currentSession);
+          setIsLoading(false);
         }
-        
-        setIsLoading(false);
       }
     );
+    
+    // Then check for existing session
+    const checkSession = async () => {
+      try {
+        const { data: { session: currentSession } } = await supabase.auth.getSession();
+        console.log("Initial session check:", currentSession ? "Session found" : "No session");
+        
+        if (!isActive) return;
+        
+        if (currentSession) {
+          setSession(currentSession);
+          setUser(currentSession.user);
+          
+          // Use setTimeout to avoid Supabase auth deadlocks
+          setTimeout(() => {
+            if (isActive) {
+              checkAdminStatus(currentSession.user);
+            }
+          }, 0);
+        } 
+        
+        // Set loading to false regardless of whether session exists
+        setTimeout(() => {
+          if (isActive) {
+            setIsLoading(false);
+            
+            // If no session and not on login page, redirect
+            if (!currentSession && location.pathname !== '/login' && location.pathname !== '/') {
+              navigate('/login', { replace: true });
+            }
+          }
+        }, 500); // Short delay to prevent redirect flickers
+      } catch (error) {
+        console.error("Error checking session:", error);
+        if (isActive) {
+          setIsLoading(false);
+          navigate('/login', { replace: true });
+        }
+      }
+    };
+    
+    checkSession();
 
     return () => {
       console.log("Cleaning up auth context");
       isActive = false;
-      subscription.unsubscribe();
+      subscription?.unsubscribe();
     };
   }, [navigate, location.pathname]);
 
@@ -142,8 +153,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const { error } = await supabase.auth.signOut();
       if (error) throw error;
       
+      // Clear local state
+      setUser(null);
+      setSession(null);
+      setIsAdmin(false);
+      
       // Force navigation to login and prevent browser back to protected pages
       navigate('/login', { replace: true });
+      
+      // Handle browser history to prevent back navigation
+      window.history.pushState(null, '', '/login');
       
       toast({
         title: "Signed out",

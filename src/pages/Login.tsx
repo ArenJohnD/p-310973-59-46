@@ -47,6 +47,8 @@ const Login = () => {
             navigate('/', { replace: true });
             return;
           }
+        } catch (error) {
+          console.error("Error checking session:", error);
         } finally {
           setInitializing(false);
         }
@@ -55,11 +57,17 @@ const Login = () => {
       await checkSession();
     };
     
+    // Execute immediately, then set a timeout as backup
     handleHashParameters();
+    
+    // Set a timeout to exit initializing state if auth checks take too long
+    const timeout = setTimeout(() => {
+      setInitializing(false);
+    }, 1500);
 
     // Clean up function
     return () => {
-      // Cancel any pending operations if component unmounts
+      clearTimeout(timeout);
     };
   }, [navigate]);
 

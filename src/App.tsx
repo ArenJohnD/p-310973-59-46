@@ -47,7 +47,7 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
     return <LoadingPage />;
   }
   
-  return user ? <>{children}</> : <LoadingPage />;
+  return user ? <>{children}</> : null;
 };
 
 // Admin route component
@@ -71,11 +71,28 @@ const AdminRoute = ({ children }: { children: React.ReactNode }) => {
     return <LoadingPage />;
   }
   
-  return (user && isAdmin) ? <>{children}</> : <LoadingPage />;
+  return (user && isAdmin) ? <>{children}</> : null;
 };
 
 // Main App component without routes
 function AppContent() {
+  const { isLoading } = useAuth();
+  const location = useLocation();
+  
+  // Immediately redirect to login page if at root
+  useEffect(() => {
+    if (location.pathname === '/') {
+      const timeout = setTimeout(() => {
+        // Force a refresh if still on loading page after 2 seconds
+        if (document.querySelector('.animate-spin')) {
+          window.location.href = '/login';
+        }
+      }, 2000);
+      
+      return () => clearTimeout(timeout);
+    }
+  }, [location]);
+
   return (
     <Suspense fallback={<LoadingPage />}>
       <Routes>
