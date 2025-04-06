@@ -137,7 +137,7 @@ const Login = () => {
             access_type: "offline",
             prompt: "consent",
           },
-          redirectTo: window.location.origin,
+          redirectTo: window.location.origin, // Ensure this matches your redirect URI
         },
       });
 
