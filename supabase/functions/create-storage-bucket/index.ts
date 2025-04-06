@@ -16,25 +16,31 @@ serve(async (req: Request) => {
   }
 
   try {
-    const supabaseClient = createClient(
+    // Create a Supabase client with the Admin key
+    const supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
+    console.log("Checking if policy-documents bucket exists...");
+
     // Check if bucket exists
-    const { data: buckets, error: bucketsError } = await supabaseClient
+    const { data: buckets, error: bucketsError } = await supabaseAdmin
       .storage
       .listBuckets();
     
     if (bucketsError) {
+      console.error("Error listing buckets:", bucketsError);
       throw bucketsError;
     }
 
     const policyDocumentsBucket = buckets?.find(bucket => bucket.name === 'policy-documents');
     
     if (!policyDocumentsBucket) {
+      console.log("Bucket does not exist. Creating policy-documents bucket...");
+      
       // Create bucket
-      const { data, error } = await supabaseClient
+      const { data, error } = await supabaseAdmin
         .storage
         .createBucket('policy-documents', {
           public: true,
@@ -42,14 +48,11 @@ serve(async (req: Request) => {
         });
         
       if (error) {
+        console.error("Error creating bucket:", error);
         throw error;
       }
-      
-      // Add policies to allow authenticated users to read
-      await supabaseClient
-        .storage
-        .from('policy-documents')
-        .setPublic();
+
+      console.log("Bucket created successfully:", data);
       
       return new Response(
         JSON.stringify({ message: 'Policy documents bucket created successfully', data }),
@@ -59,6 +62,7 @@ serve(async (req: Request) => {
         }
       );
     } else {
+      console.log("Bucket already exists:", policyDocumentsBucket.name);
       return new Response(
         JSON.stringify({ message: 'Policy documents bucket already exists' }),
         { 
@@ -68,6 +72,7 @@ serve(async (req: Request) => {
       );
     }
   } catch (error) {
+    console.error("Error in create-storage-bucket function:", error);
     return new Response(
       JSON.stringify({ error: error.message }),
       { 

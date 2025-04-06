@@ -55,18 +55,42 @@ export function FileUploadManager({
   // Ensure storage bucket exists
   const ensureStorageBucket = async () => {
     setEnsureBucketLoading(true);
+    setError(null);
+    
     try {
-      const { error } = await supabase.functions.invoke('create-storage-bucket');
+      console.log("Calling create-storage-bucket function...");
+      
+      // Use invoke with a timeout to ensure we don't wait forever
+      const functionPromise = supabase.functions.invoke('create-storage-bucket');
+      
+      // Create a timeout promise
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error("Function call timed out after 10 seconds")), 10000);
+      });
+      
+      // Race between the function call and timeout
+      const { data, error } = await Promise.race([
+        functionPromise,
+        timeoutPromise.then(() => { throw new Error("Timeout exceeded"); })
+      ]) as any;
       
       if (error) {
-        console.error("Error ensuring storage bucket:", error);
-        throw new Error(`Failed to ensure storage bucket: ${error.message}`);
+        console.error("Error from create-storage-bucket function:", error);
+        throw new Error(`Failed to ensure storage bucket: ${error.message || JSON.stringify(error)}`);
       }
       
+      console.log("Create-storage-bucket function response:", data);
       return true;
     } catch (error) {
       console.error("Exception ensuring storage bucket:", error);
       setError(error instanceof Error ? error.message : "Failed to ensure storage bucket exists");
+      
+      toast({
+        title: "Failed to prepare storage",
+        description: "There was an issue setting up the document storage. Please try again.",
+        variant: "destructive",
+      });
+      
       return false;
     } finally {
       setEnsureBucketLoading(false);
