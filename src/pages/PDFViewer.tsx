@@ -24,11 +24,49 @@ const PDFViewer = () => {
   const [category, setCategory] = useState<PolicyCategory | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedDocument, setSelectedDocument] = useState<string | null>(null);
+  const [signedUrl, setSignedUrl] = useState<string | null>(null);
 
   useEffect(() => {
     if (!id) return;
     fetchCategoryAndDocuments();
   }, [id]);
+
+  useEffect(() => {
+    // Get signed URL when selected document changes
+    if (selectedDocument) {
+      getSignedUrl(selectedDocument);
+    }
+  }, [selectedDocument]);
+
+  const getSignedUrl = async (filePath: string) => {
+    try {
+      console.log("Getting signed URL for:", filePath);
+      const { data, error } = await supabase
+        .storage
+        .from('policy-documents')
+        .createSignedUrl(filePath, 3600); // 1 hour expiration
+      
+      if (error) {
+        console.error("Error getting signed URL:", error);
+        toast({
+          title: "Error",
+          description: "Failed to load document URL",
+          variant: "destructive",
+        });
+        return;
+      }
+      
+      console.log("Signed URL created:", data.signedUrl);
+      setSignedUrl(data.signedUrl);
+    } catch (error) {
+      console.error("Exception getting signed URL:", error);
+      toast({
+        title: "Error",
+        description: "An unexpected error occurred",
+        variant: "destructive",
+      });
+    }
+  };
 
   const fetchCategoryAndDocuments = async () => {
     try {
@@ -135,12 +173,17 @@ const PDFViewer = () => {
               
               {/* PDF viewer */}
               <div className="lg:w-3/4 border rounded-lg bg-gray-50 min-h-[70vh] flex justify-center items-center">
-                {selectedDocument ? (
+                {selectedDocument && signedUrl ? (
                   <iframe
-                    src={`${supabase.storage.from('policy_documents').getPublicUrl(selectedDocument).data.publicUrl}#toolbar=0`}
+                    src={signedUrl}
                     className="w-full h-[70vh] rounded-lg"
                     title="PDF Viewer"
                   />
+                ) : selectedDocument && !signedUrl ? (
+                  <div className="text-center">
+                    <Loader2 className="h-12 w-12 text-gray-400 mx-auto mb-3 animate-spin" />
+                    <p className="text-gray-500">Loading document...</p>
+                  </div>
                 ) : (
                   <div className="text-center">
                     <FileText className="h-12 w-12 text-gray-400 mx-auto mb-3" />
