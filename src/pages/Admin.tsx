@@ -4,7 +4,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/components/ui/use-toast";
 import { Header } from "@/components/Header";
 import { AdminCategoryTable } from "@/components/AdminCategoryTable";
+import { ReferenceDocumentManager } from "@/components/ReferenceDocumentManager";
 import { useAuth } from "@/context/AuthContext";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 interface PolicyCategory {
   id: string;
@@ -224,17 +226,28 @@ const Admin = () => {
             Admin Dashboard
           </h1>
           <p className="text-black text-xl mt-2">
-            Manage Policy Categories
+            Manage Policy Categories & AI Reference Documents
           </p>
         </section>
 
-        <AdminCategoryTable 
-          categories={categories}
-          onUpdate={handleCategoryUpdate}
-          onDelete={handleCategoryDelete}
-          onCreate={handleCategoryCreate}
-          onReorder={handleReorderCategories}
-        />
+        <Tabs defaultValue="categories" className="mb-8">
+          <TabsList className="grid w-full max-w-md mx-auto grid-cols-2">
+            <TabsTrigger value="categories">Categories</TabsTrigger>
+            <TabsTrigger value="references">AI Reference Documents</TabsTrigger>
+          </TabsList>
+          <TabsContent value="categories" className="mt-6">
+            <AdminCategoryTable 
+              categories={categories}
+              onUpdate={handleCategoryUpdate}
+              onDelete={handleCategoryDelete}
+              onCreate={handleCategoryCreate}
+              onReorder={handleReorderCategories}
+            />
+          </TabsContent>
+          <TabsContent value="references" className="mt-6">
+            <ReferenceDocumentManager />
+          </TabsContent>
+        </Tabs>
       </main>
     </div>
   );
