@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -33,8 +32,10 @@ const PDFViewer = () => {
   const [loadAttempt, setLoadAttempt] = useState(0);
 
   useEffect(() => {
-    // When component mounts, refresh admin status
     refreshAdminStatus();
+    if (isAdmin) {
+      ensureBucketExists();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -44,7 +45,6 @@ const PDFViewer = () => {
   }, [id, loadAttempt]);
 
   useEffect(() => {
-    // Get signed URL when selected document changes
     if (selectedDocument) {
       getSignedUrl(selectedDocument);
     } else {
@@ -57,7 +57,6 @@ const PDFViewer = () => {
       setUrlError(null);
       console.log("Getting signed URL for:", filePath);
       
-      // First check if bucket exists
       const { data: buckets, error: bucketsError } = await supabase
         .storage
         .listBuckets();
@@ -77,11 +76,10 @@ const PDFViewer = () => {
       
       console.log("Found policy-documents bucket:", policyBucket.id);
       
-      // Get signed URL
       const { data, error } = await supabase
         .storage
         .from('policy-documents')
-        .createSignedUrl(filePath, 3600); // 1 hour expiration
+        .createSignedUrl(filePath, 3600);
       
       if (error) {
         console.error("Error getting signed URL:", error);
@@ -103,7 +101,6 @@ const PDFViewer = () => {
     try {
       setLoading(true);
       
-      // Fetch category information
       const { data: categoryData, error: categoryError } = await supabase
         .from('policy_categories')
         .select('title')
@@ -113,7 +110,6 @@ const PDFViewer = () => {
       if (categoryError) throw categoryError;
       setCategory(categoryData);
       
-      // Fetch documents for this category
       const { data: documentsData, error: documentsError } = await supabase
         .from('policy_documents')
         .select('id, file_name, file_path')
@@ -123,7 +119,6 @@ const PDFViewer = () => {
       if (documentsError) throw documentsError;
       setDocuments(documentsData || []);
 
-      // Automatically select the first document if available
       if (documentsData && documentsData.length > 0) {
         setSelectedDocument(documentsData[0].file_path);
       } else {
@@ -153,8 +148,15 @@ const PDFViewer = () => {
   };
 
   const handleFileChange = () => {
-    // Refresh the document data
     setLoadAttempt(prev => prev + 1);
+  };
+
+  const ensureBucketExists = async () => {
+    try {
+      await supabase.functions.invoke('create-storage-bucket');
+    } catch (error) {
+      console.error("Error ensuring bucket exists:", error);
+    }
   };
 
   return (
@@ -191,7 +193,6 @@ const PDFViewer = () => {
               )}
             </section>
             
-            {/* File Upload Manager (only visible to admins) */}
             {isAdmin && (
               <FileUploadManager 
                 categoryId={id || ''} 
@@ -200,7 +201,6 @@ const PDFViewer = () => {
             )}
             
             <div className="flex flex-col lg:flex-row gap-6">
-              {/* Document list sidebar */}
               <div className="lg:w-1/4">
                 <h2 className="text-xl font-semibold mb-4">Available Documents</h2>
                 {documents.length > 0 ? (
@@ -230,7 +230,6 @@ const PDFViewer = () => {
                 )}
               </div>
               
-              {/* PDF viewer */}
               <div className="lg:w-3/4 border rounded-lg bg-gray-50 min-h-[70vh] flex justify-center items-center">
                 {selectedDocument && signedUrl ? (
                   <iframe

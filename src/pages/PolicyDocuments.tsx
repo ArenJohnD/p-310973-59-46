@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -37,8 +36,10 @@ const PolicyDocuments = () => {
   const [retryCount, setRetryCount] = useState(0);
 
   useEffect(() => {
-    // When component mounts, refresh admin status
     refreshAdminStatus();
+    if (isAdmin) {
+      ensureBucketExists();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -47,7 +48,6 @@ const PolicyDocuments = () => {
       try {
         setLoading(true);
         
-        // Fetch the category information
         const { data: categoryData, error: categoryError } = await supabase
           .from('policy_categories')
           .select('*')
@@ -57,7 +57,6 @@ const PolicyDocuments = () => {
         if (categoryError) throw categoryError;
         setCategory(categoryData);
         
-        // Fetch any associated document for this category
         const { data: documentsData, error: documentsError } = await supabase
           .from('policy_documents')
           .select('*')
@@ -70,7 +69,6 @@ const PolicyDocuments = () => {
         if (documentsData && documentsData.length > 0) {
           setPolicyDoc(documentsData[0]);
           
-          // Get signed URL for the PDF
           setUrlLoading(true);
           getSignedUrl(documentsData[0].file_path);
         } else {
@@ -92,13 +90,20 @@ const PolicyDocuments = () => {
     fetchPolicyDoc();
   }, [id, retryCount]);
 
+  const ensureBucketExists = async () => {
+    try {
+      await supabase.functions.invoke('create-storage-bucket');
+    } catch (error) {
+      console.error("Error ensuring bucket exists:", error);
+    }
+  };
+
   const getSignedUrl = async (filePath: string) => {
     try {
       console.log("Getting signed URL for:", filePath);
       setLoadError(null);
       setUrlLoading(true);
       
-      // First check if bucket exists
       const { data: buckets, error: bucketsError } = await supabase
         .storage
         .listBuckets();
@@ -123,7 +128,7 @@ const PolicyDocuments = () => {
       const { data, error } = await supabase
         .storage
         .from('policy-documents')
-        .createSignedUrl(filePath, 3600); // 1 hour expiration
+        .createSignedUrl(filePath, 3600);
       
       if (error) {
         console.error("Error getting signed URL:", error);
@@ -156,7 +161,6 @@ const PolicyDocuments = () => {
   };
 
   const handleFileChange = () => {
-    // Refresh the document data
     setRetryCount(prev => prev + 1);
   };
 
@@ -221,7 +225,6 @@ const PolicyDocuments = () => {
           )}
         </div>
 
-        {/* File Upload Manager (only visible to admins) */}
         {isAdmin && (
           <FileUploadManager 
             categoryId={id || ''} 

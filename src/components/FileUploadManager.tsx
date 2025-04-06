@@ -27,6 +27,7 @@ export function FileUploadManager({
   const [uploading, setUploading] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [ensureBucketLoading, setEnsureBucketLoading] = useState(false);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
@@ -51,6 +52,27 @@ export function FileUploadManager({
     }
   };
 
+  // Ensure storage bucket exists
+  const ensureStorageBucket = async () => {
+    setEnsureBucketLoading(true);
+    try {
+      const { error } = await supabase.functions.invoke('create-storage-bucket');
+      
+      if (error) {
+        console.error("Error ensuring storage bucket:", error);
+        throw new Error(`Failed to ensure storage bucket: ${error.message}`);
+      }
+      
+      return true;
+    } catch (error) {
+      console.error("Exception ensuring storage bucket:", error);
+      setError(error instanceof Error ? error.message : "Failed to ensure storage bucket exists");
+      return false;
+    } finally {
+      setEnsureBucketLoading(false);
+    }
+  };
+
   const uploadFile = async () => {
     if (!file || !isAdmin || !user) return;
     
@@ -58,23 +80,15 @@ export function FileUploadManager({
     setError(null);
     
     try {
+      // Ensure storage bucket exists before attempting upload
+      const bucketReady = await ensureStorageBucket();
+      if (!bucketReady) {
+        throw new Error("Failed to ensure storage bucket exists");
+      }
+      
       // Generate a unique file path
       const fileExt = file.name.split('.').pop();
       const filePath = `${categoryId}/${Date.now()}.${fileExt}`;
-      
-      // Check if storage bucket exists
-      const { data: buckets, error: bucketsError } = await supabase
-        .storage
-        .listBuckets();
-      
-      if (bucketsError) {
-        throw new Error(`Error checking storage buckets: ${bucketsError.message}`);
-      }
-      
-      const policyBucket = buckets.find(bucket => bucket.id === 'policy-documents');
-      if (!policyBucket) {
-        throw new Error("Storage bucket for policy documents doesn't exist");
-      }
       
       // Upload the file to storage
       const { error: uploadError } = await supabase
@@ -139,7 +153,13 @@ export function FileUploadManager({
     setError(null);
     
     try {
-      // First get the file path
+      // First ensure the bucket exists
+      const bucketReady = await ensureStorageBucket();
+      if (!bucketReady) {
+        throw new Error("Failed to ensure storage bucket exists");
+      }
+      
+      // Get the file path
       const { data: documentData, error: docError } = await supabase
         .from('policy_documents')
         .select('file_path')
@@ -222,9 +242,9 @@ export function FileUploadManager({
               variant="destructive" 
               size="sm"
               onClick={deleteDocument}
-              disabled={deleting}
+              disabled={deleting || ensureBucketLoading}
             >
-              {deleting ? (
+              {deleting || ensureBucketLoading ? (
                 <Loader2 className="h-4 w-4 animate-spin mr-1" />
               ) : (
                 <Trash2 className="h-4 w-4 mr-1" />
@@ -241,17 +261,17 @@ export function FileUploadManager({
               accept=".pdf"
               onChange={handleFileChange}
               className="flex-1"
-              disabled={uploading}
+              disabled={uploading || ensureBucketLoading}
             />
             <Button
               onClick={uploadFile}
-              disabled={!file || uploading}
+              disabled={!file || uploading || ensureBucketLoading}
               className="bg-[rgba(49,159,67,1)] hover:bg-[rgba(39,139,57,1)]"
             >
-              {uploading ? (
+              {uploading || ensureBucketLoading ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                  Uploading...
+                  {uploading ? "Uploading..." : "Preparing..."}
                 </>
               ) : (
                 <>
