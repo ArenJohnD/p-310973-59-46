@@ -19,6 +19,7 @@ const Login = () => {
           if (error) throw error;
           
           if (data.session) {
+            console.log("Received session from OAuth callback, verifying email domain");
             // If we have a session, verify email domain
             const response = await supabase.functions.invoke('verify-email-domain', {
               method: 'GET',
@@ -28,6 +29,7 @@ const Login = () => {
             });
             
             if (response.error) {
+              console.error("Domain verification failed:", response.error);
               // If domain verification fails, sign out the user
               await supabase.auth.signOut();
               toast({
@@ -36,6 +38,7 @@ const Login = () => {
                 variant: "destructive",
               });
             } else {
+              console.log("Domain verification successful", response.data);
               // Clear the hash and navigate to home page
               window.location.hash = '';
               navigate('/');
@@ -60,8 +63,10 @@ const Login = () => {
     const checkSession = async () => {
       const { data } = await supabase.auth.getSession();
       if (data.session) {
+        console.log("User already has a session");
         // Verify email domain for existing sessions
         try {
+          console.log("Verifying email domain for existing session");
           const response = await supabase.functions.invoke('verify-email-domain', {
             method: 'GET',
             headers: {
@@ -70,6 +75,7 @@ const Login = () => {
           });
           
           if (response.error) {
+            console.error("Domain verification failed for existing session:", response.error);
             // If domain verification fails, sign out the user
             await supabase.auth.signOut();
             toast({
@@ -78,6 +84,7 @@ const Login = () => {
               variant: "destructive",
             });
           } else {
+            console.log("Domain verification successful for existing session", response.data);
             navigate('/');
           }
         } catch (error) {
@@ -95,8 +102,10 @@ const Login = () => {
     // Set up auth state listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
+        console.log("Auth state change:", event);
         if (event === "SIGNED_IN" && session) {
           try {
+            console.log("User signed in, verifying email domain");
             // Verify email domain immediately after sign in
             const response = await supabase.functions.invoke('verify-email-domain', {
               method: 'GET',
@@ -106,6 +115,7 @@ const Login = () => {
             });
             
             if (response.error) {
+              console.error("Domain verification failed after sign in:", response.error);
               // If domain verification fails, sign out the user
               await supabase.auth.signOut();
               toast({
@@ -114,6 +124,7 @@ const Login = () => {
                 variant: "destructive",
               });
             } else {
+              console.log("Domain verification successful after sign in", response.data);
               navigate('/');
             }
           } catch (error) {
@@ -130,6 +141,7 @@ const Login = () => {
   const handleGoogleLogin = async () => {
     try {
       setLoading(true);
+      console.log("Initiating Google login");
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
@@ -142,6 +154,7 @@ const Login = () => {
       });
 
       if (error) {
+        console.error("Login failed:", error);
         toast({
           title: "Login failed",
           description: error.message,

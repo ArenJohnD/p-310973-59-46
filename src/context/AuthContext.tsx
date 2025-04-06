@@ -59,14 +59,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (event === 'SIGNED_IN' && session?.user?.email?.endsWith('@neu.edu.ph')) {
           console.log("User signed in with NEU email");
           // Extra check to ensure admin status is applied
-          supabase.functions.invoke('verify-email-domain', {
-            method: 'GET',
-            headers: {
-              Authorization: `Bearer ${session.access_token}`
-            }
-          }).catch(error => {
-            console.error("Error verifying email domain on sign in:", error);
-          });
+          setTimeout(() => { // Using setTimeout to avoid auth deadlock
+            supabase.functions.invoke('verify-email-domain', {
+              method: 'GET',
+              headers: {
+                Authorization: `Bearer ${session.access_token}`
+              }
+            }).catch(error => {
+              console.error("Error verifying email domain on sign in:", error);
+            });
+          }, 500);
         }
       }
     );

@@ -28,46 +28,72 @@ export const Header = () => {
       
       try {
         setIsCheckingAdmin(true);
+        console.log("Checking admin status for user:", user.email);
         
-        // Using direct RPC call to check admin status
+        // First, check if the email is NEU domain
+        if (user.email?.endsWith('@neu.edu.ph')) {
+          console.log("User has NEU email, they should be admin");
+          
+          // Check the profiles table first
+          const { data: profileData, error: profileError } = await supabase
+            .from('profiles')
+            .select('role')
+            .eq('id', user.id)
+            .single();
+            
+          if (profileError) {
+            console.error("Error fetching profile:", profileError);
+          } else {
+            console.log("Profile role:", profileData?.role);
+            if (profileData?.role === 'admin') {
+              setIsAdmin(true);
+              setIsCheckingAdmin(false);
+              return;
+            }
+          }
+          
+          // If we're here, try to ensure admin status through the edge function
+          console.log("Calling verify-email-domain to ensure admin status");
+          const accessToken = (await supabase.auth.getSession()).data.session?.access_token;
+          
+          if (accessToken) {
+            const response = await supabase.functions.invoke('verify-email-domain', {
+              method: 'GET',
+              headers: {
+                Authorization: `Bearer ${accessToken}`
+              }
+            });
+            
+            if (response.error) {
+              console.error("Error calling verify-email-domain:", response.error);
+            } else {
+              console.log("verify-email-domain response:", response.data);
+              
+              // Check if the function reported admin status
+              if (response.data?.admin_status) {
+                setIsAdmin(true);
+                setIsCheckingAdmin(false);
+                return;
+              }
+            }
+          }
+        }
+        
+        // Fall back to directly using the RPC function
+        console.log("Using is_admin RPC as final check");
         const { data, error } = await supabase.rpc('is_admin');
         
         if (error) {
-          console.error("Error checking admin status:", error);
+          console.error("Error checking admin status with RPC:", error);
           toast({
             title: "Error",
-            description: "Failed to verify admin privileges",
+            description: "Failed to verify admin privileges. Please try signing out and in again.",
             variant: "destructive",
           });
           setIsAdmin(false);
         } else {
+          console.log("is_admin RPC result:", data);
           setIsAdmin(!!data);
-          
-          if (data) {
-            console.log("User has admin privileges");
-          } else {
-            console.log("User does not have admin privileges");
-            
-            // If they have neu.edu.ph email but not admin yet, try to set them as admin
-            if (user.email?.endsWith('@neu.edu.ph')) {
-              console.log("User has NEU email, trying to set as admin");
-              
-              // Call the verify-email-domain function to ensure admin role is set
-              const response = await supabase.functions.invoke('verify-email-domain', {
-                method: 'GET',
-                headers: {
-                  Authorization: `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
-                }
-              });
-              
-              if (!response.error) {
-                // Check admin status again
-                const { data: newData } = await supabase.rpc('is_admin');
-                setIsAdmin(!!newData);
-                console.log("Admin status after verification:", !!newData);
-              }
-            }
-          }
         }
       } catch (error) {
         console.error("Error in admin check:", error);
@@ -82,7 +108,6 @@ export const Header = () => {
 
   const handleSignOut = async () => {
     await signOut();
-    // Navigation will be handled by the auth state change listener in AuthContext
   };
 
   return (
@@ -134,9 +159,10 @@ export const Header = () => {
                   />
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-56">
-                  <div className="px-2 py-1.5 text-sm font-medium text-muted-foreground">
+                  <div className="px-2 py-1.5 text-sm font-medium">
                     {user.email}
                     {isCheckingAdmin && <span className="ml-2 text-xs">(checking permissions...)</span>}
+                    {!isCheckingAdmin && isAdmin && <span className="ml-2 text-xs text-green-600">(admin)</span>}
                   </div>
                   
                   <DropdownMenuSeparator />

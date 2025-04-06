@@ -49,6 +49,8 @@ serve(async (req) => {
       );
     }
 
+    console.log("User found:", user.email);
+    
     // Check if the email domain is from neu.edu.ph
     const isNeuEmail = user.email?.endsWith("@neu.edu.ph");
 
@@ -69,6 +71,8 @@ serve(async (req) => {
 
     // If they have a neu.edu.ph email, make sure they are set as admin in the profiles table
     try {
+      console.log(`Setting admin role for ${user.email}`);
+      
       // Check if user exists in profiles
       const { data: profileData, error: profileError } = await supabaseClient
         .from('profiles')
@@ -76,13 +80,11 @@ serve(async (req) => {
         .eq('id', user.id)
         .single();
       
-      if (profileError && profileError.code !== 'PGRST116') {
-        // If there's an error other than "not found"
+      if (profileError) {
         console.error(`Error checking profile: ${profileError.message}`);
-      }
-      
-      if (!profileData) {
+        
         // If profile doesn't exist, create it with admin role
+        console.log(`Creating admin profile for user ${user.email}`);
         const { error: insertError } = await supabaseClient
           .from('profiles')
           .insert({
@@ -93,11 +95,10 @@ serve(async (req) => {
           
         if (insertError) {
           console.error(`Failed to create profile: ${insertError.message}`);
-        } else {
-          console.log(`Created admin profile for user ${user.email}`);
         }
       } else if (profileData.role !== 'admin') {
         // If profile exists but role is not admin, update it
+        console.log(`Updating role to admin for user ${user.email}`);
         const { error: updateError } = await supabaseClient
           .from('profiles')
           .update({ role: 'admin' })
@@ -105,19 +106,31 @@ serve(async (req) => {
           
         if (updateError) {
           console.error(`Failed to update profile role: ${updateError.message}`);
-        } else {
-          console.log(`Updated role to admin for user ${user.email}`);
         }
+      } else {
+        console.log(`User ${user.email} already has admin role`);
+      }
+      
+      // Direct SQL query to ensure admin role is set
+      const { error: rpcError } = await supabaseClient.rpc(
+        'set_user_as_admin',
+        { _email: user.email }
+      );
+      
+      if (rpcError) {
+        console.error(`Error calling set_user_as_admin: ${rpcError.message}`);
+      } else {
+        console.log(`Successfully called set_user_as_admin for ${user.email}`);
       }
     } catch (profileSetError) {
       console.error(`Error setting admin role: ${profileSetError.message}`);
-      // Continue with the flow even if setting admin role fails
     }
 
     return new Response(
       JSON.stringify({ 
         message: "Email verification successful", 
-        user: { id: user.id, email: user.email } 
+        user: { id: user.id, email: user.email },
+        admin_status: true
       }),
       {
         status: 200,
@@ -125,6 +138,7 @@ serve(async (req) => {
       }
     );
   } catch (error) {
+    console.error(`General error: ${error.message}`);
     return new Response(
       JSON.stringify({ error: error.message }),
       {
