@@ -35,13 +35,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       console.log("Checking admin status for user:", currentSession.user.email);
       
-      // Email is from NEU domain
+      // Don't assume NEU email is admin, check the database instead
+      const { data: profileData, error: profileError } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', currentSession.user.id)
+        .single();
+      
+      if (profileError) {
+        console.error("Error fetching user profile:", profileError);
+        setIsAdmin(false);
+        return;
+      }
+      
+      // Set admin status based on the role in the database
+      console.log("User role from database:", profileData.role);
+      setIsAdmin(profileData.role === 'admin');
+      
+      // If it's an NEU email, verify the domain but don't override the role
       if (currentSession.user.email?.endsWith('@neu.edu.ph')) {
-        console.log("NEU email detected, setting admin status to true");
-        setIsAdmin(true);
+        console.log("NEU email detected, verifying domain but preserving role");
         
-        // We'll do a verification anyway to update the database if needed
-        setTimeout(() => { // Using setTimeout to avoid auth deadlock
+        // Using setTimeout to avoid auth deadlock
+        setTimeout(() => {
           supabase.functions.invoke('verify-email-domain', {
             method: 'GET',
             headers: {
@@ -51,19 +67,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             console.error("Error verifying email domain:", error);
           });
         }, 500);
-        
-        return;
-      }
-      
-      // Fall back to using the RPC function
-      const { data, error } = await supabase.rpc('is_admin');
-      
-      if (error) {
-        console.error("Error checking admin status with RPC:", error);
-        setIsAdmin(false);
-      } else {
-        console.log("is_admin RPC result:", data);
-        setIsAdmin(!!data);
       }
     } catch (error) {
       console.error("Error in admin check:", error);

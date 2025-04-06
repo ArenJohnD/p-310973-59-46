@@ -1,22 +1,14 @@
 
-import { useEffect, useState } from "react";
+import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Header } from "@/components/Header";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/use-toast";
 import { useAuth } from "@/context/AuthContext";
-import { 
-  FileText, 
-  Download, 
-  Trash2, 
-  ArrowLeft,
-  Loader2
-} from "lucide-react";
 
 interface PolicyDocument {
   id: string;
-  category_id: string;
   file_name: string;
   file_path: string;
   file_size: number;
@@ -25,6 +17,7 @@ interface PolicyDocument {
 }
 
 interface PolicyCategory {
+  id: string;
   title: string;
 }
 
@@ -32,299 +25,135 @@ const PolicyDocuments = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { isAdmin } = useAuth();
-  const [documents, setDocuments] = useState<PolicyDocument[]>([]);
+  const [policyDoc, setPolicyDoc] = useState<PolicyDocument | null>(null);
   const [category, setCategory] = useState<PolicyCategory | null>(null);
   const [loading, setLoading] = useState(true);
-  const [uploading, setUploading] = useState(false);
+  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!id) return;
-    fetchCategoryAndDocuments();
+    const fetchPolicyDoc = async () => {
+      try {
+        setLoading(true);
+        
+        // Fetch the category information
+        const { data: categoryData, error: categoryError } = await supabase
+          .from('policy_categories')
+          .select('*')
+          .eq('id', id)
+          .single();
+          
+        if (categoryError) throw categoryError;
+        setCategory(categoryData);
+        
+        // Fetch any associated document for this category
+        const { data: documentsData, error: documentsError } = await supabase
+          .from('policy_documents')
+          .select('*')
+          .eq('category_id', id)
+          .order('created_at', { ascending: false })
+          .limit(1);
+          
+        if (documentsError) throw documentsError;
+        
+        if (documentsData && documentsData.length > 0) {
+          setPolicyDoc(documentsData[0]);
+          
+          // Get signed URL for the PDF
+          const { data: urlData, error: urlError } = await supabase
+            .storage
+            .from('policy-documents')
+            .createSignedUrl(documentsData[0].file_path, 3600);
+            
+          if (urlError) throw urlError;
+          setPdfUrl(urlData.signedUrl);
+        }
+      } catch (error) {
+        console.error("Error fetching policy document:", error);
+        toast({
+          title: "Error",
+          description: "Failed to load policy document",
+          variant: "destructive",
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    fetchPolicyDoc();
   }, [id]);
 
-  const fetchCategoryAndDocuments = async () => {
-    try {
-      setLoading(true);
-      
-      // Fetch category information
-      const { data: categoryData, error: categoryError } = await supabase
-        .from('policy_categories')
-        .select('title')
-        .eq('id', id)
-        .single();
-      
-      if (categoryError) throw categoryError;
-      setCategory(categoryData);
-      
-      // Fetch documents for this category
-      const { data: documentsData, error: documentsError } = await supabase
-        .from('policy_documents')
-        .select('*')
-        .eq('category_id', id)
-        .order('created_at', { ascending: false });
-      
-      if (documentsError) throw documentsError;
-      setDocuments(documentsData || []);
-      
-    } catch (error) {
-      console.error("Error fetching data:", error);
-      toast({
-        title: "Error",
-        description: "Failed to load policy documents. Please try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const files = event.target.files;
-    if (!files || files.length === 0) return;
-    
-    try {
-      setUploading(true);
-      
-      for (let i = 0; i < files.length; i++) {
-        const file = files[i];
-        
-        // Validate file type
-        if (file.type !== 'application/pdf') {
-          toast({
-            title: "Invalid file type",
-            description: "Only PDF files are allowed.",
-            variant: "destructive",
-          });
-          continue;
-        }
-        
-        // Upload file to storage
-        const filePath = `${id}/${Date.now()}_${file.name}`;
-        const { error: uploadError } = await supabase.storage
-          .from('policy_documents')
-          .upload(filePath, file);
-        
-        if (uploadError) throw uploadError;
-        
-        // Create database record
-        const { error: insertError } = await supabase
-          .from('policy_documents')
-          .insert({
-            category_id: id,
-            file_name: file.name,
-            file_path: filePath,
-            file_size: file.size,
-            mime_type: file.type,
-            uploaded_by: (await supabase.auth.getUser()).data.user?.id,
-          });
-        
-        if (insertError) throw insertError;
-      }
-      
-      // Refresh document list
-      fetchCategoryAndDocuments();
-      
-      toast({
-        title: "Success",
-        description: "Document(s) uploaded successfully.",
-      });
-      
-    } catch (error) {
-      console.error("Error uploading document:", error);
-      toast({
-        title: "Error",
-        description: "Failed to upload document. Please try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setUploading(false);
-      // Reset file input
-      const fileInput = document.getElementById("file-upload") as HTMLInputElement;
-      if (fileInput) fileInput.value = "";
-    }
-  };
-
-  const handleDeleteDocument = async (document: PolicyDocument) => {
-    if (!confirm(`Are you sure you want to delete "${document.file_name}"?`)) {
-      return;
-    }
-    
-    try {
-      // Delete file from storage
-      const { error: storageError } = await supabase.storage
-        .from('policy_documents')
-        .remove([document.file_path]);
-      
-      if (storageError) throw storageError;
-      
-      // Delete database record
-      const { error: dbError } = await supabase
-        .from('policy_documents')
-        .delete()
-        .eq('id', document.id);
-      
-      if (dbError) throw dbError;
-      
-      // Update local state
-      setDocuments(documents.filter(doc => doc.id !== document.id));
-      
-      toast({
-        title: "Success",
-        description: "Document deleted successfully.",
-      });
-      
-    } catch (error) {
-      console.error("Error deleting document:", error);
-      toast({
-        title: "Error",
-        description: "Failed to delete document. Please try again.",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const handleDownloadDocument = async (document: PolicyDocument) => {
-    try {
-      const { data, error } = await supabase.storage
-        .from('policy_documents')
-        .download(document.file_path);
-      
-      if (error) throw error;
-      
-      // Create download link
-      const url = URL.createObjectURL(data);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = document.file_name;
-      document.body.appendChild(a);
-      a.click();
-      URL.revokeObjectURL(url);
-      document.body.removeChild(a);
-      
-    } catch (error) {
-      console.error("Error downloading document:", error);
-      toast({
-        title: "Error",
-        description: "Failed to download document. Please try again.",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const formatFileSize = (bytes: number) => {
-    if (bytes < 1024) return bytes + " bytes";
-    else if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(2) + " KB";
-    else return (bytes / (1024 * 1024)).toFixed(2) + " MB";
-  };
+  if (loading) {
+    return (
+      <div className="min-h-screen flex flex-col bg-[rgba(233,233,233,1)]">
+        <Header />
+        <main className="bg-white flex-1 mt-[29px] px-20 py-[52px] rounded-[40px_40px_0px_0px] max-md:px-5">
+          <div className="flex justify-center items-center h-64">
+            <p className="text-xl">Loading...</p>
+          </div>
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex flex-col bg-[rgba(233,233,233,1)]">
       <Header />
       <main className="bg-white flex-1 mt-[29px] px-20 py-[52px] rounded-[40px_40px_0px_0px] max-md:px-5">
-        <Button 
-          variant="outline" 
-          onClick={() => navigate('/')}
-          className="mb-6"
-        >
-          <ArrowLeft className="mr-2 h-4 w-4" /> Back to Categories
-        </Button>
+        <section className="text-center mb-8">
+          <h1 className="text-black text-3xl font-bold">
+            {category?.title || "Policy Document"}
+          </h1>
+          <p className="text-black text-xl mt-2">
+            {policyDoc ? "View the policy document below" : "No document available for this policy category"}
+          </p>
+        </section>
         
-        {loading ? (
-          <div className="flex justify-center items-center py-12">
-            <Loader2 className="h-8 w-8 animate-spin text-gray-500" />
+        <div className="flex justify-center mb-8">
+          <Button 
+            onClick={() => navigate('/')}
+            className="bg-gray-500 hover:bg-gray-600 mr-4"
+          >
+            Back to Home
+          </Button>
+          
+          {isAdmin && (
+            <Button 
+              onClick={() => navigate('/admin')}
+              className="bg-[rgba(49,159,67,1)] hover:bg-[rgba(39,139,57,1)]"
+            >
+              Manage in Admin
+            </Button>
+          )}
+        </div>
+
+        {policyDoc ? (
+          <div className="flex flex-col items-center">
+            <div className="mb-6 text-center">
+              <h2 className="text-xl font-semibold mb-2">{policyDoc.file_name}</h2>
+              <p className="text-gray-500">
+                Uploaded on {new Date(policyDoc.created_at).toLocaleDateString()}
+              </p>
+            </div>
+            
+            {pdfUrl && (
+              <div className="w-full max-w-4xl border border-gray-300 rounded-lg overflow-hidden shadow-lg">
+                <iframe
+                  src={pdfUrl}
+                  className="w-full h-[800px]"
+                  title={policyDoc.file_name}
+                />
+              </div>
+            )}
           </div>
         ) : (
-          <>
-            <section className="text-center mb-8">
-              <h1 className="text-black text-3xl font-bold mb-2">
-                {category?.title} Documents
-              </h1>
-              <p className="text-gray-600">
-                View and download policy documents for this category
-              </p>
-            </section>
-            
+          <div className="text-center p-10 border border-gray-200 rounded-lg">
+            <p className="text-gray-600 mb-2">No document has been uploaded for this policy category yet.</p>
             {isAdmin && (
-              <section className="mb-8 p-6 bg-gray-50 rounded-lg">
-                <h2 className="text-lg font-semibold mb-4">Upload New Documents</h2>
-                <div className="flex items-center gap-4">
-                  <input
-                    type="file"
-                    id="file-upload"
-                    accept=".pdf"
-                    multiple
-                    onChange={handleFileUpload}
-                    disabled={uploading}
-                    className="block w-full text-sm text-gray-500
-                      file:mr-4 file:py-2 file:px-4
-                      file:rounded-md file:border-0
-                      file:text-sm file:font-semibold
-                      file:bg-green-50 file:text-green-700
-                      hover:file:bg-green-100"
-                  />
-                  {uploading && (
-                    <Loader2 className="h-5 w-5 animate-spin text-green-600" />
-                  )}
-                </div>
-                <p className="text-xs text-gray-500 mt-2">
-                  Only PDF files are accepted. Maximum file size: 10MB.
-                </p>
-              </section>
+              <p className="text-sm text-gray-500">
+                You can upload a document from the Admin Dashboard.
+              </p>
             )}
-            
-            <section>
-              <h2 className="text-xl font-semibold mb-4">Available Documents</h2>
-              {documents.length > 0 ? (
-                <ul className="space-y-3">
-                  {documents.map((document) => (
-                    <li 
-                      key={document.id}
-                      className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50"
-                    >
-                      <div className="flex items-center">
-                        <FileText className="h-6 w-6 text-gray-500 mr-3" />
-                        <div>
-                          <p className="font-medium">{document.file_name}</p>
-                          <p className="text-sm text-gray-500">
-                            {formatFileSize(document.file_size)} • Added on {new Date(document.created_at).toLocaleDateString()}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex space-x-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleDownloadDocument(document)}
-                        >
-                          <Download className="h-4 w-4 mr-1" /> Download
-                        </Button>
-                        {isAdmin && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                            onClick={() => handleDeleteDocument(document)}
-                          >
-                            <Trash2 className="h-4 w-4 mr-1" /> Delete
-                          </Button>
-                        )}
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <div className="text-center py-10 border rounded-lg bg-gray-50">
-                  <FileText className="h-12 w-12 text-gray-400 mx-auto mb-3" />
-                  <p className="text-gray-500">No documents available for this category.</p>
-                  {isAdmin && (
-                    <p className="text-gray-400 text-sm mt-2">
-                      Upload documents using the form above.
-                    </p>
-                  )}
-                </div>
-              )}
-            </section>
-          </>
+          </div>
         )}
       </main>
     </div>

@@ -69,9 +69,10 @@ serve(async (req) => {
       );
     }
 
-    // If they have a neu.edu.ph email, make sure they are set as admin in the profiles table
+    // If they have a neu.edu.ph email, check their current role in the profiles table
+    // but don't automatically set them as admin
     try {
-      console.log(`Setting admin role for ${user.email}`);
+      console.log(`Checking profile for ${user.email}`);
       
       // First, check if user exists in profiles
       const { data: profileData, error: profileError } = await supabaseClient
@@ -83,7 +84,7 @@ serve(async (req) => {
       if (profileError) {
         console.error(`Error checking profile: ${profileError.message}`);
         
-        // If profile doesn't exist, create it with admin role
+        // If profile doesn't exist, create it with admin role (first time only)
         console.log(`Creating admin profile for user ${user.email}`);
         const { error: insertError } = await supabaseClient
           .from('profiles')
@@ -96,29 +97,25 @@ serve(async (req) => {
         if (insertError) {
           console.error(`Failed to create profile: ${insertError.message}`);
         }
-      } else if (profileData.role !== 'admin') {
-        // If profile exists but role is not admin, update it
-        console.log(`Updating role to admin for user ${user.email}`);
-        const { error: updateError } = await supabaseClient
-          .from('profiles')
-          .update({ role: 'admin' })
-          .eq('id', user.id);
-          
-        if (updateError) {
-          console.error(`Failed to update profile role: ${updateError.message}`);
-        }
       } else {
-        console.log(`User ${user.email} already has admin role`);
+        console.log(`User ${user.email} has role: ${profileData.role}`);
       }
     } catch (profileSetError) {
-      console.error(`Error setting admin role: ${profileSetError.message}`);
+      console.error(`Error with profile check: ${profileSetError.message}`);
     }
+
+    // Get current role to return in response
+    const { data: currentProfile } = await supabaseClient
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .single();
 
     return new Response(
       JSON.stringify({ 
         message: "Email verification successful", 
         user: { id: user.id, email: user.email },
-        admin_status: true
+        admin_status: currentProfile?.role === 'admin'
       }),
       {
         status: 200,
