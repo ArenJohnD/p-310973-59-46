@@ -1,1 +1,5 @@
+
 project_id = "jwxrtvuyerntqiqyqbsz"
+
+[functions.create-storage-bucket]
+verify_jwt = true

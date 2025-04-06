@@ -5,7 +5,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { Header } from "@/components/Header";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/use-toast";
-import { ArrowLeft, FileText, Loader2 } from "lucide-react";
+import { ArrowLeft, FileText, Loader2, Upload } from "lucide-react";
+import { useAuth } from "@/context/AuthContext";
 
 interface PolicyDocument {
   id: string;
@@ -20,11 +21,14 @@ interface PolicyCategory {
 const PDFViewer = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { isAdmin } = useAuth();
   const [documents, setDocuments] = useState<PolicyDocument[]>([]);
   const [category, setCategory] = useState<PolicyCategory | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedDocument, setSelectedDocument] = useState<string | null>(null);
   const [signedUrl, setSignedUrl] = useState<string | null>(null);
+  const [urlError, setUrlError] = useState<string | null>(null);
+  const [loadAttempt, setLoadAttempt] = useState(0);
 
   useEffect(() => {
     if (!id) return;
@@ -36,10 +40,11 @@ const PDFViewer = () => {
     if (selectedDocument) {
       getSignedUrl(selectedDocument);
     }
-  }, [selectedDocument]);
+  }, [selectedDocument, loadAttempt]);
 
   const getSignedUrl = async (filePath: string) => {
     try {
+      setUrlError(null);
       console.log("Getting signed URL for:", filePath);
       const { data, error } = await supabase
         .storage
@@ -48,11 +53,8 @@ const PDFViewer = () => {
       
       if (error) {
         console.error("Error getting signed URL:", error);
-        toast({
-          title: "Error",
-          description: "Failed to load document URL",
-          variant: "destructive",
-        });
+        setUrlError("Failed to load document. The file may not exist or you do not have permission to view it.");
+        setSignedUrl(null);
         return;
       }
       
@@ -60,11 +62,8 @@ const PDFViewer = () => {
       setSignedUrl(data.signedUrl);
     } catch (error) {
       console.error("Exception getting signed URL:", error);
-      toast({
-        title: "Error",
-        description: "An unexpected error occurred",
-        variant: "destructive",
-      });
+      setUrlError("An unexpected error occurred while loading the document.");
+      setSignedUrl(null);
     }
   };
 
@@ -111,6 +110,10 @@ const PDFViewer = () => {
 
   const handleViewDocument = async (filePath: string) => {
     setSelectedDocument(filePath);
+  };
+
+  const handleRetryLoad = () => {
+    setLoadAttempt(prev => prev + 1);
   };
 
   return (
@@ -167,6 +170,16 @@ const PDFViewer = () => {
                   <div className="text-center py-8 border rounded-lg bg-gray-50">
                     <FileText className="h-8 w-8 text-gray-400 mx-auto mb-2" />
                     <p className="text-gray-500">No documents available.</p>
+                    {isAdmin && (
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => navigate(`/admin`)}
+                        className="mt-3"
+                      >
+                        <Upload className="h-4 w-4 mr-1" /> Upload Documents
+                      </Button>
+                    )}
                   </div>
                 )}
               </div>
@@ -180,9 +193,40 @@ const PDFViewer = () => {
                     title="PDF Viewer"
                   />
                 ) : selectedDocument && !signedUrl ? (
-                  <div className="text-center">
-                    <Loader2 className="h-12 w-12 text-gray-400 mx-auto mb-3 animate-spin" />
-                    <p className="text-gray-500">Loading document...</p>
+                  <div className="text-center p-8">
+                    {urlError ? (
+                      <>
+                        <div className="bg-red-100 text-red-600 p-4 rounded-lg mb-4">
+                          <p className="font-medium">{urlError}</p>
+                        </div>
+                        <Button 
+                          onClick={handleRetryLoad}
+                          variant="outline"
+                          className="mt-3"
+                        >
+                          Retry Loading Document
+                        </Button>
+                        {isAdmin && (
+                          <div className="mt-6">
+                            <p className="text-sm text-gray-600 mb-2">
+                              As an admin, you can try one of the following:
+                            </p>
+                            <Button 
+                              variant="default"
+                              className="bg-[rgba(49,159,67,1)] hover:bg-[rgba(39,139,57,1)]"
+                              onClick={() => navigate('/admin')}
+                            >
+                              Manage Documents
+                            </Button>
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <>
+                        <Loader2 className="h-12 w-12 text-gray-400 mx-auto mb-3 animate-spin" />
+                        <p className="text-gray-500">Loading document...</p>
+                      </>
+                    )}
                   </div>
                 ) : (
                   <div className="text-center">

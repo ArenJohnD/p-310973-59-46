@@ -4,11 +4,12 @@ import {
   Routes,
   Route,
   Navigate,
+  useNavigate,
+  useLocation
 } from "react-router-dom";
-import { Suspense, lazy } from "react";
-import { AuthProvider } from "@/context/AuthContext";
+import { Suspense, lazy, useEffect } from "react";
+import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { Toaster } from "@/components/ui/toaster";
-import { useAuth } from "@/context/AuthContext";
 import { Loader2 } from "lucide-react";
 
 // Lazy load pages for better performance
@@ -32,35 +33,45 @@ const LoadingPage = () => (
 // Protected route component
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { user, isLoading } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
+  
+  useEffect(() => {
+    // If not loading and no user, redirect to login
+    if (!isLoading && !user) {
+      navigate('/login', { replace: true, state: { from: location.pathname } });
+    }
+  }, [user, isLoading, navigate, location]);
   
   if (isLoading) {
     return <LoadingPage />;
   }
   
-  if (!user) {
-    return <Navigate to="/login" replace />;
-  }
-  
-  return <>{children}</>;
+  return user ? <>{children}</> : <LoadingPage />;
 };
 
 // Admin route component
 const AdminRoute = ({ children }: { children: React.ReactNode }) => {
   const { user, isAdmin, isLoading } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
+  
+  useEffect(() => {
+    // If not loading and no user, redirect to login
+    if (!isLoading && !user) {
+      navigate('/login', { replace: true, state: { from: location.pathname } });
+    } 
+    // If not loading, has user, but not admin, redirect to home
+    else if (!isLoading && user && !isAdmin) {
+      navigate('/', { replace: true });
+    }
+  }, [user, isAdmin, isLoading, navigate, location]);
   
   if (isLoading) {
     return <LoadingPage />;
   }
   
-  if (!user) {
-    return <Navigate to="/login" replace />;
-  }
-  
-  if (!isAdmin) {
-    return <Navigate to="/" replace />;
-  }
-  
-  return <>{children}</>;
+  return (user && isAdmin) ? <>{children}</> : <LoadingPage />;
 };
 
 // Main App component without routes

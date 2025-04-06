@@ -75,26 +75,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     console.log("Setting up auth context");
+    let isActive = true; // Flag to prevent state updates after unmount
     
     // First check for existing session
     supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!isActive) return;
       console.log("Initial session check:", session ? "Session found" : "No session");
-      setSession(session);
-      setUser(session?.user ?? null);
       
       if (session) {
+        // Only update state if component is still mounted
+        setSession(session);
+        setUser(session?.user ?? null);
+        
         // Only check admin status if session exists
         checkAdminStatus(session).then(() => {
+          if (!isActive) return;
           setIsLoading(false);
-          // Only redirect if on login page and we have a session
-          if (location.pathname === '/login') {
-            navigate('/', { replace: true });
-          }
         });
       } else {
         setIsLoading(false);
         // Only redirect to login if not already there and not on initial load
-        if (location.pathname !== '/login' && location.pathname !== '/') {
+        if (location.pathname !== '/login' && location.pathname !== '/' && location.pathname !== '/*') {
           navigate('/login', { replace: true });
         }
       }
@@ -103,6 +104,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Set up auth state listener 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
+        if (!isActive) return;
         console.log("Auth state change:", event);
         
         if (event === 'SIGNED_IN' && session) {
@@ -127,24 +129,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     return () => {
       console.log("Cleaning up auth context");
+      isActive = false;
       subscription.unsubscribe();
     };
   }, [navigate, location.pathname]);
 
   const signOut = async () => {
     try {
-      setIsLoading(true); // Set loading state to prevent multiple clicks
+      setIsLoading(true);
+      
+      // Clear the session and redirect to login page
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
+      
+      // Force navigation to login and prevent browser back to protected pages
       navigate('/login', { replace: true });
       
-      // Delay the actual sign out to ensure navigation happens first
-      setTimeout(async () => {
-        await supabase.auth.signOut();
-        toast({
-          title: "Signed out",
-          description: "You have been successfully signed out.",
-        });
-        setIsLoading(false);
-      }, 100);
+      toast({
+        title: "Signed out",
+        description: "You have been successfully signed out.",
+      });
     } catch (error) {
       console.error("Error signing out:", error);
       toast({
@@ -152,6 +156,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         description: "Failed to sign out. Please try again.",
         variant: "destructive",
       });
+    } finally {
       setIsLoading(false);
     }
   };
