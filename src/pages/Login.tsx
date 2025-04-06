@@ -10,6 +10,52 @@ const Login = () => {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
+    // Handle URL hash parameters on page load (OAuth callback)
+    const handleHashParameters = async () => {
+      if (window.location.hash) {
+        setLoading(true);
+        try {
+          const { data, error } = await supabase.auth.getSession();
+          if (error) throw error;
+          
+          if (data.session) {
+            // If we have a session, verify email domain
+            const response = await supabase.functions.invoke('verify-email-domain', {
+              method: 'GET',
+              headers: {
+                Authorization: `Bearer ${data.session.access_token}`
+              }
+            });
+            
+            if (response.error) {
+              // If domain verification fails, sign out the user
+              await supabase.auth.signOut();
+              toast({
+                title: "Access denied",
+                description: "Only @neu.edu.ph email addresses are allowed.",
+                variant: "destructive",
+              });
+            } else {
+              // Clear the hash and navigate to home page
+              window.location.hash = '';
+              navigate("/");
+            }
+          }
+        } catch (error) {
+          console.error("Error handling hash parameters:", error);
+          toast({
+            title: "Login error",
+            description: "An error occurred while processing your login",
+            variant: "destructive",
+          });
+        } finally {
+          setLoading(false);
+        }
+      }
+    };
+    
+    handleHashParameters();
+    
     // Check if user is already logged in
     const checkSession = async () => {
       const { data } = await supabase.auth.getSession();
@@ -40,7 +86,11 @@ const Login = () => {
         }
       }
     };
-    checkSession();
+    
+    if (!window.location.hash) {
+      // Only check session if we're not handling hash parameters
+      checkSession();
+    }
 
     // Set up auth state listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
