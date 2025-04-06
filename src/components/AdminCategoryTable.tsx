@@ -1,5 +1,6 @@
 
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { 
   Table, 
   TableBody, 
@@ -22,7 +23,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { ChevronUp, ChevronDown, Trash, Plus } from "lucide-react";
+import { ChevronUp, ChevronDown, Trash, Plus, FilePlus } from "lucide-react";
 
 interface PolicyCategory {
   id: string;
@@ -51,6 +52,7 @@ export const AdminCategoryTable = ({
   const [editTitleId, setEditTitleId] = useState<string | null>(null);
   const [newTitle, setNewTitle] = useState("");
   const [newCategoryTitle, setNewCategoryTitle] = useState("");
+  const navigate = useNavigate();
 
   const handleTitleChange = (id: string, title: string) => {
     const category = categories.find(c => c.id === id);
@@ -96,6 +98,10 @@ export const AdminCategoryTable = ({
     }
   };
 
+  const handleManageDocuments = (categoryId: string) => {
+    navigate(`/policy/${categoryId}`);
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center space-x-4 mb-6">
@@ -121,7 +127,7 @@ export const AdminCategoryTable = ({
               <TableHead className="w-[50px]">Order</TableHead>
               <TableHead>Title</TableHead>
               <TableHead className="w-[150px]">Visible</TableHead>
-              <TableHead className="w-[150px]">Actions</TableHead>
+              <TableHead className="w-[250px]">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -196,30 +202,41 @@ export const AdminCategoryTable = ({
                   />
                 </TableCell>
                 <TableCell>
-                  <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                      <Button variant="destructive" size="sm">
-                        <Trash className="h-4 w-4 mr-1" /> Delete
-                      </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-                        <AlertDialogDescription>
-                          This will permanently delete the "{category.title}" category. This action cannot be undone.
-                        </AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction
-                          onClick={() => onDelete(category.id)}
-                          className="bg-red-500 hover:bg-red-600"
-                        >
-                          Delete
-                        </AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
+                  <div className="flex gap-2">
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => handleManageDocuments(category.id)}
+                      className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                    >
+                      <FilePlus className="h-4 w-4 mr-1" /> Manage Files
+                    </Button>
+                    
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button variant="destructive" size="sm">
+                          <Trash className="h-4 w-4 mr-1" /> Delete
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            This will permanently delete the "{category.title}" category and all associated documents. This action cannot be undone.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancel</AlertDialogCancel>
+                          <AlertDialogAction
+                            onClick={() => onDelete(category.id)}
+                            className="bg-red-500 hover:bg-red-600"
+                          >
+                            Delete
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  </div>
                 </TableCell>
               </TableRow>
             ))}
