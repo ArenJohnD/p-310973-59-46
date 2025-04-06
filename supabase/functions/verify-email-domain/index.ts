@@ -67,16 +67,50 @@ serve(async (req) => {
       );
     }
 
-    // If they have a neu.edu.ph email, set them as admin
+    // If they have a neu.edu.ph email, make sure they are set as admin in the profiles table
     try {
-      // Use RPC to call the set_user_as_admin function
-      await supabaseClient.rpc('set_user_as_admin', {
-        _email: user.email
-      });
+      // Check if user exists in profiles
+      const { data: profileData, error: profileError } = await supabaseClient
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .single();
       
-      console.log(`User ${user.email} has been granted admin privileges`);
-    } catch (adminError) {
-      console.error(`Failed to set user as admin: ${adminError.message}`);
+      if (profileError && profileError.code !== 'PGRST116') {
+        // If there's an error other than "not found"
+        console.error(`Error checking profile: ${profileError.message}`);
+      }
+      
+      if (!profileData) {
+        // If profile doesn't exist, create it with admin role
+        const { error: insertError } = await supabaseClient
+          .from('profiles')
+          .insert({
+            id: user.id,
+            email: user.email,
+            role: 'admin'
+          });
+          
+        if (insertError) {
+          console.error(`Failed to create profile: ${insertError.message}`);
+        } else {
+          console.log(`Created admin profile for user ${user.email}`);
+        }
+      } else if (profileData.role !== 'admin') {
+        // If profile exists but role is not admin, update it
+        const { error: updateError } = await supabaseClient
+          .from('profiles')
+          .update({ role: 'admin' })
+          .eq('id', user.id);
+          
+        if (updateError) {
+          console.error(`Failed to update profile role: ${updateError.message}`);
+        } else {
+          console.log(`Updated role to admin for user ${user.email}`);
+        }
+      }
+    } catch (profileSetError) {
+      console.error(`Error setting admin role: ${profileSetError.message}`);
       // Continue with the flow even if setting admin role fails
     }
 

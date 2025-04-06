@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { PolicyCard } from "./PolicyCard";
 import { supabase } from "@/integrations/supabase/client";
+import { toast } from "@/components/ui/use-toast";
 
 interface PolicyCategory {
   id: string;
@@ -20,16 +21,28 @@ export const PolicyGrid = () => {
     const fetchCategories = async () => {
       try {
         setLoading(true);
+        console.log("Fetching policy categories");
+        
         const { data, error } = await supabase
           .from('policy_categories')
           .select('*')
           .eq('is_active', true)
           .order('display_order', { ascending: true });
 
-        if (error) throw error;
+        if (error) {
+          console.error("Error fetching policy categories:", error);
+          throw error;
+        }
+        
+        console.log("Retrieved categories:", data?.length);
         setCategories(data || []);
       } catch (error) {
         console.error("Error fetching policy categories:", error);
+        toast({
+          title: "Error",
+          description: "Failed to load policy categories. Please try again.",
+          variant: "destructive",
+        });
       } finally {
         setLoading(false);
       }

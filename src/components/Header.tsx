@@ -1,3 +1,4 @@
+
 import { Link } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import {
@@ -10,24 +11,69 @@ import {
 import { LogOut, Settings } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useState, useEffect } from "react";
+import { toast } from "@/components/ui/use-toast";
 
 export const Header = () => {
   const { user, signOut } = useAuth();
   const [isAdmin, setIsAdmin] = useState(false);
+  const [isCheckingAdmin, setIsCheckingAdmin] = useState(true);
 
   useEffect(() => {
     const checkAdminStatus = async () => {
-      if (!user) return;
+      if (!user) {
+        setIsAdmin(false);
+        setIsCheckingAdmin(false);
+        return;
+      }
       
       try {
+        setIsCheckingAdmin(true);
+        
+        // Using direct RPC call to check admin status
         const { data, error } = await supabase.rpc('is_admin');
+        
         if (error) {
           console.error("Error checking admin status:", error);
-          return;
+          toast({
+            title: "Error",
+            description: "Failed to verify admin privileges",
+            variant: "destructive",
+          });
+          setIsAdmin(false);
+        } else {
+          setIsAdmin(!!data);
+          
+          if (data) {
+            console.log("User has admin privileges");
+          } else {
+            console.log("User does not have admin privileges");
+            
+            // If they have neu.edu.ph email but not admin yet, try to set them as admin
+            if (user.email?.endsWith('@neu.edu.ph')) {
+              console.log("User has NEU email, trying to set as admin");
+              
+              // Call the verify-email-domain function to ensure admin role is set
+              const response = await supabase.functions.invoke('verify-email-domain', {
+                method: 'GET',
+                headers: {
+                  Authorization: `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
+                }
+              });
+              
+              if (!response.error) {
+                // Check admin status again
+                const { data: newData } = await supabase.rpc('is_admin');
+                setIsAdmin(!!newData);
+                console.log("Admin status after verification:", !!newData);
+              }
+            }
+          }
         }
-        setIsAdmin(!!data);
       } catch (error) {
-        console.error("Error checking admin status:", error);
+        console.error("Error in admin check:", error);
+        setIsAdmin(false);
+      } finally {
+        setIsCheckingAdmin(false);
       }
     };
 
@@ -90,6 +136,7 @@ export const Header = () => {
                 <DropdownMenuContent align="end" className="w-56">
                   <div className="px-2 py-1.5 text-sm font-medium text-muted-foreground">
                     {user.email}
+                    {isCheckingAdmin && <span className="ml-2 text-xs">(checking permissions...)</span>}
                   </div>
                   
                   <DropdownMenuSeparator />
