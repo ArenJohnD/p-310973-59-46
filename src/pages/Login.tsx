@@ -38,7 +38,7 @@ const Login = () => {
             } else {
               // Clear the hash and navigate to home page
               window.location.hash = '';
-              navigate("/");
+              window.location.href = '/'; // Using direct navigation instead of React Router to ensure a clean state
             }
           }
         } catch (error) {
@@ -78,11 +78,11 @@ const Login = () => {
               variant: "destructive",
             });
           } else {
-            navigate("/");
+            window.location.href = '/'; // Using direct navigation
           }
         } catch (error) {
           console.error("Error verifying email domain:", error);
-          navigate("/");
+          window.location.href = '/';
         }
       }
     };
@@ -114,11 +114,11 @@ const Login = () => {
                 variant: "destructive",
               });
             } else {
-              navigate("/");
+              window.location.href = '/';
             }
           } catch (error) {
             console.error("Error verifying email domain:", error);
-            navigate("/");
+            window.location.href = '/';
           }
         }
       }
@@ -137,7 +137,7 @@ const Login = () => {
             access_type: "offline",
             prompt: "consent",
           },
-          redirectTo: window.location.origin, // Ensure this matches your redirect URI
+          redirectTo: window.location.origin + "/login", // Explicitly add the /login path
         },
       });
 
