@@ -6,8 +6,9 @@ import { Header } from "@/components/Header";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/use-toast";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { ArrowLeft, FileText, Loader2, Upload } from "lucide-react";
+import { ArrowLeft, FileText, Loader2 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
+import { FileUploadManager } from "@/components/FileUploadManager";
 
 interface PolicyDocument {
   id: string;
@@ -22,7 +23,7 @@ interface PolicyCategory {
 const PDFViewer = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { isAdmin, user, refreshAdminStatus } = useAuth();
+  const { isAdmin, refreshAdminStatus } = useAuth();
   const [documents, setDocuments] = useState<PolicyDocument[]>([]);
   const [category, setCategory] = useState<PolicyCategory | null>(null);
   const [loading, setLoading] = useState(true);
@@ -40,14 +41,16 @@ const PDFViewer = () => {
   useEffect(() => {
     if (!id) return;
     fetchCategoryAndDocuments();
-  }, [id]);
+  }, [id, loadAttempt]);
 
   useEffect(() => {
     // Get signed URL when selected document changes
     if (selectedDocument) {
       getSignedUrl(selectedDocument);
+    } else {
+      setSignedUrl(null);
     }
-  }, [selectedDocument, loadAttempt]);
+  }, [selectedDocument]);
 
   const getSignedUrl = async (filePath: string) => {
     try {
@@ -123,6 +126,8 @@ const PDFViewer = () => {
       // Automatically select the first document if available
       if (documentsData && documentsData.length > 0) {
         setSelectedDocument(documentsData[0].file_path);
+      } else {
+        setSelectedDocument(null);
       }
       
     } catch (error) {
@@ -142,6 +147,13 @@ const PDFViewer = () => {
   };
 
   const handleRetryLoad = () => {
+    if (selectedDocument) {
+      getSignedUrl(selectedDocument);
+    }
+  };
+
+  const handleFileChange = () => {
+    // Refresh the document data
     setLoadAttempt(prev => prev + 1);
   };
 
@@ -179,6 +191,14 @@ const PDFViewer = () => {
               )}
             </section>
             
+            {/* File Upload Manager (only visible to admins) */}
+            {isAdmin && (
+              <FileUploadManager 
+                categoryId={id || ''} 
+                onFileChange={handleFileChange}
+              />
+            )}
+            
             <div className="flex flex-col lg:flex-row gap-6">
               {/* Document list sidebar */}
               <div className="lg:w-1/4">
@@ -206,16 +226,6 @@ const PDFViewer = () => {
                   <div className="text-center py-8 border rounded-lg bg-gray-50">
                     <FileText className="h-8 w-8 text-gray-400 mx-auto mb-2" />
                     <p className="text-gray-500">No documents available.</p>
-                    {isAdmin && (
-                      <Button 
-                        variant="outline" 
-                        size="sm"
-                        onClick={() => navigate(`/admin`)}
-                        className="mt-3"
-                      >
-                        <Upload className="h-4 w-4 mr-1" /> Upload Documents
-                      </Button>
-                    )}
                   </div>
                 )}
               </div>
@@ -245,21 +255,6 @@ const PDFViewer = () => {
                           >
                             Retry Loading Document
                           </Button>
-                          
-                          {isAdmin && (
-                            <div className="mt-6">
-                              <p className="text-sm text-gray-600 mb-2">
-                                As an admin, you can try one of the following:
-                              </p>
-                              <Button 
-                                variant="default"
-                                className="bg-[rgba(49,159,67,1)] hover:bg-[rgba(39,139,57,1)]"
-                                onClick={() => navigate('/admin')}
-                              >
-                                Manage Documents
-                              </Button>
-                            </div>
-                          )}
                         </div>
                       </>
                     ) : (

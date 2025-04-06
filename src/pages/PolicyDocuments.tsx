@@ -8,6 +8,7 @@ import { toast } from "@/components/ui/use-toast";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useAuth } from "@/context/AuthContext";
 import { Loader2, AlertCircle } from "lucide-react";
+import { FileUploadManager } from "@/components/FileUploadManager";
 
 interface PolicyDocument {
   id: string;
@@ -72,6 +73,9 @@ const PolicyDocuments = () => {
           // Get signed URL for the PDF
           setUrlLoading(true);
           getSignedUrl(documentsData[0].file_path);
+        } else {
+          setPolicyDoc(null);
+          setPdfUrl(null);
         }
       } catch (error) {
         console.error("Error fetching policy document:", error);
@@ -92,6 +96,7 @@ const PolicyDocuments = () => {
     try {
       console.log("Getting signed URL for:", filePath);
       setLoadError(null);
+      setUrlLoading(true);
       
       // First check if bucket exists
       const { data: buckets, error: bucketsError } = await supabase
@@ -130,11 +135,11 @@ const PolicyDocuments = () => {
       
       console.log("Signed URL created:", data.signedUrl);
       setPdfUrl(data.signedUrl);
-      setUrlLoading(false);
     } catch (error) {
       console.error("Exception getting signed URL:", error);
       setLoadError("An unexpected error occurred loading the document.");
       setPdfUrl(null);
+    } finally {
       setUrlLoading(false);
     }
   };
@@ -148,6 +153,11 @@ const PolicyDocuments = () => {
     if (id) {
       navigate(`/policy-viewer/${id}`);
     }
+  };
+
+  const handleFileChange = () => {
+    // Refresh the document data
+    setRetryCount(prev => prev + 1);
   };
 
   if (loading) {
@@ -211,6 +221,15 @@ const PolicyDocuments = () => {
           )}
         </div>
 
+        {/* File Upload Manager (only visible to admins) */}
+        {isAdmin && (
+          <FileUploadManager 
+            categoryId={id || ''} 
+            onFileChange={handleFileChange}
+            existingDocument={policyDoc ? { id: policyDoc.id, file_name: policyDoc.file_name } : null}
+          />
+        )}
+
         {policyDoc ? (
           <div className="flex flex-col items-center">
             <div className="mb-6 text-center">
@@ -245,13 +264,6 @@ const PolicyDocuments = () => {
                 <Button onClick={handleRetry} variant="outline" className="mb-4">
                   Retry Loading Document
                 </Button>
-                
-                {isAdmin && (
-                  <p className="text-sm text-gray-600 mt-4 bg-yellow-50 p-3 rounded border border-yellow-200">
-                    As an admin, you can check the document or upload a new one from the Admin Dashboard.
-                    Make sure the file exists in the policy-documents storage bucket.
-                  </p>
-                )}
               </div>
             )}
           </div>
@@ -260,7 +272,7 @@ const PolicyDocuments = () => {
             <p className="text-gray-600 mb-2">No document has been uploaded for this policy category yet.</p>
             {isAdmin && (
               <p className="text-sm text-gray-500">
-                You can upload a document from the Admin Dashboard.
+                You can upload a document using the form above.
               </p>
             )}
           </div>
