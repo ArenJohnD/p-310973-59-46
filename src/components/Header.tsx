@@ -9,12 +9,16 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { LogOut, Settings } from "lucide-react";
+import { useState } from "react";
 
 export const Header = () => {
   const { user, isAdmin, isLoading, signOut } = useAuth();
+  const [isOpen, setIsOpen] = useState(false);
 
   const handleSignOut = async () => {
+    setIsOpen(false); // Close dropdown before sign out
     await signOut();
+    // No need to navigate here - AuthContext will handle it
   };
 
   return (
@@ -57,7 +61,7 @@ export const Header = () => {
               className="aspect-[1.05] object-contain w-20 shrink-0"
             />
             {user && (
-              <DropdownMenu>
+              <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
                 <DropdownMenuTrigger className="focus:outline-none">
                   <img
                     src="https://cdn.builder.io/api/v1/image/assets/e3c6b0ec50df45b58e99e24af78e19b0/59482616a61d60d64d2712becd5bb11aca52bf05?placeholderIfAbsent=true"
@@ -65,7 +69,7 @@ export const Header = () => {
                     className="aspect-[1] object-contain w-[50px] shrink-0 my-auto cursor-pointer"
                   />
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuContent align="end" className="w-56 bg-white">
                   <div className="px-2 py-1.5 text-sm font-medium">
                     {user.email}
                     {isLoading && <span className="ml-2 text-xs">(checking permissions...)</span>}

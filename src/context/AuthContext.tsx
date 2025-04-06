@@ -9,6 +9,7 @@ import {
 import { User, Session } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/components/ui/use-toast";
+import { useNavigate } from "react-router-dom";
 
 type AuthContextType = {
   user: User | null;
@@ -25,6 +26,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
+  const navigate = useNavigate();
 
   const checkAdminStatus = async (currentSession: Session | null) => {
     if (!currentSession?.user) {
@@ -101,6 +103,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           await checkAdminStatus(session);
         } else {
           setIsAdmin(false);
+          if (event === 'SIGNED_OUT') {
+            // Redirect to login page when signed out
+            navigate('/login');
+          }
         }
         
         setIsLoading(false);
@@ -111,7 +117,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.log("Cleaning up auth context");
       subscription.unsubscribe();
     };
-  }, []);
+  }, [navigate]);
 
   const signOut = async () => {
     try {
@@ -120,6 +126,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         title: "Signed out",
         description: "You have been successfully signed out.",
       });
+      // We don't need to manually navigate here as the onAuthStateChange will handle it
     } catch (error) {
       console.error("Error signing out:", error);
       toast({
