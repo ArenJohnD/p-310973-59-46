@@ -1,6 +1,22 @@
+
 import { Link } from "react-router-dom";
+import { useAuth } from "@/context/AuthContext";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { LogOut } from "lucide-react";
 
 export const Header = () => {
+  const { user, signOut } = useAuth();
+
+  const handleSignOut = async () => {
+    await signOut();
+    // Navigation will be handled by the auth state change listener in AuthContext
+  };
+
   return (
     <header className="bg-[rgba(233,233,233,1)] shadow-[0px_4px_4px_rgba(0,0,0,0.25)] pt-[30px]">
       <div className="self-center flex w-full max-w-[1374px] mx-auto items-stretch gap-[40px_100px] flex-wrap max-md:max-w-full">
@@ -40,11 +56,29 @@ export const Header = () => {
               alt="Icon 2"
               className="aspect-[1.05] object-contain w-20 shrink-0"
             />
-            <img
-              src="https://cdn.builder.io/api/v1/image/assets/e3c6b0ec50df45b58e99e24af78e19b0/59482616a61d60d64d2712becd5bb11aca52bf05?placeholderIfAbsent=true"
-              alt="Icon 3"
-              className="aspect-[1] object-contain w-[50px] shrink-0 my-auto"
-            />
+            {user && (
+              <DropdownMenu>
+                <DropdownMenuTrigger className="focus:outline-none">
+                  <img
+                    src="https://cdn.builder.io/api/v1/image/assets/e3c6b0ec50df45b58e99e24af78e19b0/59482616a61d60d64d2712becd5bb11aca52bf05?placeholderIfAbsent=true"
+                    alt="User Menu"
+                    className="aspect-[1] object-contain w-[50px] shrink-0 my-auto cursor-pointer"
+                  />
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56">
+                  <div className="px-2 py-1.5 text-sm font-medium text-muted-foreground">
+                    {user.email}
+                  </div>
+                  <DropdownMenuItem 
+                    onClick={handleSignOut}
+                    className="cursor-pointer text-red-500 focus:text-red-500 focus:bg-red-50"
+                  >
+                    <LogOut className="mr-2 h-4 w-4" />
+                    Sign out
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
           </div>
         </div>
       </div>
