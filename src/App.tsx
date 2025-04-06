@@ -74,7 +74,8 @@ function AppContent() {
           <PDFViewer />
         </ProtectedRoute>
       } />
-      <Route path="*" element={<NotFound />} />
+      {/* Add a catch-all route that redirects to login */}
+      <Route path="*" element={<Navigate to="/login" replace />} />
     </Routes>
   );
 }

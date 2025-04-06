@@ -87,6 +87,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       if (session) {
         checkAdminStatus(session);
+      } else {
+        // If no session is found, redirect to login
+        console.log("No session found, redirecting to login page");
+        navigate('/login');
       }
       
       setIsLoading(false);
@@ -106,7 +110,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           if (event === 'SIGNED_OUT') {
             // Explicitly navigate to login page when signed out
             console.log("User signed out, redirecting to login page");
-            navigate('/login');
+            navigate('/login', { replace: true });
           }
         }
         
@@ -122,13 +126,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = async () => {
     try {
-      await supabase.auth.signOut();
-      toast({
-        title: "Signed out",
-        description: "You have been successfully signed out.",
-      });
-      // Force navigation to login page
-      navigate('/login');
+      // First navigate to login page, THEN sign out
+      navigate('/login', { replace: true });
+      
+      // Delay the actual sign out to ensure navigation happens first
+      setTimeout(async () => {
+        await supabase.auth.signOut();
+        toast({
+          title: "Signed out",
+          description: "You have been successfully signed out.",
+        });
+      }, 100);
     } catch (error) {
       console.error("Error signing out:", error);
       toast({
