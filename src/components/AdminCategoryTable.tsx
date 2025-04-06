@@ -23,7 +23,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { ChevronUp, ChevronDown, Trash, Plus, FilePlus } from "lucide-react";
+import { ChevronUp, ChevronDown, Trash, Plus } from "lucide-react";
 
 interface PolicyCategory {
   id: string;
@@ -98,10 +98,6 @@ export const AdminCategoryTable = ({
     }
   };
 
-  const handleManageDocuments = (categoryId: string) => {
-    navigate(`/policy/${categoryId}`);
-  };
-
   return (
     <div className="space-y-6">
       <div className="flex items-center space-x-4 mb-6">
@@ -127,7 +123,7 @@ export const AdminCategoryTable = ({
               <TableHead className="w-[50px]">Order</TableHead>
               <TableHead>Title</TableHead>
               <TableHead className="w-[150px]">Visible</TableHead>
-              <TableHead className="w-[250px]">Actions</TableHead>
+              <TableHead className="w-[150px]">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -203,15 +199,6 @@ export const AdminCategoryTable = ({
                 </TableCell>
                 <TableCell>
                   <div className="flex gap-2">
-                    <Button 
-                      variant="outline" 
-                      size="sm"
-                      onClick={() => handleManageDocuments(category.id)}
-                      className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-                    >
-                      <FilePlus className="h-4 w-4 mr-1" /> Manage Files
-                    </Button>
-                    
                     <AlertDialog>
                       <AlertDialogTrigger asChild>
                         <Button variant="destructive" size="sm">
