@@ -5,8 +5,10 @@ import { supabase } from "@/integrations/supabase/client";
 import { Header } from "@/components/Header";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/use-toast";
-import { ArrowLeft, Loader2, FileText } from "lucide-react";
+import { ArrowLeft, Loader2, FileText, MessageSquare } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
+import { ChatBot } from "@/components/ChatBot";
+import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
 
 interface PolicyCategory {
   title: string;
@@ -26,6 +28,7 @@ const PDFViewer = () => {
   const [document, setDocument] = useState<PolicyDocument | null>(null);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isChatOpen, setIsChatOpen] = useState(false);
 
   useEffect(() => {
     refreshAdminStatus();
@@ -120,16 +123,34 @@ const PDFViewer = () => {
               )}
             </section>
             
-            {isAdmin && (
-              <div className="mb-4 flex justify-center">
+            <div className="mb-4 flex justify-center gap-4">
+              {isAdmin && (
                 <Button 
                   onClick={() => navigate('/admin')}
                   className="bg-[rgba(49,159,67,1)] hover:bg-[rgba(39,139,57,1)]"
                 >
                   Go to Admin Dashboard
                 </Button>
-              </div>
-            )}
+              )}
+              
+              {pdfUrl && (
+                <Dialog>
+                  <DialogTrigger asChild>
+                    <Button className="bg-blue-600 hover:bg-blue-700">
+                      <MessageSquare className="mr-2 h-4 w-4" /> Ask About This Policy
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="sm:max-w-[600px]">
+                    <div className="py-4">
+                      <h2 className="text-xl font-semibold text-center mb-4">
+                        Ask about {category?.title}
+                      </h2>
+                      <ChatBot />
+                    </div>
+                  </DialogContent>
+                </Dialog>
+              )}
+            </div>
             
             {pdfUrl ? (
               <div className="border rounded-lg bg-gray-50 overflow-hidden">
