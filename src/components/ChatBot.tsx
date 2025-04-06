@@ -1,9 +1,15 @@
+
 import { useState, useRef, useEffect } from "react";
 import { Send, Loader2, FileText, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/components/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import * as pdfjsLib from 'pdfjs-dist';
+import { GlobalWorkerOptions } from 'pdfjs-dist';
+
+// Initialize PDF.js worker
+GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
 
 interface Message {
   id: string;
@@ -54,28 +60,8 @@ export const ChatBot = () => {
       if (error) throw error;
       
       if (data) {
-        // Fetch the content of each document
-        const docsWithContent = await Promise.all(
-          data.map(async (doc) => {
-            try {
-              // Get signed URL for the PDF
-              const { data: fileData } = await supabase.storage
-                .from('policy_documents')
-                .createSignedUrl(doc.file_path, 3600);
-                
-              if (fileData?.signedUrl) {
-                // We'll extract text client-side when needed
-                return { ...doc };
-              }
-              return doc;
-            } catch (err) {
-              console.error("Error getting file URL:", err);
-              return doc;
-            }
-          })
-        );
-        
-        setReferenceDocuments(docsWithContent);
+        console.log(`Found ${data.length} reference documents`);
+        setReferenceDocuments(data);
       } else {
         setReferenceDocuments([]);
       }
@@ -99,10 +85,12 @@ export const ChatBot = () => {
     }
 
     try {
+      console.log(`Searching for information about: "${query}" in ${referenceDocuments.length} documents`);
       // For each document that doesn't have text_content yet, fetch and extract it
       for (let i = 0; i < referenceDocuments.length; i++) {
         const doc = referenceDocuments[i];
         if (!doc.text_content) {
+          console.log(`Processing document: ${doc.file_name}`);
           // Get signed URL for the PDF
           const { data: fileData } = await supabase.storage
             .from('policy_documents')
@@ -110,13 +98,9 @@ export const ChatBot = () => {
             
           if (fileData?.signedUrl) {
             try {
-              // Fetch the PDF
-              const response = await fetch(fileData.signedUrl);
-              const pdfBlob = await response.blob();
-              
-              // Use a simple text extraction approach
-              // In a production app, you would use a more robust PDF parsing library
-              const text = await extractTextFromPDF(pdfBlob);
+              // Extract text from the PDF using PDF.js
+              const text = await extractTextFromPDF(fileData.signedUrl);
+              console.log(`Extracted ${text.length} characters from ${doc.file_name}`);
               
               // Update the document with its text content
               referenceDocuments[i] = { ...doc, text_content: text };
@@ -130,7 +114,7 @@ export const ChatBot = () => {
       // Now all documents should have text content
       // Simple search for relevant information based on keyword matching
       const queryWords = query.toLowerCase().split(/\s+/);
-      let bestMatches: { text: string, score: number }[] = [];
+      let bestMatches: { text: string, score: number, docName: string }[] = [];
       
       referenceDocuments.forEach(doc => {
         if (doc.text_content) {
@@ -149,7 +133,8 @@ export const ChatBot = () => {
               if (matchScore > 0) {
                 bestMatches.push({
                   text: paragraph,
-                  score: matchScore
+                  score: matchScore,
+                  docName: doc.file_name
                 });
               }
             }
@@ -159,6 +144,7 @@ export const ChatBot = () => {
       
       // Sort matches by score (highest first)
       bestMatches.sort((a, b) => b.score - a.score);
+      console.log(`Found ${bestMatches.length} relevant paragraphs`);
       
       // Take the top 3 matches and combine them
       const topMatches = bestMatches.slice(0, 3);
@@ -166,7 +152,7 @@ export const ChatBot = () => {
       if (topMatches.length > 0) {
         let combinedResponse = "Based on our policy documents:\n\n";
         topMatches.forEach(match => {
-          combinedResponse += match.text.trim() + "\n\n";
+          combinedResponse += `From "${match.docName}":\n${match.text.trim()}\n\n`;
         });
         return combinedResponse.trim();
       } else {
@@ -181,21 +167,33 @@ export const ChatBot = () => {
     }
   };
 
-  // Simple function to extract text from a PDF
-  // In a production app, you would use a more robust PDF parsing library
-  const extractTextFromPDF = async (pdfBlob: Blob): Promise<string> => {
-    // This is a placeholder - In a real application, use a PDF parsing library
-    // For browser-based parsing, you could use pdf.js or other libraries
-    // For this example, we'll just return a dummy extraction message
-    
-    // Mock extraction - in a real app, implement proper PDF text extraction
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        resolve("This is extracted text from the PDF document. " +
-                "In a real application, you would see the actual content from the document here. " +
-                "You should implement a proper PDF text extraction library in production.");
-      }, 500);
-    });
+  // Function to extract text from a PDF using PDF.js
+  const extractTextFromPDF = async (pdfUrl: string): Promise<string> => {
+    try {
+      // Load the PDF document
+      const loadingTask = pdfjsLib.getDocument(pdfUrl);
+      const pdf = await loadingTask.promise;
+      console.log(`PDF loaded with ${pdf.numPages} pages`);
+      
+      let fullText = '';
+      
+      // Extract text from each page
+      for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const textContent = await page.getTextContent();
+        const pageText = textContent.items
+          .filter((item: any) => 'str' in item)
+          .map((item: any) => item.str)
+          .join(' ');
+          
+        fullText += pageText + '\n\n';
+      }
+      
+      return fullText;
+    } catch (error) {
+      console.error("Error extracting text from PDF:", error);
+      throw new Error(`PDF extraction failed: ${error}`);
+    }
   };
 
   // Generate simple AI responses based on policy-related keywords
