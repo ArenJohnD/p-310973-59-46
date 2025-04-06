@@ -30,16 +30,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
   const location = useLocation();
 
+  // Check if user is admin by directly querying the profiles table
   const checkAdminStatus = async (currentUser: User | null) => {
     if (!currentUser) {
+      console.log("No user to check admin status for");
       setIsAdmin(false);
-      return;
+      return false;
     }
 
     try {
       console.log("Checking admin status for user:", currentUser.email);
       
-      // Directly query the profiles table
+      // Direct query to get user's role from profiles table
       const { data: profileData, error: profileError } = await supabase
         .from('profiles')
         .select('role')
@@ -47,29 +49,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .single();
       
       if (profileError) {
-        console.error("Error fetching user profile:", profileError);
+        console.error("Error fetching profile:", profileError);
         setIsAdmin(false);
-        return;
+        return false;
       }
       
-      console.log("User role from database:", profileData?.role);
+      console.log("User profile data:", profileData);
       
-      // Explicitly set admin status based on role value
+      // Check if user has admin role
       if (profileData?.role === 'admin') {
-        console.log("User is an admin");
+        console.log("User is confirmed as admin");
         setIsAdmin(true);
+        return true;
       } else {
-        console.log("User is not an admin");
+        console.log("User is not an admin, role:", profileData?.role);
         setIsAdmin(false);
+        return false;
       }
     } catch (error) {
       console.error("Error in admin check:", error);
       setIsAdmin(false);
+      return false;
     }
   };
 
+  // Function to refresh admin status - can be called externally
   const refreshAdminStatus = async () => {
-    await checkAdminStatus(user);
+    return await checkAdminStatus(user);
   };
 
   useEffect(() => {
@@ -90,11 +96,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setTimeout(() => {
             if (isActive) {
               checkAdminStatus(currentSession.user);
+              setIsLoading(false);
             }
           }, 100);
-          
-          setIsLoading(false);
         } else if (event === 'SIGNED_OUT') {
+          console.log("User signed out, clearing state");
           setUser(null);
           setSession(null);
           setIsAdmin(false);
@@ -103,14 +109,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           if (location.pathname !== '/login') {
             navigate('/login', { replace: true });
           }
+          
+          // Prevent browser back after logout
+          window.history.pushState(null, '', '/login');
         } else if (event === 'TOKEN_REFRESHED') {
+          console.log("Token refreshed");
           setSession(currentSession);
           setIsLoading(false);
         }
       }
     );
     
-    // Then check for existing session
+    // Then check for existing session with a timeout to prevent hanging
     const checkSession = async () => {
       try {
         const { data: { session: currentSession } } = await supabase.auth.getSession();
@@ -135,12 +145,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           if (isActive) {
             setIsLoading(false);
             
-            // If no session and not on login page, redirect
+            // Redirect if needed but only after loading is complete
             if (!currentSession && location.pathname !== '/login' && location.pathname !== '/') {
               navigate('/login', { replace: true });
             }
           }
-        }, 500); // Short delay to prevent redirect flickers
+        }, 500);
       } catch (error) {
         console.error("Error checking session:", error);
         if (isActive) {
@@ -150,12 +160,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     };
     
+    // Add a maximum timeout to prevent hanging in loading state
+    const loadingTimeout = setTimeout(() => {
+      if (isActive && isLoading) {
+        console.log("Auth context maximum loading time reached");
+        setIsLoading(false);
+      }
+    }, 3000);
+    
     checkSession();
 
     return () => {
       console.log("Cleaning up auth context");
       isActive = false;
       subscription?.unsubscribe();
+      clearTimeout(loadingTimeout);
     };
   }, [navigate, location.pathname]);
 

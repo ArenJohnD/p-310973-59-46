@@ -10,10 +10,27 @@ const Login = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [initializing, setInitializing] = useState(true);
+  const [initTimeout, setInitTimeout] = useState<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    // Force exit initializing state after 2 seconds at maximum
+    const timeout = setTimeout(() => {
+      setInitializing(false);
+      console.log("Login init timeout reached, exiting loading state");
+    }, 2000);
+    
+    setInitTimeout(timeout);
+    
+    return () => {
+      if (timeout) clearTimeout(timeout);
+    };
+  }, []);
 
   useEffect(() => {
     // Handle URL hash parameters on page load (OAuth callback)
     const handleHashParameters = async () => {
+      console.log("Checking login state, hash present:", !!window.location.hash);
+      
       if (window.location.hash) {
         setLoading(true);
         try {
@@ -35,6 +52,9 @@ const Login = () => {
           });
           setLoading(false);
         }
+        
+        if (initTimeout) clearTimeout(initTimeout);
+        setInitializing(false);
         return;
       }
       
@@ -43,13 +63,14 @@ const Login = () => {
         try {
           const { data } = await supabase.auth.getSession();
           if (data.session) {
-            console.log("User already has a session");
+            console.log("User already has a session, redirecting to home");
             navigate('/', { replace: true });
             return;
           }
         } catch (error) {
           console.error("Error checking session:", error);
         } finally {
+          if (initTimeout) clearTimeout(initTimeout);
           setInitializing(false);
         }
       };
@@ -57,19 +78,14 @@ const Login = () => {
       await checkSession();
     };
     
-    // Execute immediately, then set a timeout as backup
+    // Execute immediately
     handleHashParameters();
     
-    // Set a timeout to exit initializing state if auth checks take too long
-    const timeout = setTimeout(() => {
-      setInitializing(false);
-    }, 1500);
-
     // Clean up function
     return () => {
-      clearTimeout(timeout);
+      if (initTimeout) clearTimeout(initTimeout);
     };
-  }, [navigate]);
+  }, [navigate, initTimeout]);
 
   const handleGoogleLogin = async () => {
     try {

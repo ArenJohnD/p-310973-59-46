@@ -39,6 +39,7 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   useEffect(() => {
     // If not loading and no user, redirect to login
     if (!isLoading && !user) {
+      console.log("No user detected, redirecting to login");
       navigate('/login', { replace: true, state: { from: location.pathname } });
     }
   }, [user, isLoading, navigate, location]);
@@ -57,24 +58,29 @@ const AdminRoute = ({ children }: { children: React.ReactNode }) => {
   const location = useLocation();
   
   useEffect(() => {
-    // Refresh admin status on mount to ensure it's up-to-date
-    refreshAdminStatus();
-    
-    // If not loading and not admin, redirect immediately
-    if (!isLoading) {
-      if (!user) {
-        navigate('/login', { replace: true, state: { from: location.pathname } });
-      } 
-      else if (!isAdmin) {
-        console.log("User is not an admin, redirecting to home");
-        navigate('/', { replace: true });
-        toast({
-          title: "Access denied",
-          description: "You don't have admin privileges",
-          variant: "destructive"
-        });
+    const checkAdminAccess = async () => {
+      // Refresh admin status to ensure it's accurate
+      await refreshAdminStatus();
+      
+      // If not loading and not admin, redirect immediately
+      if (!isLoading) {
+        if (!user) {
+          console.log("No user detected in AdminRoute, redirecting to login");
+          navigate('/login', { replace: true, state: { from: location.pathname } });
+        } 
+        else if (!isAdmin) {
+          console.log("User is not an admin, redirecting to home");
+          navigate('/', { replace: true });
+          toast({
+            title: "Access denied",
+            description: "You don't have admin privileges",
+            variant: "destructive"
+          });
+        }
       }
-    }
+    };
+    
+    checkAdminAccess();
   }, [user, isAdmin, isLoading, navigate, location, refreshAdminStatus]);
   
   if (isLoading) {
@@ -90,26 +96,31 @@ import { toast } from "@/components/ui/use-toast";
 
 // Main App component without routes
 function AppContent() {
-  const { isLoading } = useAuth();
+  const { isLoading, user } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   
   // Immediately redirect to login page if at root
   useEffect(() => {
-    const handleInitialNavigation = async () => {
-      if (location.pathname === '/') {
+    if (location.pathname === '/') {
+      if (isLoading) {
         // Set a timeout to force navigate to login if still on loading after delay
         const timeout = setTimeout(() => {
-          console.log("Timeout triggered, navigating to login");
+          console.log("Root path timeout triggered, navigating to login");
           navigate('/login', { replace: true });
-        }, 1500);
+        }, 1000); // Reduced timeout for faster redirection
         
         return () => clearTimeout(timeout);
+      } else if (!user) {
+        console.log("Root path, no user, redirecting to login");
+        navigate('/login', { replace: true });
       }
-    };
-    
-    handleInitialNavigation();
-  }, [location.pathname, navigate]);
+    } else if (location.pathname === '/login' && user && !isLoading) {
+      // If already logged in and on login page, redirect to home
+      console.log("User already logged in, redirecting from login to home");
+      navigate('/', { replace: true });
+    }
+  }, [location.pathname, navigate, isLoading, user]);
 
   return (
     <Suspense fallback={<LoadingPage />}>
