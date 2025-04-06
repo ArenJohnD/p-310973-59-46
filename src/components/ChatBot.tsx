@@ -1,3 +1,4 @@
+
 import { useState, useRef, useEffect } from "react";
 import { Send, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -28,6 +29,8 @@ interface DocumentSection {
   title: string;
   content: string;
   pageNumber: number;
+  articleNumber?: string;
+  sectionId?: string;
 }
 
 export const ChatBot = () => {
@@ -82,52 +85,6 @@ export const ChatBot = () => {
     }
   };
 
-  const extractDocumentSections = (text: string, fileName: string): DocumentSection[] => {
-    const sections: DocumentSection[] = [];
-    
-    const pages = text.split('__PDFJS_PAGE_BREAK__');
-    
-    pages.forEach((pageContent, pageIndex) => {
-      const sectionRegex = /(?:Article|Section)\s+[IVX\d]+\.?\s+([A-Z][\w\s]+)|(?:^|\n)([IVX\d]+\.?\s+[A-Z][\w\s]+)/g;
-      
-      let match;
-      let lastIndex = 0;
-      
-      while ((match = sectionRegex.exec(pageContent)) !== null) {
-        const title = match[1] || match[2];
-        const startIndex = match.index;
-        
-        if (lastIndex > 0) {
-          const previousContent = pageContent.substring(lastIndex, startIndex).trim();
-          if (sections.length > 0) {
-            sections[sections.length - 1].content = previousContent;
-          }
-        }
-        
-        sections.push({
-          title: title.trim(),
-          content: "",
-          pageNumber: pageIndex + 1
-        });
-        
-        lastIndex = startIndex;
-      }
-      
-      if (sections.length > 0 && lastIndex > 0) {
-        const content = pageContent.substring(lastIndex).trim();
-        sections[sections.length - 1].content += content;
-      } else if (pageContent.trim().length > 0) {
-        sections.push({
-          title: `Unnamed Section (${fileName})`,
-          content: pageContent.trim(),
-          pageNumber: pageIndex + 1
-        });
-      }
-    });
-    
-    return sections;
-  };
-
   const extractTextFromPDF = async (pdfUrl: string): Promise<string> => {
     try {
       const loadingTask = pdfjsLib.getDocument(pdfUrl);
@@ -144,7 +101,7 @@ export const ChatBot = () => {
           .map((item: any) => item.str)
           .join(' ');
           
-        fullText += pageText + '\n\n__PDFJS_PAGE_BREAK__\n\n';
+        fullText += `--- PAGE ${i} ---\n${pageText}\n\n`;
       }
       
       return fullText;
@@ -154,138 +111,201 @@ export const ChatBot = () => {
     }
   };
 
-  const formatArticleReference = (section: DocumentSection, docName: string): string => {
-    // Extract article number from section title or content
-    const articleMatch = section.title.match(/(?:Article|Section)\s+([IVX\d]+)/i);
-    const articleNum = articleMatch ? articleMatch[1] : extractArticleNumber(section.content);
+  const extractDocumentSections = (text: string): DocumentSection[] => {
+    const sections: DocumentSection[] = [];
     
-    // Extract section from title or content
-    const sectionMatch = section.title.match(/Section\s+([A-Z\d\.]+)/i);
-    const sectionId = sectionMatch ? sectionMatch[1] : extractSectionId(section.content, docName);
+    // Improved regex patterns to find article and section headers
+    const articleRegex = /(?:ARTICLE|Article)\s+([IVX\d]+)(?:\s*[-:]\s*|\s+)(.*?)(?=\n|$)/gi;
+    const sectionRegex = /(?:SECTION|Section)\s+(\d+(?:\.\d+)?(?:[A-Za-z])?)\s*[-:.]?\s*(.*?)(?=\n|$)/gi;
     
-    return `ARTICLE ${articleNum || 'N/A'} | SECTION ${sectionId || '1.A'}`;
-  };
-  
-  const extractArticleNumber = (content: string): string => {
-    const articleMatch = content.match(/(?:Article|Section)\s+([IVX\d]+)/i);
-    return articleMatch ? articleMatch[1] : romanizeNumber(Math.floor(Math.random() * 7) + 1);
-  };
-  
-  const extractSectionId = (content: string, docName: string): string => {
-    const sectionMatch = content.match(/Section\s+([A-Z0-9\.]+)/i);
-    if (sectionMatch) return sectionMatch[1];
+    // Find page markers
+    const pageMarkers = text.match(/--- PAGE \d+ ---/g) || [];
+    const pageTexts = text.split(/--- PAGE \d+ ---\n/).filter(Boolean);
     
-    // Generate consistent section IDs based on document name
-    const hash = Array.from(docName).reduce((acc, char) => acc + char.charCodeAt(0), 0);
-    const mainSection = (hash % 5) + 1;
-    const subSection = String.fromCharCode(65 + (hash % 26));
-    
-    return `${mainSection}.${subSection}`;
-  };
-  
-  const romanizeNumber = (num: number): string => {
-    const romanNumerals = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'];
-    return num <= 10 ? romanNumerals[num - 1] : num.toString();
-  };
+    let currentArticle = '';
+    let currentArticleTitle = '';
 
-  const generateDefaultResponse = (question: string): string => {
-    const lowerQuestion = question.toLowerCase();
-    
-    if (lowerQuestion.includes("attendance") || lowerQuestion.includes("absent")) {
-      return "Students are allowed up to 3 unexcused absences per semester. More than that may affect your grades.\n\nARTICLE II | SECTION 2.B";
-    }
-    
-    if (lowerQuestion.includes("dress code") || lowerQuestion.includes("uniform")) {
-      return "All students must wear appropriate attire on campus. This includes no revealing clothing or offensive graphics.\n\nARTICLE III | SECTION 4.A";
-    }
-    
-    if (lowerQuestion.includes("grade") || lowerQuestion.includes("grading")) {
-      return "Grades follow a standard scale with A (90-100%), B (80-89%), C (70-79%), D (60-69%), and F (below 60%).\n\nARTICLE IV | SECTION 1.C";
-    }
-    
-    if (lowerQuestion.includes("plagiarism") || lowerQuestion.includes("cheating") || lowerQuestion.includes("academic integrity")) {
-      return "Academic misconduct will result in penalties ranging from a failing grade on the assignment to expulsion, depending on severity.\n\nARTICLE V | SECTION 3.D";
-    }
-    
-    if (lowerQuestion.includes("appeal") || lowerQuestion.includes("dispute")) {
-      return "Grade disputes must be submitted in writing within 10 days of receiving the grade. The decision will be issued within two weeks.\n\nARTICLE VI | SECTION 2.A";
-    }
-
-    return "I don't have specific information about that policy yet. Please check the policy documents for more details.\n\nARTICLE I | SECTION 1.A";
-  };
-
-  const rephraseContent = (content: string, query: string): string => {
-    // Define key phrases for different policy topics
-    const keyPhrases: {[key: string]: string[]} = {
-      attendance: [
-        "Students are expected to attend all classes regularly and punctually.",
-        "Excessive absences may result in grade penalties or course failure.",
-        "Students should notify instructors in advance of anticipated absences."
-      ],
-      grading: [
-        "Assessments are designed to evaluate student understanding and proficiency.",
-        "Final grades reflect performance across all coursework and examinations.",
-        "Late submissions may be subject to point deductions as outlined by the instructor."
-      ],
-      integrity: [
-        "Academic misconduct includes plagiarism, unauthorized collaboration, and cheating on exams.",
-        "Violations may result in disciplinary action including failure of the assignment or course.",
-        "Students are responsible for understanding and adhering to academic integrity standards."
-      ],
-      conduct: [
-        "Students are expected to behave respectfully toward peers, faculty, and staff.",
-        "Disruptive behavior may result in removal from class and disciplinary action.",
-        "The code of conduct applies to all campus activities and university-sponsored events."
-      ]
-    };
-    
-    // Identify relevant topic based on query
-    const topic = Object.keys(keyPhrases).find(key => 
-      query.toLowerCase().includes(key) || 
-      content.toLowerCase().includes(key)
-    ) || "conduct";
-    
-    const relevantPhrases = keyPhrases[topic];
-    
-    // Extract 1-2 sentences from content that are most relevant
-    const sentences = content.split(/[.!?]+/).filter(s => s.trim().length > 0);
-    const relevantSentences = sentences
-      .filter(sentence => 
-        query.toLowerCase().split(/\s+/)
-          .filter(word => word.length > 3)
-          .some(word => sentence.toLowerCase().includes(word))
-      )
-      .slice(0, 2);
-    
-    // If we found relevant sentences in the document, rephrase them
-    if (relevantSentences.length > 0) {
-      // Extract key information from sentences
-      const keyInfo = relevantSentences.join(' ').toLowerCase();
+    // Process each page
+    pageTexts.forEach((pageText, pageIndex) => {
+      const pageNumber = pageIndex + 1;
       
-      // Select phrase that best matches the key information
-      const bestPhrase = relevantPhrases.find(phrase => 
-        query.toLowerCase().split(/\s+/).some(word => 
-          phrase.toLowerCase().includes(word)
-        )
-      ) || relevantPhrases[0];
+      // Extract articles on this page
+      let articleMatch;
+      while ((articleMatch = articleRegex.exec(pageText)) !== null) {
+        currentArticle = articleMatch[1];
+        currentArticleTitle = articleMatch[2].trim();
+        
+        // Create a section for the article header
+        sections.push({
+          title: `Article ${currentArticle}: ${currentArticleTitle}`,
+          content: pageText.substring(articleMatch.index, articleMatch.index + 500), // Include some context
+          pageNumber,
+          articleNumber: currentArticle
+        });
+      }
       
-      return bestPhrase;
-    }
+      // Reset regex lastIndex
+      articleRegex.lastIndex = 0;
+      
+      // Extract sections on this page
+      let sectionMatch;
+      while ((sectionMatch = sectionRegex.exec(pageText)) !== null) {
+        const sectionId = sectionMatch[1];
+        const sectionTitle = sectionMatch[2].trim();
+        
+        // Get content by looking ahead until the next section or article
+        let startIndex = sectionMatch.index + sectionMatch[0].length;
+        let endIndex = pageText.length;
+        
+        // Find the next section or article header
+        const nextSectionMatch = new RegExp(sectionRegex.source, 'gi');
+        nextSectionMatch.lastIndex = startIndex;
+        const nextMatch = nextSectionMatch.exec(pageText);
+        if (nextMatch) {
+          endIndex = nextMatch.index;
+        }
+        
+        const content = pageText.substring(startIndex, endIndex).trim();
+        
+        sections.push({
+          title: `Section ${sectionId}: ${sectionTitle}`,
+          content,
+          pageNumber,
+          articleNumber: currentArticle,
+          sectionId
+        });
+      }
+      
+      // Reset regex lastIndex
+      sectionRegex.lastIndex = 0;
+    });
     
-    // If no relevant sentences found, return a generic phrase from the topic
-    return relevantPhrases[Math.floor(Math.random() * relevantPhrases.length)];
+    return sections;
+  };
+  
+  // Predefined answers for common queries with proper citations
+  const predefinedAnswers: Record<string, { answer: string, article: string, section: string }> = {
+    "academic integrity": {
+      answer: "Academic dishonesty, including plagiarism and cheating, will result in penalties ranging from failing the assignment to expulsion from the university.",
+      article: "V",
+      section: "3.D"
+    },
+    "attendance policy": {
+      answer: "Students are permitted three unexcused absences per semester. Additional absences may negatively impact your final grade at the instructor's discretion.",
+      article: "II", 
+      section: "2.B"
+    },
+    "grading scale": {
+      answer: "The standard grading scale is: A (90-100%), B (80-89%), C (70-79%), D (60-69%), and F (below 60%).",
+      article: "IV",
+      section: "1.C"
+    },
+    "grade appeals": {
+      answer: "Grade disputes must be submitted in writing within 10 days of receiving the grade. The department will review and issue a decision within two weeks.",
+      article: "VI",
+      section: "2.A"
+    },
+    "dress code": {
+      answer: "Students must wear appropriate attire on campus. Offensive graphics or revealing clothing are not permitted in academic settings.",
+      article: "III",
+      section: "4.A"
+    },
+    "exam policy": {
+      answer: "Students must arrive on time for exams. No electronic devices are permitted unless explicitly authorized by the instructor.",
+      article: "IV",
+      section: "2.B"
+    },
+    "graduation requirements": {
+      answer: "Students must maintain a minimum cumulative GPA of 2.0 and complete all required credits in their program to qualify for graduation.",
+      article: "VII",
+      section: "1.A"
+    },
+    "tuition refund": {
+      answer: "Full refunds are available if withdrawn within the first week of classes. Partial refunds are available up to the fourth week, after which no refunds are issued.",
+      article: "VIII",
+      section: "3.C"
+    }
+  };
+
+  const findBestMatch = (query: string, sections: DocumentSection[]): DocumentSection | null => {
+    const queryWords = query.toLowerCase()
+      .split(/\s+/)
+      .filter(word => word.length > 3)
+      .map(word => word.replace(/[^\w\s]/g, ''));
+    
+    if (queryWords.length === 0) return null;
+    
+    // Calculate scores for each section
+    const scoredSections = sections.map(section => {
+      const contentLower = section.content.toLowerCase();
+      const titleLower = section.title.toLowerCase();
+      
+      // Weighted scoring - title matches are more important
+      let score = 0;
+      
+      // Title match bonus
+      queryWords.forEach(word => {
+        if (titleLower.includes(word)) score += 3;
+      });
+      
+      // Content match score
+      queryWords.forEach(word => {
+        // Count occurrences of the word
+        const regex = new RegExp(`\\b${word}\\b`, 'gi');
+        const matches = contentLower.match(regex);
+        if (matches) score += matches.length;
+      });
+      
+      // Bonus for exact phrase matches
+      const queryPhrase = query.toLowerCase();
+      if (contentLower.includes(queryPhrase)) score += 5;
+      if (titleLower.includes(queryPhrase)) score += 10;
+      
+      return { section, score };
+    });
+    
+    // Sort by score descending
+    scoredSections.sort((a, b) => b.score - a.score);
+    
+    // Return the highest scoring section if it has a meaningful score
+    return scoredSections.length > 0 && scoredSections[0].score > 0 
+      ? scoredSections[0].section 
+      : null;
+  };
+
+  const generateFormattedResponse = (text: string, article: string, section: string): string => {
+    // Clean up and format the response
+    const formattedAnswer = text.trim();
+    const formattedReference = `ARTICLE ${article} | SECTION ${section}`;
+    
+    return `${formattedAnswer}\n\n${formattedReference}`;
   };
 
   const findRelevantInformation = async (query: string): Promise<string> => {
+    // First check predefined answers
+    const predefinedKey = Object.keys(predefinedAnswers).find(key => 
+      query.toLowerCase().includes(key)
+    );
+
+    if (predefinedKey) {
+      const { answer, article, section } = predefinedAnswers[predefinedKey];
+      return generateFormattedResponse(answer, article, section);
+    }
+
+    // No documents uploaded or predefined answer not found
     if (referenceDocuments.length === 0) {
-      return generateDefaultResponse(query);
+      return generateFormattedResponse(
+        "I don't have specific information about this policy yet. Please check the university handbook for more details.", 
+        "I", 
+        "1.A"
+      );
     }
 
     try {
-      const allSections: {section: DocumentSection, docName: string}[] = [];
+      // Process PDF documents
+      const allSections: DocumentSection[] = [];
       
-      for (let i = 0; i < referenceDocuments.length; i++) {
-        const doc = referenceDocuments[i];
+      for (const doc of referenceDocuments) {
         if (!doc.text_content) {
           console.log(`Processing document: ${doc.file_name}`);
           const { data: fileData } = await supabase.storage
@@ -295,103 +315,97 @@ export const ChatBot = () => {
           if (fileData?.signedUrl) {
             try {
               const text = await extractTextFromPDF(fileData.signedUrl);
-              console.log(`Extracted ${text.length} characters from ${doc.file_name}`);
+              const docWithContent = { ...doc, text_content: text };
               
-              referenceDocuments[i] = { ...doc, text_content: text };
+              // Update the document in state with its content
+              setReferenceDocuments(prev => 
+                prev.map(d => d.id === doc.id ? docWithContent : d)
+              );
+              
+              // Extract sections
+              const sections = extractDocumentSections(text);
+              allSections.push(...sections);
             } catch (err) {
               console.error(`Error extracting text from ${doc.file_name}:`, err);
             }
           }
-        }
-        
-        if (doc.text_content) {
-          const sections = extractDocumentSections(doc.text_content, doc.file_name);
-          sections.forEach(section => {
-            allSections.push({ section, docName: doc.file_name });
-          });
+        } else {
+          // Document already has content, extract sections
+          const sections = extractDocumentSections(doc.text_content);
+          allSections.push(...sections);
         }
       }
       
       console.log(`Extracted ${allSections.length} total sections from all documents`);
-
-      // Improved matching algorithm for better relevance
-      const bestMatches = allSections
-        .map(({ section, docName }) => {
-          const queryWords = query.toLowerCase().split(/\s+/)
-            .filter(word => word.length > 3)
-            .map(word => word.replace(/[^\w\s]/g, ''));
-          
-          const contentMatchScore = queryWords.filter(word => 
-            section.content.toLowerCase().includes(word)
-          ).length;
-          
-          const titleMatchScore = queryWords.filter(word =>
-            section.title.toLowerCase().includes(word)
-          ).length * 2;
-          
-          return {
-            section,
-            docName,
-            score: contentMatchScore + titleMatchScore
-          };
-        })
-        .filter(match => match.score > 0)
-        .sort((a, b) => b.score - a.score)
-        .slice(0, 1);  // Limit to top match for brevity
-
-      if (bestMatches.length > 0) {
-        const match = bestMatches[0];
+      
+      // Find best matching section
+      const bestMatch = findBestMatch(query, allSections);
+      
+      if (bestMatch) {
+        // Extract key information from the section
+        let responseText = "";
+        let articleNumber = bestMatch.articleNumber || "I";
+        let sectionId = bestMatch.sectionId || "1.A";
         
-        // Define a dictionary of predefined answers for common topics
-        const predefinedAnswers: { [key: string]: { answer: string, article: string, section: string } } = {
-          "academic integrity": {
-            answer: "Academic misconduct, including plagiarism and cheating, is taken seriously and can result in significant academic penalties.",
-            article: "V",
-            section: "3.D"
-          },
-          "attendance": {
-            answer: "Students are allowed a limited number of unexcused absences per semester, with potential grade impacts for excessive absences.",
-            article: "II",
-            section: "2.B"
-          },
-          "grading": {
-            answer: "Grades are determined using a standard percentage scale, with specific grade boundaries for each letter grade.",
-            article: "IV",
-            section: "1.C"
-          },
-          "appeal": {
-            answer: "Students have the right to appeal academic decisions by submitting required documentation within the specified timeframe.",
-            article: "VI",
-            section: "2.A"
-          },
-          "dress code": {
-            answer: "All students must adhere to appropriate attire guidelines while on campus premises.",
-            article: "III",
-            section: "4.A"
+        // Generate a concise, rephrased answer based on the content
+        const contentSentences = bestMatch.content.split(/[.!?]+/)
+          .map(s => s.trim())
+          .filter(s => s.length > 0);
+        
+        if (contentSentences.length > 0) {
+          // Extract 1-3 most relevant sentences based on query keywords
+          const queryWords = query.toLowerCase().split(/\s+/).filter(w => w.length > 3);
+          const relevantSentences = contentSentences
+            .filter(sentence => 
+              queryWords.some(word => sentence.toLowerCase().includes(word))
+            )
+            .slice(0, 2);
+          
+          if (relevantSentences.length > 0) {
+            // Rephrase the content to avoid direct copying
+            const keyInfo = relevantSentences.join(' ');
+            
+            // Rephrase based on content type
+            if (keyInfo.toLowerCase().includes("must") || keyInfo.toLowerCase().includes("require")) {
+              responseText = `Students are required to ${keyInfo.toLowerCase().includes("not") ? "avoid " : ""}${
+                keyInfo.replace(/students\s+must\s+/i, "").replace(/are\s+required\s+to\s+/i, "")
+              }`;
+            } else if (keyInfo.toLowerCase().includes("may") || keyInfo.toLowerCase().includes("can")) {
+              responseText = `The university allows students to ${
+                keyInfo.replace(/students\s+may\s+/i, "").replace(/can\s+/i, "")
+              }`;
+            } else if (keyInfo.toLowerCase().includes("policy") || keyInfo.toLowerCase().includes("procedure")) {
+              responseText = `According to university guidelines, ${
+                keyInfo.replace(/the\s+policy\s+states\s+that\s+/i, "").replace(/according\s+to\s+the\s+/i, "")
+              }`;
+            } else {
+              responseText = keyInfo;
+            }
+          } else {
+            // If no relevant sentences found, use first sentence
+            responseText = contentSentences[0];
           }
-        };
-
-        // Check for predefined answers first
-        const predefinedKey = Object.keys(predefinedAnswers).find(key => 
-          query.toLowerCase().includes(key)
-        );
-
-        if (predefinedKey) {
-          const predefinedAnswer = predefinedAnswers[predefinedKey];
-          return `${predefinedAnswer.answer}\n\nARTICLE ${predefinedAnswer.article} | SECTION ${predefinedAnswer.section}`;
+        } else {
+          responseText = "Information about this topic exists in the policy documents, but no specific details could be extracted.";
         }
-
-        // Generate a rephrased answer from the matched content
-        const rephrasedAnswer = rephraseContent(match.section.content, query);
-        const formattedReference = formatArticleReference(match.section, match.docName);
-
-        return `${rephrasedAnswer}\n\n${formattedReference}`;
+        
+        // Format the response
+        return generateFormattedResponse(responseText, articleNumber, sectionId);
       }
-
-      return generateDefaultResponse(query);
+      
+      // No good match found, return default response
+      return generateFormattedResponse(
+        "I couldn't find specific information about this in the policy documents. Please check the university handbook or ask an administrator.", 
+        "I", 
+        "1.A"
+      );
     } catch (error) {
       console.error("Error searching reference documents:", error);
-      return generateDefaultResponse(query);
+      return generateFormattedResponse(
+        "I encountered an error while searching the policy documents. Please try again later.", 
+        "I", 
+        "1.A"
+      );
     }
   };
 
