@@ -1,6 +1,5 @@
-
 import { useState, useRef, useEffect } from "react";
-import { Send, Loader2, FileText, X } from "lucide-react";
+import { Send, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/components/ui/use-toast";
@@ -23,6 +22,12 @@ interface ReferenceDocument {
   file_name: string;
   file_path: string;
   text_content?: string;
+}
+
+interface DocumentSection {
+  title: string;
+  content: string;
+  pageNumber: number;
 }
 
 export const ChatBot = () => {
@@ -77,86 +82,155 @@ export const ChatBot = () => {
     }
   };
 
-  // Function to find relevant information from reference documents based on a query
+  const extractDocumentSections = (text: string, fileName: string): DocumentSection[] => {
+    const sections: DocumentSection[] = [];
+    
+    const pages = text.split('__PDFJS_PAGE_BREAK__');
+    
+    pages.forEach((pageContent, pageIndex) => {
+      const sectionRegex = /(?:Article|Section)\s+[IVX\d]+\.?\s+([A-Z][\w\s]+)|(?:^|\n)([IVX\d]+\.?\s+[A-Z][\w\s]+)/g;
+      
+      let match;
+      let lastIndex = 0;
+      
+      while ((match = sectionRegex.exec(pageContent)) !== null) {
+        const title = match[1] || match[2];
+        const startIndex = match.index;
+        
+        if (lastIndex > 0) {
+          const previousContent = pageContent.substring(lastIndex, startIndex).trim();
+          if (sections.length > 0) {
+            sections[sections.length - 1].content = previousContent;
+          }
+        }
+        
+        sections.push({
+          title: title.trim(),
+          content: "",
+          pageNumber: pageIndex + 1
+        });
+        
+        lastIndex = startIndex;
+      }
+      
+      if (sections.length > 0 && lastIndex > 0) {
+        const content = pageContent.substring(lastIndex).trim();
+        sections[sections.length - 1].content += content;
+      } else if (pageContent.trim().length > 0) {
+        sections.push({
+          title: `Unnamed Section (${fileName})`,
+          content: pageContent.trim(),
+          pageNumber: pageIndex + 1
+        });
+      }
+    });
+    
+    return sections;
+  };
+
   const findRelevantInformation = async (query: string): Promise<string> => {
-    // If no reference documents are available, use the default responses
     if (referenceDocuments.length === 0) {
       return generateDefaultResponse(query);
     }
 
     try {
       console.log(`Searching for information about: "${query}" in ${referenceDocuments.length} documents`);
-      // For each document that doesn't have text_content yet, fetch and extract it
+      const allSections: {section: DocumentSection, docName: string}[] = [];
+      
       for (let i = 0; i < referenceDocuments.length; i++) {
         const doc = referenceDocuments[i];
         if (!doc.text_content) {
           console.log(`Processing document: ${doc.file_name}`);
-          // Get signed URL for the PDF
           const { data: fileData } = await supabase.storage
             .from('policy_documents')
             .createSignedUrl(doc.file_path, 3600);
             
           if (fileData?.signedUrl) {
             try {
-              // Extract text from the PDF using PDF.js
               const text = await extractTextFromPDF(fileData.signedUrl);
               console.log(`Extracted ${text.length} characters from ${doc.file_name}`);
               
-              // Update the document with its text content
               referenceDocuments[i] = { ...doc, text_content: text };
             } catch (err) {
               console.error(`Error extracting text from ${doc.file_name}:`, err);
             }
           }
         }
+        
+        if (doc.text_content) {
+          const sections = extractDocumentSections(doc.text_content, doc.file_name);
+          sections.forEach(section => {
+            allSections.push({ section, docName: doc.file_name });
+          });
+        }
       }
       
-      // Now all documents should have text content
-      // Simple search for relevant information based on keyword matching
-      const queryWords = query.toLowerCase().split(/\s+/);
-      let bestMatches: { text: string, score: number, docName: string }[] = [];
+      console.log(`Extracted ${allSections.length} total sections from all documents`);
       
-      referenceDocuments.forEach(doc => {
-        if (doc.text_content) {
-          // Split the document into paragraphs
-          const paragraphs = doc.text_content.split(/\n\s*\n/);
+      const queryWords = query.toLowerCase().split(/\s+/)
+        .filter(word => word.length > 3)
+        .map(word => word.replace(/[^\w\s]/g, ''));
+      
+      let bestMatches: { 
+        section: DocumentSection, 
+        score: number, 
+        docName: string 
+      }[] = [];
+      
+      allSections.forEach(({ section, docName }) => {
+        if (section.content.length > 30) {
+          const normalizedContent = section.content.toLowerCase();
+          const normalizedTitle = section.title.toLowerCase();
           
-          paragraphs.forEach(paragraph => {
-            if (paragraph.trim().length > 30) { // Skip very short paragraphs
-              const normalizedParagraph = paragraph.toLowerCase();
-              
-              // Count how many query words appear in this paragraph
-              const matchScore = queryWords.filter(word => 
-                word.length > 3 && normalizedParagraph.includes(word)
-              ).length;
-              
-              if (matchScore > 0) {
-                bestMatches.push({
-                  text: paragraph,
-                  score: matchScore,
-                  docName: doc.file_name
-                });
-              }
-            }
-          });
+          const contentMatchScore = queryWords.filter(word => 
+            normalizedContent.includes(word)
+          ).length;
+          
+          const titleMatchScore = queryWords.filter(word =>
+            normalizedTitle.includes(word)
+          ).length * 2;
+          
+          const matchScore = contentMatchScore + titleMatchScore;
+          
+          if (matchScore > 0) {
+            bestMatches.push({
+              section,
+              score: matchScore,
+              docName
+            });
+          }
         }
       });
       
-      // Sort matches by score (highest first)
       bestMatches.sort((a, b) => b.score - a.score);
-      console.log(`Found ${bestMatches.length} relevant paragraphs`);
+      console.log(`Found ${bestMatches.length} relevant sections`);
       
-      // Take the top 3 matches and combine them
-      const topMatches = bestMatches.slice(0, 3);
+      const topMatches = bestMatches.slice(0, 2);
       
       if (topMatches.length > 0) {
-        let combinedResponse = "Based on our policy documents:\n\n";
+        let answer = "";
+        
         topMatches.forEach(match => {
-          combinedResponse += `From "${match.docName}":\n${match.text.trim()}\n\n`;
+          let excerpt = match.section.content;
+          if (excerpt.split(/\s+/).length > 150) {
+            const sentences = excerpt.split(/(?<=[.!?])\s+/);
+            const relevantSentences = sentences.filter(sentence => 
+              queryWords.some(word => sentence.toLowerCase().includes(word))
+            );
+            
+            if (relevantSentences.length > 0) {
+              excerpt = relevantSentences.slice(0, 3).join(' ');
+            } else {
+              excerpt = excerpt.split(/\s+/).slice(0, 150).join(' ') + '...';
+            }
+          }
+          
+          answer += `**Source: "${match.docName}", ${match.section.title} (Page ${match.section.pageNumber})**\n\n`;
+          answer += `${excerpt.trim()}\n\n`;
         });
-        return combinedResponse.trim();
+        
+        return answer.trim();
       } else {
-        // No matches found, fall back to default responses
         return "I couldn't find specific information about that in our reference documents. " + 
                generateDefaultResponse(query);
       }
@@ -167,17 +241,14 @@ export const ChatBot = () => {
     }
   };
 
-  // Function to extract text from a PDF using PDF.js
   const extractTextFromPDF = async (pdfUrl: string): Promise<string> => {
     try {
-      // Load the PDF document
       const loadingTask = pdfjsLib.getDocument(pdfUrl);
       const pdf = await loadingTask.promise;
       console.log(`PDF loaded with ${pdf.numPages} pages`);
       
       let fullText = '';
       
-      // Extract text from each page
       for (let i = 1; i <= pdf.numPages; i++) {
         const page = await pdf.getPage(i);
         const textContent = await page.getTextContent();
@@ -186,7 +257,7 @@ export const ChatBot = () => {
           .map((item: any) => item.str)
           .join(' ');
           
-        fullText += pageText + '\n\n';
+        fullText += pageText + '\n\n__PDFJS_PAGE_BREAK__\n\n';
       }
       
       return fullText;
@@ -196,7 +267,6 @@ export const ChatBot = () => {
     }
   };
 
-  // Generate simple AI responses based on policy-related keywords
   const generateDefaultResponse = (question: string): string => {
     const lowerQuestion = question.toLowerCase();
     
@@ -226,7 +296,6 @@ export const ChatBot = () => {
   const handleSendMessage = async () => {
     if (!inputText.trim()) return;
     
-    // Add user message
     const userMessage: Message = {
       id: Date.now().toString(),
       text: inputText,
@@ -239,7 +308,6 @@ export const ChatBot = () => {
     setIsLoading(true);
     
     try {
-      // Find relevant information from reference documents
       const botResponse = await findRelevantInformation(inputText);
       
       const botMessage: Message = {
