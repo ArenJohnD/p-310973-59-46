@@ -1,8 +1,10 @@
-import { useEffect, useState } from "react";
+
+import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/components/ui/use-toast";
 import { Header } from "@/components/Header";
 import { AdminCategoryTable } from "@/components/AdminCategoryTable";
+import { useAuth } from "@/context/AuthContext";
 
 interface PolicyCategory {
   id: string;
@@ -14,47 +16,18 @@ interface PolicyCategory {
 }
 
 const Admin = () => {
+  const { isAdmin, isLoading } = useAuth();
   const [categories, setCategories] = useState<PolicyCategory[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
-    const checkAdminStatus = async () => {
-      try {
-        const { data, error } = await supabase.rpc('is_admin');
-        
-        if (error) {
-          console.error("Error checking admin status:", error);
-          toast({
-            title: "Error",
-            description: "Failed to verify admin privileges",
-            variant: "destructive",
-          });
-          setIsAdmin(false);
-          return;
-        }
-
-        setIsAdmin(!!data);
-        
-        if (!data) {
-          toast({
-            title: "Access Denied",
-            description: "You don't have admin privileges to access this page",
-            variant: "destructive",
-          });
-        } else {
-          fetchCategories();
-        }
-      } catch (error) {
-        console.error("Error in admin check:", error);
-        setIsAdmin(false);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    checkAdminStatus();
-  }, []);
+    // Only fetch categories if user is admin
+    if (isAdmin && !isLoading) {
+      fetchCategories();
+    } else if (!isLoading && !isAdmin) {
+      setLoading(false);
+    }
+  }, [isAdmin, isLoading]);
 
   const fetchCategories = async () => {
     try {

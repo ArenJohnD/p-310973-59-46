@@ -55,12 +55,12 @@ serve(async (req) => {
     const isNeuEmail = user.email?.endsWith("@neu.edu.ph");
 
     if (!isNeuEmail) {
-      // If not a NEU email, delete the user and return an error
-      await supabaseClient.auth.admin.deleteUser(user.id);
-      
+      // For testing purposes, we won't delete the user anymore
+      // Just return an error indicating the email domain is not allowed
       return new Response(
         JSON.stringify({ 
-          error: "Access denied. Only @neu.edu.ph email addresses are allowed." 
+          error: "Access denied. Only @neu.edu.ph email addresses are allowed.",
+          admin_status: false
         }),
         {
           status: 403,
@@ -73,7 +73,7 @@ serve(async (req) => {
     try {
       console.log(`Setting admin role for ${user.email}`);
       
-      // Check if user exists in profiles
+      // First, check if user exists in profiles
       const { data: profileData, error: profileError } = await supabaseClient
         .from('profiles')
         .select('*')
@@ -109,18 +109,6 @@ serve(async (req) => {
         }
       } else {
         console.log(`User ${user.email} already has admin role`);
-      }
-      
-      // Direct SQL query to ensure admin role is set
-      const { error: rpcError } = await supabaseClient.rpc(
-        'set_user_as_admin',
-        { _email: user.email }
-      );
-      
-      if (rpcError) {
-        console.error(`Error calling set_user_as_admin: ${rpcError.message}`);
-      } else {
-        console.log(`Successfully called set_user_as_admin for ${user.email}`);
       }
     } catch (profileSetError) {
       console.error(`Error setting admin role: ${profileSetError.message}`);

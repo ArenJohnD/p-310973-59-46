@@ -14,6 +14,7 @@ type AuthContextType = {
   user: User | null;
   session: Session | null;
   isLoading: boolean;
+  isAdmin: boolean;
   signOut: () => Promise<void>;
 };
 
@@ -23,6 +24,52 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  const checkAdminStatus = async (currentSession: Session | null) => {
+    if (!currentSession?.user) {
+      setIsAdmin(false);
+      return;
+    }
+
+    try {
+      console.log("Checking admin status for user:", currentSession.user.email);
+      
+      // Email is from NEU domain
+      if (currentSession.user.email?.endsWith('@neu.edu.ph')) {
+        console.log("NEU email detected, setting admin status to true");
+        setIsAdmin(true);
+        
+        // We'll do a verification anyway to update the database if needed
+        setTimeout(() => { // Using setTimeout to avoid auth deadlock
+          supabase.functions.invoke('verify-email-domain', {
+            method: 'GET',
+            headers: {
+              Authorization: `Bearer ${currentSession.access_token}`
+            }
+          }).catch(error => {
+            console.error("Error verifying email domain:", error);
+          });
+        }, 500);
+        
+        return;
+      }
+      
+      // Fall back to using the RPC function
+      const { data, error } = await supabase.rpc('is_admin');
+      
+      if (error) {
+        console.error("Error checking admin status with RPC:", error);
+        setIsAdmin(false);
+      } else {
+        console.log("is_admin RPC result:", data);
+        setIsAdmin(!!data);
+      }
+    } catch (error) {
+      console.error("Error in admin check:", error);
+      setIsAdmin(false);
+    }
+  };
 
   useEffect(() => {
     console.log("Setting up auth context");
@@ -32,44 +79,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.log("Initial session check:", session ? "Session found" : "No session");
       setSession(session);
       setUser(session?.user ?? null);
-      setIsLoading(false);
       
-      // If we have a session with NEU email, make sure they're set as admin
-      if (session?.user?.email?.endsWith('@neu.edu.ph')) {
-        console.log("NEU email detected, verifying admin status");
-        supabase.functions.invoke('verify-email-domain', {
-          method: 'GET',
-          headers: {
-            Authorization: `Bearer ${session.access_token}`
-          }
-        }).catch(error => {
-          console.error("Error verifying email domain:", error);
-        });
+      if (session) {
+        checkAdminStatus(session);
       }
+      
+      setIsLoading(false);
     });
     
     // THEN set up auth state listener 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
+      async (event, session) => {
         console.log("Auth state change:", event);
         setSession(session);
         setUser(session?.user ?? null);
-        setIsLoading(false);
         
-        if (event === 'SIGNED_IN' && session?.user?.email?.endsWith('@neu.edu.ph')) {
-          console.log("User signed in with NEU email");
-          // Extra check to ensure admin status is applied
-          setTimeout(() => { // Using setTimeout to avoid auth deadlock
-            supabase.functions.invoke('verify-email-domain', {
-              method: 'GET',
-              headers: {
-                Authorization: `Bearer ${session.access_token}`
-              }
-            }).catch(error => {
-              console.error("Error verifying email domain on sign in:", error);
-            });
-          }, 500);
+        if (session) {
+          await checkAdminStatus(session);
+        } else {
+          setIsAdmin(false);
         }
+        
+        setIsLoading(false);
       }
     );
 
@@ -100,6 +131,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     user,
     session,
     isLoading,
+    isAdmin,
     signOut,
   };
 

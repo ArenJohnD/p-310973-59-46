@@ -9,102 +9,9 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { LogOut, Settings } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
-import { useState, useEffect } from "react";
-import { toast } from "@/components/ui/use-toast";
 
 export const Header = () => {
-  const { user, signOut } = useAuth();
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [isCheckingAdmin, setIsCheckingAdmin] = useState(true);
-
-  useEffect(() => {
-    const checkAdminStatus = async () => {
-      if (!user) {
-        setIsAdmin(false);
-        setIsCheckingAdmin(false);
-        return;
-      }
-      
-      try {
-        setIsCheckingAdmin(true);
-        console.log("Checking admin status for user:", user.email);
-        
-        // First, check if the email is NEU domain
-        if (user.email?.endsWith('@neu.edu.ph')) {
-          console.log("User has NEU email, they should be admin");
-          
-          // Check the profiles table first
-          const { data: profileData, error: profileError } = await supabase
-            .from('profiles')
-            .select('role')
-            .eq('id', user.id)
-            .single();
-            
-          if (profileError) {
-            console.error("Error fetching profile:", profileError);
-          } else {
-            console.log("Profile role:", profileData?.role);
-            if (profileData?.role === 'admin') {
-              setIsAdmin(true);
-              setIsCheckingAdmin(false);
-              return;
-            }
-          }
-          
-          // If we're here, try to ensure admin status through the edge function
-          console.log("Calling verify-email-domain to ensure admin status");
-          const accessToken = (await supabase.auth.getSession()).data.session?.access_token;
-          
-          if (accessToken) {
-            const response = await supabase.functions.invoke('verify-email-domain', {
-              method: 'GET',
-              headers: {
-                Authorization: `Bearer ${accessToken}`
-              }
-            });
-            
-            if (response.error) {
-              console.error("Error calling verify-email-domain:", response.error);
-            } else {
-              console.log("verify-email-domain response:", response.data);
-              
-              // Check if the function reported admin status
-              if (response.data?.admin_status) {
-                setIsAdmin(true);
-                setIsCheckingAdmin(false);
-                return;
-              }
-            }
-          }
-        }
-        
-        // Fall back to directly using the RPC function
-        console.log("Using is_admin RPC as final check");
-        const { data, error } = await supabase.rpc('is_admin');
-        
-        if (error) {
-          console.error("Error checking admin status with RPC:", error);
-          toast({
-            title: "Error",
-            description: "Failed to verify admin privileges. Please try signing out and in again.",
-            variant: "destructive",
-          });
-          setIsAdmin(false);
-        } else {
-          console.log("is_admin RPC result:", data);
-          setIsAdmin(!!data);
-        }
-      } catch (error) {
-        console.error("Error in admin check:", error);
-        setIsAdmin(false);
-      } finally {
-        setIsCheckingAdmin(false);
-      }
-    };
-
-    checkAdminStatus();
-  }, [user]);
+  const { user, isAdmin, isLoading, signOut } = useAuth();
 
   const handleSignOut = async () => {
     await signOut();
@@ -161,8 +68,8 @@ export const Header = () => {
                 <DropdownMenuContent align="end" className="w-56">
                   <div className="px-2 py-1.5 text-sm font-medium">
                     {user.email}
-                    {isCheckingAdmin && <span className="ml-2 text-xs">(checking permissions...)</span>}
-                    {!isCheckingAdmin && isAdmin && <span className="ml-2 text-xs text-green-600">(admin)</span>}
+                    {isLoading && <span className="ml-2 text-xs">(checking permissions...)</span>}
+                    {!isLoading && isAdmin && <span className="ml-2 text-xs text-green-600">(admin)</span>}
                   </div>
                   
                   <DropdownMenuSeparator />
