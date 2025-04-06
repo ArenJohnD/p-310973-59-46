@@ -18,7 +18,7 @@ export const Header = () => {
   const handleSignOut = async () => {
     setIsOpen(false); // Close dropdown before sign out
     await signOut();
-    // No need to navigate here - AuthContext will handle it
+    // No need for navigation here - AuthContext will handle it
   };
 
   return (

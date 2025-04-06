@@ -104,7 +104,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         } else {
           setIsAdmin(false);
           if (event === 'SIGNED_OUT') {
-            // Redirect to login page when signed out
+            // Explicitly navigate to login page when signed out
+            console.log("User signed out, redirecting to login page");
             navigate('/login');
           }
         }
@@ -126,7 +127,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         title: "Signed out",
         description: "You have been successfully signed out.",
       });
-      // We don't need to manually navigate here as the onAuthStateChange will handle it
+      // Force navigation to login page
+      navigate('/login');
     } catch (error) {
       console.error("Error signing out:", error);
       toast({
