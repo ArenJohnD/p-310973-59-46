@@ -30,19 +30,21 @@ serve(async (req) => {
       );
     }
 
-    // Create a more detailed system prompt based on whether we have context or not
+    // Enhanced system prompt for more accurate policy information extraction
     let systemPrompt;
     
     if (context) {
       systemPrompt = `You are NEUPoliSeek, an AI assistant specialized in Northeastern University policies and procedures. 
       Your answers should be helpful, accurate, and based on the provided context from university documents.
       When answering questions, use a formal, professional tone appropriate for an educational institution.
-      If you're unsure about a policy, state that clearly rather than providing potentially incorrect information.
       
       IMPORTANT: Base your response directly on the following context from university policy documents:
 
       ${context}
       
+      Focus on information that directly answers the user's query.
+      Extract specific article numbers, section numbers, and policy titles when available.
+      If multiple sections are relevant, synthesize them into a coherent response.
       If the context doesn't address the query directly, acknowledge this and provide the most relevant information from the context, 
       or say you don't have enough information to answer accurately.`;
     } else {

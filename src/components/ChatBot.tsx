@@ -118,6 +118,7 @@ export const ChatBot = () => {
     const articleRegex = /(?:ARTICLE|Article)\s+([IVX\d]+)(?:\s*[-:]\s*|\s+)(.*?)(?=\n|$)/gi;
     const sectionRegex = /(?:SECTION|Section)\s+(\d+(?:\.\d+)?(?:[A-Za-z])?)\s*[-:.]?\s*(.*?)(?=\n|$)/gi;
     const headingRegex = /(?:^|\n)((?:[A-Z][A-Za-z\s]+|[A-Z\s]+):?)(?=\n|$)/gm;
+    const policyRegex = /(?:Policy|POLICY)\s+(?:Number|NUMBER)?\s*[:#]?\s*(\d+(?:\.\d+)?)/gi;
     
     const pageMarkers = text.match(/--- PAGE \d+ ---/g) || [];
     const pageTexts = text.split(/--- PAGE \d+ ---\n/).filter(Boolean);
@@ -134,9 +135,18 @@ export const ChatBot = () => {
         currentArticle = articleMatch[1];
         currentArticleTitle = articleMatch[2].trim();
         
+        // Find the end of this article (start of next article or end of page)
+        let articleContent = pageText.substring(articleMatch.index);
+        const nextArticleMatch = new RegExp(articleRegex.source, 'gi');
+        nextArticleMatch.lastIndex = articleMatch.index + articleMatch[0].length;
+        const nextMatch = nextArticleMatch.exec(pageText);
+        if (nextMatch) {
+          articleContent = pageText.substring(articleMatch.index, nextMatch.index);
+        }
+        
         sections.push({
           title: `Article ${currentArticle}: ${currentArticleTitle}`,
-          content: pageText.substring(articleMatch.index, articleMatch.index + 500),
+          content: articleContent,
           pageNumber,
           articleNumber: currentArticle
         });
@@ -174,6 +184,30 @@ export const ChatBot = () => {
       
       sectionRegex.lastIndex = 0;
       
+      // Extract policy numbers
+      let policyMatch;
+      while ((policyMatch = policyRegex.exec(pageText)) !== null) {
+        const policyId = policyMatch[1];
+        
+        // Extract 500 characters before and after the policy number to capture context
+        const startPos = Math.max(0, policyMatch.index - 500);
+        const endPos = Math.min(pageText.length, policyMatch.index + 1000);
+        const policyContext = pageText.substring(startPos, endPos);
+        
+        // Try to extract a title from the context
+        const titleMatch = policyContext.match(/(?:Title|TITLE|Subject|SUBJECT):\s*([^\n]+)/i);
+        const policyTitle = titleMatch ? titleMatch[1].trim() : `Policy ${policyId}`;
+        
+        sections.push({
+          title: `Policy ${policyId}: ${policyTitle}`,
+          content: policyContext,
+          pageNumber,
+          sectionId: policyId
+        });
+      }
+      
+      policyRegex.lastIndex = 0;
+      
       // Extract other headings if no articles/sections found
       if (!sections.some(s => s.pageNumber === pageNumber)) {
         let headingMatch;
@@ -200,64 +234,189 @@ export const ChatBot = () => {
           });
         }
         
-        // If still no sections found, add the whole page as a section
+        // If still no sections found, split page into manageable chunks
         if (!sections.some(s => s.pageNumber === pageNumber)) {
-          sections.push({
-            title: `Page ${pageNumber}`,
-            content: pageText,
-            pageNumber
+          // Split into chunks of roughly 1000 characters with paragraph breaks
+          const paragraphs = pageText.split(/\n\s*\n/);
+          let currentChunk = '';
+          let chunkNumber = 1;
+          
+          paragraphs.forEach(paragraph => {
+            if (currentChunk.length + paragraph.length > 1000) {
+              // Store current chunk as a section
+              sections.push({
+                title: `Page ${pageNumber} - Part ${chunkNumber}`,
+                content: currentChunk,
+                pageNumber
+              });
+              chunkNumber++;
+              currentChunk = paragraph;
+            } else {
+              currentChunk += (currentChunk ? '\n\n' : '') + paragraph;
+            }
           });
+          
+          // Add the last chunk if it has content
+          if (currentChunk) {
+            sections.push({
+              title: `Page ${pageNumber} - Part ${chunkNumber}`,
+              content: currentChunk,
+              pageNumber
+            });
+          }
         }
       }
     });
     
+    console.log(`Extracted ${sections.length} sections from document`);
     return sections;
   };
   
   const findBestMatch = (query: string, sections: DocumentSection[]): DocumentSection[] => {
-    // Convert query to lowercase and extract meaningful words
-    const queryWords = query.toLowerCase()
+    // Normalize and tokenize the query
+    const queryNormalized = query.toLowerCase().replace(/[^\w\s]/g, '');
+    const queryTokens = queryNormalized
       .split(/\s+/)
-      .filter(word => word.length > 3)
-      .map(word => word.replace(/[^\w\s]/g, ''));
+      .filter(word => word.length > 2)
+      .map(word => word.trim());
+      
+    if (queryTokens.length === 0) return [];
     
-    if (queryWords.length === 0) return [];
+    // Important keywords that might indicate relevance
+    const importantKeywords = [
+      'policy', 'procedure', 'regulation', 'rule', 'guideline', 
+      'requirement', 'mandatory', 'prohibited', 'permission', 'approval',
+      'student', 'faculty', 'staff', 'admin', 'academic', 'conduct', 'discipline'
+    ];
+    
+    // Weight query tokens that match important keywords higher
+    const weightedQueryTokens = queryTokens.map(token => ({
+      token,
+      weight: importantKeywords.includes(token) ? 2.0 : 1.0
+    }));
     
     // Score each section based on relevance to query
     const scoredSections = sections.map(section => {
-      const contentLower = section.content.toLowerCase();
-      const titleLower = section.title.toLowerCase();
+      const contentNormalized = section.content.toLowerCase().replace(/[^\w\s]/g, '');
+      const titleNormalized = section.title.toLowerCase().replace(/[^\w\s]/g, '');
       
       let score = 0;
       
       // Title matches (weighted higher)
-      queryWords.forEach(word => {
-        if (titleLower.includes(word)) score += 5;
+      weightedQueryTokens.forEach(({ token, weight }) => {
+        if (titleNormalized.includes(token)) {
+          score += 10 * weight;
+          
+          // Boost score for exact phrase matches in title
+          if (titleNormalized.includes(queryNormalized)) {
+            score += 30;
+          }
+        }
       });
       
       // Content matches
-      queryWords.forEach(word => {
-        const regex = new RegExp(`\\b${word}\\b`, 'gi');
-        const matches = contentLower.match(regex);
-        if (matches) score += matches.length;
+      weightedQueryTokens.forEach(({ token, weight }) => {
+        // Count occurrences
+        const regex = new RegExp(`\\b${token}\\b`, 'gi');
+        const matches = (section.content.match(regex) || []).length;
+        
+        // Add to score, with higher weight for more matches (logarithmic scaling)
+        if (matches > 0) {
+          score += Math.min(15, 5 + 2 * Math.log2(matches + 1)) * weight;
+        }
       });
       
+      // Boost score for sections with article and section numbers (more specific)
+      if (section.articleNumber && section.sectionId) {
+        score *= 1.2;
+      }
+      
       // Exact phrase matches (weighted highest)
-      const queryPhrase = query.toLowerCase();
-      if (contentLower.includes(queryPhrase)) score += 10;
-      if (titleLower.includes(queryPhrase)) score += 15;
+      if (contentNormalized.includes(queryNormalized)) {
+        score += 20;
+      }
+      
+      // Proximity boost - if query terms appear close together
+      if (queryTokens.length > 1) {
+        const proximityBonus = calculateProximityScore(contentNormalized, queryTokens);
+        score += proximityBonus;
+      }
       
       return { section, score };
     });
     
-    // Sort by score (highest first) and return top 3 matches
+    // Sort by score (highest first)
     scoredSections.sort((a, b) => b.score - a.score);
     
     // Only return sections with a minimum score
-    return scoredSections
-      .filter(item => item.score > 0)
-      .slice(0, 3)
+    const significantMatches = scoredSections
+      .filter(item => item.score > 5)
+      .slice(0, 5)  // Get top 5 matches
       .map(item => item.section);
+      
+    console.log(`Found ${significantMatches.length} significant matches for query`);
+    return significantMatches;
+  };
+  
+  // Helper function to calculate proximity score
+  const calculateProximityScore = (text: string, queryTokens: string[]): number => {
+    let proximityScore = 0;
+    
+    // Find positions of all query tokens in the text
+    const positions: Record<string, number[]> = {};
+    
+    queryTokens.forEach(token => {
+      positions[token] = [];
+      let pos = text.indexOf(token);
+      while (pos !== -1) {
+        positions[token].push(pos);
+        pos = text.indexOf(token, pos + 1);
+      }
+    });
+    
+    // Check if all tokens are present
+    const allTokensPresent = queryTokens.every(token => positions[token].length > 0);
+    if (!allTokensPresent) return 0;
+    
+    // Find the smallest window containing all tokens
+    const allPositions: {token: string, pos: number}[] = [];
+    Object.entries(positions).forEach(([token, poses]) => {
+      poses.forEach(pos => {
+        allPositions.push({ token, pos });
+      });
+    });
+    
+    allPositions.sort((a, b) => a.pos - b.pos);
+    
+    // Calculate minimum window size containing all unique tokens
+    let minWindow = Number.MAX_SAFE_INTEGER;
+    
+    for (let i = 0; i < allPositions.length; i++) {
+      const tokensInWindow = new Set<string>();
+      tokensInWindow.add(allPositions[i].token);
+      
+      for (let j = i + 1; j < allPositions.length; j++) {
+        tokensInWindow.add(allPositions[j].token);
+        
+        // If we have all tokens in this window
+        if (tokensInWindow.size === queryTokens.length) {
+          const windowSize = allPositions[j].pos - allPositions[i].pos + 1;
+          minWindow = Math.min(minWindow, windowSize);
+          break;
+        }
+      }
+    }
+    
+    // Award proximity bonus based on how close the terms appear
+    if (minWindow < 100) {
+      proximityScore = 15;  // Very close
+    } else if (minWindow < 300) {
+      proximityScore = 10;  // Moderately close
+    } else if (minWindow < 600) {
+      proximityScore = 5;   // In same general area
+    }
+    
+    return proximityScore;
   };
 
   const generateFormattedResponse = (text: string, article: string, section: string): string => {
