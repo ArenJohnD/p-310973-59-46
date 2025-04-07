@@ -30,7 +30,7 @@ serve(async (req) => {
       );
     }
 
-    // Enhanced system prompt for more accurate policy information extraction
+    // Enhanced system prompt with policy relevance constraint
     let systemPrompt;
     
     if (context) {
@@ -38,7 +38,12 @@ serve(async (req) => {
       Your answers should be helpful, accurate, and based on the provided context from university documents.
       When answering questions, use a formal, professional tone appropriate for an educational institution.
       
-      IMPORTANT: Base your response directly on the following context from university policy documents:
+      VERY IMPORTANT: 
+      1. ONLY answer questions related to New Era University policies and procedures.
+      2. If a question is not about university policies, politely decline to answer and explain that you can only provide information about New Era University policies.
+      3. Do not fabricate information if it's not in the context.
+      
+      Base your response directly on the following context from university policy documents:
 
       ${context}
       
@@ -48,11 +53,15 @@ serve(async (req) => {
       If the context doesn't address the query directly, acknowledge this and provide the most relevant information from the context, 
       or say you don't have enough information to answer accurately.`;
     } else {
-      systemPrompt = `You are NEUPoliSeek, an AI assistant specialized in Northeastern University policies and procedures. 
+      systemPrompt = `You are NEUPoliSeek, an AI assistant specialized in New Era University policies and procedures. 
       Your answers should be helpful, concise, and based only on factual information from the university's official documents.
       When answering questions, use a formal, professional tone appropriate for an educational institution.
-      If you're unsure about a policy, state that clearly rather than providing potentially incorrect information.
-      If you don't have enough information to answer a specific question, let the user know that they can check official university resources.`;
+      
+      VERY IMPORTANT:
+      1. ONLY answer questions related to New Era University policies and procedures.
+      2. If a question is not about university policies, politely decline to answer and explain that you can only provide information about New Era University policies.
+      3. If you're unsure about a policy, state that clearly rather than providing potentially incorrect information.
+      4. If you don't have enough information to answer a specific question, let the user know that they can check official university resources.`;
     }
 
     console.log("Calling Mistral API with query:", query);
@@ -97,14 +106,9 @@ serve(async (req) => {
     const generatedText = responseData.choices[0].message.content;
     console.log("Generated response successfully");
     
-    // Find any article and section references in the generated text
-    const articleMatch = generatedText.match(/ARTICLE\s+([IVX\d]+)/i);
-    const sectionMatch = generatedText.match(/SECTION\s+(\d+(?:\.\d+)?(?:[A-Za-z])?)/i);
-    
+    // Return just the answer without article/section references
     const result = {
-      answer: generatedText,
-      article: articleMatch ? articleMatch[1] : "I",
-      section: sectionMatch ? sectionMatch[1] : "1.A"
+      answer: generatedText
     };
     
     return new Response(

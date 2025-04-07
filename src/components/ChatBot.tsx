@@ -1,4 +1,3 @@
-
 import { useState, useRef, useEffect } from "react";
 import { Send, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -419,13 +418,6 @@ export const ChatBot = () => {
     return proximityScore;
   };
 
-  const generateFormattedResponse = (text: string, article: string, section: string): string => {
-    const formattedAnswer = text.trim();
-    const formattedReference = `ARTICLE ${article} | SECTION ${section}`;
-    
-    return `${formattedAnswer}\n\n${formattedReference}`;
-  };
-
   const findRelevantInformation = async (query: string): Promise<string> => {
     // If no reference documents are available, use Mistral API directly
     if (referenceDocuments.length === 0) {
@@ -437,11 +429,8 @@ export const ChatBot = () => {
 
         if (error) throw new Error(error.message);
         
-        return generateFormattedResponse(
-          data.answer,
-          data.article,
-          data.section
-        );
+        // Just return the answer without article/section formatting
+        return data.answer;
       } catch (err) {
         console.error("Error calling Mistral API:", err);
         return "I'm sorry, I encountered an error while processing your question. Please try again later.";
@@ -511,24 +500,13 @@ export const ChatBot = () => {
 
           if (error) throw new Error(error.message);
           
-          // Use article/section from best match if available
-          const articleRef = bestMatches[0].articleNumber || data.article;
-          const sectionRef = bestMatches[0].sectionId || data.section;
-          
-          return generateFormattedResponse(
-            data.answer,
-            articleRef,
-            sectionRef
-          );
+          // Return just the answer without article/section formatting
+          return data.answer;
         } catch (err) {
           console.error("Error calling Mistral API with context:", err);
           
           // Fallback to returning the best match content directly
-          return generateFormattedResponse(
-            `Based on the policy documents, here's what I found:\n\n${bestMatches[0].content}`,
-            bestMatches[0].articleNumber || "I",
-            bestMatches[0].sectionId || "1.A"
-          );
+          return `Based on the policy documents, here's what I found:\n\n${bestMatches[0].content}`;
         }
       } else {
         console.log("No specific matches found. Using general context");
@@ -547,11 +525,8 @@ export const ChatBot = () => {
 
           if (error) throw new Error(error.message);
           
-          return generateFormattedResponse(
-            data.answer,
-            data.article,
-            data.section
-          );
+          // Return just the answer without article/section formatting
+          return data.answer;
         } catch (err) {
           console.error("Error calling Mistral API with general context:", err);
           return "I couldn't find specific information about this in the policy documents. Please check the university handbook or ask an administrator.";
