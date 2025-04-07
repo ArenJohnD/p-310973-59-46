@@ -1,9 +1,16 @@
+
 import { Header } from "@/components/Header";
 import { SearchBar } from "@/components/SearchBar";
 import { PolicyGrid } from "@/components/PolicyGrid";
 import { FAQAccordion } from "@/components/FAQAccordion";
+import { useEffect } from "react";
 
 const Index = () => {
+  // Scroll to top when the component mounts
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, []);
+
   return (
     <div className="min-h-screen flex flex-col bg-[rgba(233,233,233,1)]">
       <Header />

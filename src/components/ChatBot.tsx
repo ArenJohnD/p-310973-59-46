@@ -7,6 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import * as pdfjsLib from 'pdfjs-dist';
 import { GlobalWorkerOptions } from 'pdfjs-dist';
 import ReactMarkdown from 'react-markdown';
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 // Initialize PDF.js worker
 GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
@@ -45,10 +46,6 @@ export const ChatBot = () => {
   const [referenceDocuments, setReferenceDocuments] = useState<ReferenceDocument[]>([]);
   const [loadingDocuments, setLoadingDocuments] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
 
   useEffect(() => {
     fetchReferenceDocuments();
@@ -534,34 +531,36 @@ export const ChatBot = () => {
 
   return (
     <div className="flex flex-col bg-white shadow-[0px_4px_4px_rgba(0,0,0,0.25)] border border-[rgba(0,0,0,0.2)] rounded-[30px] p-4 w-full max-w-[1002px] mx-auto">
-      <div className="flex flex-col gap-4 h-[350px] overflow-y-auto p-2">
-        {messages.map((message) => (
-          <div 
-            key={message.id}
-            className={`flex ${message.sender === "user" ? "justify-end" : "justify-start"}`}
-          >
+      <ScrollArea className="h-[350px] w-full">
+        <div className="flex flex-col gap-4 p-2">
+          {messages.map((message) => (
             <div 
-              className={`max-w-[80%] rounded-[20px] px-4 py-3 ${
-                message.sender === "user" 
-                  ? "bg-[rgba(49,159,67,0.1)] text-black" 
-                  : "bg-[rgba(49,159,67,1)] text-white"
-              }`}
+              key={message.id}
+              className={`flex ${message.sender === "user" ? "justify-end" : "justify-start"}`}
             >
-              {message.sender === "bot" ? (
-                <ReactMarkdown className="text-[16px] whitespace-pre-line markdown-content">
-                  {message.text}
-                </ReactMarkdown>
-              ) : (
-                <p className="text-[16px] whitespace-pre-line">{message.text}</p>
-              )}
-              <p className="text-[12px] opacity-70 mt-1">
-                {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-              </p>
+              <div 
+                className={`max-w-[80%] rounded-[20px] px-4 py-3 ${
+                  message.sender === "user" 
+                    ? "bg-[rgba(49,159,67,0.1)] text-black" 
+                    : "bg-[rgba(49,159,67,1)] text-white"
+                }`}
+              >
+                {message.sender === "bot" ? (
+                  <ReactMarkdown className="text-[16px] whitespace-pre-line markdown-content">
+                    {message.text}
+                  </ReactMarkdown>
+                ) : (
+                  <p className="text-[16px] whitespace-pre-line">{message.text}</p>
+                )}
+                <p className="text-[12px] opacity-70 mt-1">
+                  {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </p>
+              </div>
             </div>
-          </div>
-        ))}
-        <div ref={messagesEndRef} />
-      </div>
+          ))}
+          <div ref={messagesEndRef} />
+        </div>
+      </ScrollArea>
       
       <div className="flex items-center gap-2 mt-4">
         <Input
