@@ -69,8 +69,8 @@ export const Header = () => {
                   )}
                 </Avatar>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56 bg-white">
-                <div className="px-2 py-1.5 text-sm font-medium">
+              <DropdownMenuContent align="end" className="w-full min-w-[200px] bg-white z-50">
+                <div className="px-3 py-2 text-sm font-medium break-words">
                   {user.email}
                   {isLoading && <span className="ml-2 text-xs">(checking permissions...)</span>}
                   {!isLoading && isAdmin && <span className="ml-2 text-xs text-green-600">(admin)</span>}

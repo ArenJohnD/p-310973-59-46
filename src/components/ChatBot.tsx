@@ -36,7 +36,7 @@ interface DocumentSection {
 export const ChatBot = () => {
   const [messages, setMessages] = useState<Message[]>([{
     id: "welcome",
-    text: "Hello! I'm your NEUPoliSeek Assistant. How can I help you with school policies today?",
+    text: "Hi! I'm Poli, your NEU policy assistant. I can help you find information about university policies, answer questions about academic regulations, and guide you through administrative procedures. How can I assist you today?",
     sender: "bot",
     timestamp: new Date()
   }]);

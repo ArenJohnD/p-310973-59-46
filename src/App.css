@@ -73,3 +73,14 @@ header {
   color: #e0e0e0; /* Light gray for italic text for better readability */
 }
 
+/* Fix for dropdown menus */
+.dropdown-menu-content {
+  max-width: none !important;
+  min-width: 200px !important;
+  width: auto !important;
+  overflow: visible !important;
+  z-index: 100 !important;
+  white-space: normal !important;
+  word-break: break-word !important;
+}
+
