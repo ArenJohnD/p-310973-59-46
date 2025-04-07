@@ -54,3 +54,14 @@
   word-break: break-word;
   hyphens: auto;
 }
+
+/* Markdown styling for chat messages */
+.markdown-content strong {
+  font-weight: 700;
+  color: #ffeb3b; /* Yellow highlight for better visibility on green background */
+}
+
+.markdown-content em {
+  font-style: italic;
+  color: #e0e0e0; /* Light gray for italic text for better readability */
+}

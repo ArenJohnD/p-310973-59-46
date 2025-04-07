@@ -6,6 +6,7 @@ import { toast } from "@/components/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import * as pdfjsLib from 'pdfjs-dist';
 import { GlobalWorkerOptions } from 'pdfjs-dist';
+import ReactMarkdown from 'react-markdown';
 
 // Initialize PDF.js worker
 GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
@@ -45,12 +46,10 @@ export const ChatBot = () => {
   const [loadingDocuments, setLoadingDocuments] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Auto-scroll to bottom of chat on new messages
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // Fetch reference documents on component mount
   useEffect(() => {
     fetchReferenceDocuments();
   }, []);
@@ -113,7 +112,6 @@ export const ChatBot = () => {
   const extractDocumentSections = (text: string): DocumentSection[] => {
     const sections: DocumentSection[] = [];
     
-    // Enhanced regex patterns to capture more document structures
     const articleRegex = /(?:ARTICLE|Article)\s+([IVX\d]+)(?:\s*[-:]\s*|\s+)(.*?)(?=\n|$)/gi;
     const sectionRegex = /(?:SECTION|Section)\s+(\d+(?:\.\d+)?(?:[A-Za-z])?)\s*[-:.]?\s*(.*?)(?=\n|$)/gi;
     const headingRegex = /(?:^|\n)((?:[A-Z][A-Za-z\s]+|[A-Z\s]+):?)(?=\n|$)/gm;
@@ -128,13 +126,11 @@ export const ChatBot = () => {
     pageTexts.forEach((pageText, pageIndex) => {
       const pageNumber = pageIndex + 1;
       
-      // Extract articles
       let articleMatch;
       while ((articleMatch = articleRegex.exec(pageText)) !== null) {
         currentArticle = articleMatch[1];
         currentArticleTitle = articleMatch[2].trim();
         
-        // Find the end of this article (start of next article or end of page)
         let articleContent = pageText.substring(articleMatch.index);
         const nextArticleMatch = new RegExp(articleRegex.source, 'gi');
         nextArticleMatch.lastIndex = articleMatch.index + articleMatch[0].length;
@@ -153,7 +149,6 @@ export const ChatBot = () => {
       
       articleRegex.lastIndex = 0;
       
-      // Extract sections
       let sectionMatch;
       while ((sectionMatch = sectionRegex.exec(pageText)) !== null) {
         const sectionId = sectionMatch[1];
@@ -162,7 +157,6 @@ export const ChatBot = () => {
         let startIndex = sectionMatch.index;
         let endIndex = pageText.length;
         
-        // Find the end of this section (start of next section)
         const nextSectionMatch = new RegExp(sectionRegex.source, 'gi');
         nextSectionMatch.lastIndex = startIndex + sectionMatch[0].length;
         const nextMatch = nextSectionMatch.exec(pageText);
@@ -183,17 +177,14 @@ export const ChatBot = () => {
       
       sectionRegex.lastIndex = 0;
       
-      // Extract policy numbers
       let policyMatch;
       while ((policyMatch = policyRegex.exec(pageText)) !== null) {
         const policyId = policyMatch[1];
         
-        // Extract 500 characters before and after the policy number to capture context
         const startPos = Math.max(0, policyMatch.index - 500);
         const endPos = Math.min(pageText.length, policyMatch.index + 1000);
         const policyContext = pageText.substring(startPos, endPos);
         
-        // Try to extract a title from the context
         const titleMatch = policyContext.match(/(?:Title|TITLE|Subject|SUBJECT):\s*([^\n]+)/i);
         const policyTitle = titleMatch ? titleMatch[1].trim() : `Policy ${policyId}`;
         
@@ -207,7 +198,6 @@ export const ChatBot = () => {
       
       policyRegex.lastIndex = 0;
       
-      // Extract other headings if no articles/sections found
       if (!sections.some(s => s.pageNumber === pageNumber)) {
         let headingMatch;
         while ((headingMatch = headingRegex.exec(pageText)) !== null) {
@@ -216,7 +206,6 @@ export const ChatBot = () => {
           let startIndex = headingMatch.index;
           let endIndex = pageText.length;
           
-          // Find the end of this heading (start of next heading)
           const nextHeadingMatch = new RegExp(headingRegex.source, 'gm');
           nextHeadingMatch.lastIndex = startIndex + headingMatch[0].length;
           const nextMatch = nextHeadingMatch.exec(pageText);
@@ -233,16 +222,13 @@ export const ChatBot = () => {
           });
         }
         
-        // If still no sections found, split page into manageable chunks
         if (!sections.some(s => s.pageNumber === pageNumber)) {
-          // Split into chunks of roughly 1000 characters with paragraph breaks
           const paragraphs = pageText.split(/\n\s*\n/);
           let currentChunk = '';
           let chunkNumber = 1;
           
           paragraphs.forEach(paragraph => {
             if (currentChunk.length + paragraph.length > 1000) {
-              // Store current chunk as a section
               sections.push({
                 title: `Page ${pageNumber} - Part ${chunkNumber}`,
                 content: currentChunk,
@@ -255,7 +241,6 @@ export const ChatBot = () => {
             }
           });
           
-          // Add the last chunk if it has content
           if (currentChunk) {
             sections.push({
               title: `Page ${pageNumber} - Part ${chunkNumber}`,
@@ -270,9 +255,8 @@ export const ChatBot = () => {
     console.log(`Extracted ${sections.length} sections from document`);
     return sections;
   };
-  
+
   const findBestMatch = (query: string, sections: DocumentSection[]): DocumentSection[] => {
-    // Normalize and tokenize the query
     const queryNormalized = query.toLowerCase().replace(/[^\w\s]/g, '');
     const queryTokens = queryNormalized
       .split(/\s+/)
@@ -281,61 +265,50 @@ export const ChatBot = () => {
       
     if (queryTokens.length === 0) return [];
     
-    // Important keywords that might indicate relevance
     const importantKeywords = [
       'policy', 'procedure', 'regulation', 'rule', 'guideline', 
       'requirement', 'mandatory', 'prohibited', 'permission', 'approval',
       'student', 'faculty', 'staff', 'admin', 'academic', 'conduct', 'discipline'
     ];
     
-    // Weight query tokens that match important keywords higher
     const weightedQueryTokens = queryTokens.map(token => ({
       token,
       weight: importantKeywords.includes(token) ? 2.0 : 1.0
     }));
     
-    // Score each section based on relevance to query
     const scoredSections = sections.map(section => {
       const contentNormalized = section.content.toLowerCase().replace(/[^\w\s]/g, '');
       const titleNormalized = section.title.toLowerCase().replace(/[^\w\s]/g, '');
       
       let score = 0;
       
-      // Title matches (weighted higher)
       weightedQueryTokens.forEach(({ token, weight }) => {
         if (titleNormalized.includes(token)) {
           score += 10 * weight;
           
-          // Boost score for exact phrase matches in title
           if (titleNormalized.includes(queryNormalized)) {
             score += 30;
           }
         }
       });
       
-      // Content matches
       weightedQueryTokens.forEach(({ token, weight }) => {
-        // Count occurrences
         const regex = new RegExp(`\\b${token}\\b`, 'gi');
         const matches = (section.content.match(regex) || []).length;
         
-        // Add to score, with higher weight for more matches (logarithmic scaling)
         if (matches > 0) {
           score += Math.min(15, 5 + 2 * Math.log2(matches + 1)) * weight;
         }
       });
       
-      // Boost score for sections with article and section numbers (more specific)
       if (section.articleNumber && section.sectionId) {
         score *= 1.2;
       }
       
-      // Exact phrase matches (weighted highest)
       if (contentNormalized.includes(queryNormalized)) {
         score += 20;
       }
       
-      // Proximity boost - if query terms appear close together
       if (queryTokens.length > 1) {
         const proximityBonus = calculateProximityScore(contentNormalized, queryTokens);
         score += proximityBonus;
@@ -344,24 +317,20 @@ export const ChatBot = () => {
       return { section, score };
     });
     
-    // Sort by score (highest first)
     scoredSections.sort((a, b) => b.score - a.score);
     
-    // Only return sections with a minimum score
     const significantMatches = scoredSections
       .filter(item => item.score > 5)
-      .slice(0, 5)  // Get top 5 matches
+      .slice(0, 5)
       .map(item => item.section);
       
     console.log(`Found ${significantMatches.length} significant matches for query`);
     return significantMatches;
   };
-  
-  // Helper function to calculate proximity score
+
   const calculateProximityScore = (text: string, queryTokens: string[]): number => {
     let proximityScore = 0;
     
-    // Find positions of all query tokens in the text
     const positions: Record<string, number[]> = {};
     
     queryTokens.forEach(token => {
@@ -373,11 +342,9 @@ export const ChatBot = () => {
       }
     });
     
-    // Check if all tokens are present
     const allTokensPresent = queryTokens.every(token => positions[token].length > 0);
     if (!allTokensPresent) return 0;
     
-    // Find the smallest window containing all tokens
     const allPositions: {token: string, pos: number}[] = [];
     Object.entries(positions).forEach(([token, poses]) => {
       poses.forEach(pos => {
@@ -387,7 +354,6 @@ export const ChatBot = () => {
     
     allPositions.sort((a, b) => a.pos - b.pos);
     
-    // Calculate minimum window size containing all unique tokens
     let minWindow = Number.MAX_SAFE_INTEGER;
     
     for (let i = 0; i < allPositions.length; i++) {
@@ -397,7 +363,6 @@ export const ChatBot = () => {
       for (let j = i + 1; j < allPositions.length; j++) {
         tokensInWindow.add(allPositions[j].token);
         
-        // If we have all tokens in this window
         if (tokensInWindow.size === queryTokens.length) {
           const windowSize = allPositions[j].pos - allPositions[i].pos + 1;
           minWindow = Math.min(minWindow, windowSize);
@@ -406,20 +371,18 @@ export const ChatBot = () => {
       }
     }
     
-    // Award proximity bonus based on how close the terms appear
     if (minWindow < 100) {
-      proximityScore = 15;  // Very close
+      proximityScore = 15;
     } else if (minWindow < 300) {
-      proximityScore = 10;  // Moderately close
+      proximityScore = 10;
     } else if (minWindow < 600) {
-      proximityScore = 5;   // In same general area
+      proximityScore = 5;
     }
     
     return proximityScore;
   };
 
   const findRelevantInformation = async (query: string): Promise<string> => {
-    // If no reference documents are available, use Mistral API directly
     if (referenceDocuments.length === 0) {
       try {
         console.log("No reference documents found, using Mistral API directly");
@@ -429,7 +392,6 @@ export const ChatBot = () => {
 
         if (error) throw new Error(error.message);
         
-        // Just return the answer without article/section formatting
         return data.answer;
       } catch (err) {
         console.error("Error calling Mistral API:", err);
@@ -440,27 +402,22 @@ export const ChatBot = () => {
     try {
       const allSections: DocumentSection[] = [];
       
-      // Process each reference document
       for (const doc of referenceDocuments) {
         if (!doc.text_content) {
           console.log(`Processing document: ${doc.file_name}`);
           try {
-            // Get signed URL for the document
             const { data: fileData } = await supabase.storage
               .from('policy_documents')
               .createSignedUrl(doc.file_path, 3600);
               
             if (fileData?.signedUrl) {
-              // Extract text from PDF
               const text = await extractTextFromPDF(fileData.signedUrl);
               
-              // Update document with extracted text
               const docWithContent = { ...doc, text_content: text };
               setReferenceDocuments(prev => 
                 prev.map(d => d.id === doc.id ? docWithContent : d)
               );
               
-              // Extract sections from document
               const sections = extractDocumentSections(text);
               allSections.push(...sections);
               console.log(`Extracted ${sections.length} sections from ${doc.file_name}`);
@@ -469,7 +426,6 @@ export const ChatBot = () => {
             console.error(`Error extracting text from ${doc.file_name}:`, err);
           }
         } else {
-          // Use already extracted sections
           const sections = extractDocumentSections(doc.text_content);
           allSections.push(...sections);
           console.log(`Using ${sections.length} sections from cached document ${doc.file_name}`);
@@ -478,13 +434,11 @@ export const ChatBot = () => {
       
       console.log(`Total sections available: ${allSections.length}`);
       
-      // Find best matching sections for the query
       const bestMatches = findBestMatch(query, allSections);
       
       if (bestMatches.length > 0) {
         console.log(`Found ${bestMatches.length} relevant sections`);
         
-        // Create context from best matching sections
         const context = bestMatches
           .map(match => `${match.title}\n${match.content}`)
           .join('\n\n');
@@ -493,39 +447,33 @@ export const ChatBot = () => {
         console.log("Sending query to Mistral with context");
         
         try {
-          // Call Mistral API with context
           const { data, error } = await supabase.functions.invoke('mistral-chat', {
             body: { query, context }
           });
 
           if (error) throw new Error(error.message);
           
-          // Return just the answer without article/section formatting
           return data.answer;
         } catch (err) {
           console.error("Error calling Mistral API with context:", err);
           
-          // Fallback to returning the best match content directly
           return `Based on the policy documents, here's what I found:\n\n${bestMatches[0].content}`;
         }
       } else {
         console.log("No specific matches found. Using general context");
         
-        // If no specific matches, use some general context from documents
         const generalContext = allSections
           .slice(0, 5)
           .map(section => `${section.title}\n${section.content}`)
           .join('\n\n');
           
         try {
-          // Call Mistral API with general context
           const { data, error } = await supabase.functions.invoke('mistral-chat', {
             body: { query, context: generalContext }
           });
 
           if (error) throw new Error(error.message);
           
-          // Return just the answer without article/section formatting
           return data.answer;
         } catch (err) {
           console.error("Error calling Mistral API with general context:", err);
@@ -571,7 +519,6 @@ export const ChatBot = () => {
         variant: "destructive",
       });
       
-      // Add error message to chat
       const errorMessage: Message = {
         id: (Date.now() + 1).toString(),
         text: "I'm sorry, I encountered an error while processing your question. Please try again later.",
@@ -600,7 +547,13 @@ export const ChatBot = () => {
                   : "bg-[rgba(49,159,67,1)] text-white"
               }`}
             >
-              <p className="text-[16px] whitespace-pre-line">{message.text}</p>
+              {message.sender === "bot" ? (
+                <ReactMarkdown className="text-[16px] whitespace-pre-line markdown-content">
+                  {message.text}
+                </ReactMarkdown>
+              ) : (
+                <p className="text-[16px] whitespace-pre-line">{message.text}</p>
+              )}
               <p className="text-[12px] opacity-70 mt-1">
                 {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
               </p>
