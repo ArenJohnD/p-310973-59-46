@@ -1,3 +1,4 @@
+
 import { useState, useRef, useEffect } from "react";
 import { Send, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -113,8 +114,10 @@ export const ChatBot = () => {
   const extractDocumentSections = (text: string): DocumentSection[] => {
     const sections: DocumentSection[] = [];
     
+    // Enhanced regex patterns to capture more document structures
     const articleRegex = /(?:ARTICLE|Article)\s+([IVX\d]+)(?:\s*[-:]\s*|\s+)(.*?)(?=\n|$)/gi;
     const sectionRegex = /(?:SECTION|Section)\s+(\d+(?:\.\d+)?(?:[A-Za-z])?)\s*[-:.]?\s*(.*?)(?=\n|$)/gi;
+    const headingRegex = /(?:^|\n)((?:[A-Z][A-Za-z\s]+|[A-Z\s]+):?)(?=\n|$)/gm;
     
     const pageMarkers = text.match(/--- PAGE \d+ ---/g) || [];
     const pageTexts = text.split(/--- PAGE \d+ ---\n/).filter(Boolean);
@@ -125,6 +128,7 @@ export const ChatBot = () => {
     pageTexts.forEach((pageText, pageIndex) => {
       const pageNumber = pageIndex + 1;
       
+      // Extract articles
       let articleMatch;
       while ((articleMatch = articleRegex.exec(pageText)) !== null) {
         currentArticle = articleMatch[1];
@@ -140,16 +144,18 @@ export const ChatBot = () => {
       
       articleRegex.lastIndex = 0;
       
+      // Extract sections
       let sectionMatch;
       while ((sectionMatch = sectionRegex.exec(pageText)) !== null) {
         const sectionId = sectionMatch[1];
         const sectionTitle = sectionMatch[2].trim();
         
-        let startIndex = sectionMatch.index + sectionMatch[0].length;
+        let startIndex = sectionMatch.index;
         let endIndex = pageText.length;
         
+        // Find the end of this section (start of next section)
         const nextSectionMatch = new RegExp(sectionRegex.source, 'gi');
-        nextSectionMatch.lastIndex = startIndex;
+        nextSectionMatch.lastIndex = startIndex + sectionMatch[0].length;
         const nextMatch = nextSectionMatch.exec(pageText);
         if (nextMatch) {
           endIndex = nextMatch.index;
@@ -167,47 +173,91 @@ export const ChatBot = () => {
       }
       
       sectionRegex.lastIndex = 0;
+      
+      // Extract other headings if no articles/sections found
+      if (!sections.some(s => s.pageNumber === pageNumber)) {
+        let headingMatch;
+        while ((headingMatch = headingRegex.exec(pageText)) !== null) {
+          const headingTitle = headingMatch[1].trim();
+          
+          let startIndex = headingMatch.index;
+          let endIndex = pageText.length;
+          
+          // Find the end of this heading (start of next heading)
+          const nextHeadingMatch = new RegExp(headingRegex.source, 'gm');
+          nextHeadingMatch.lastIndex = startIndex + headingMatch[0].length;
+          const nextMatch = nextHeadingMatch.exec(pageText);
+          if (nextMatch) {
+            endIndex = nextMatch.index;
+          }
+          
+          const content = pageText.substring(startIndex, endIndex).trim();
+          
+          sections.push({
+            title: headingTitle,
+            content,
+            pageNumber
+          });
+        }
+        
+        // If still no sections found, add the whole page as a section
+        if (!sections.some(s => s.pageNumber === pageNumber)) {
+          sections.push({
+            title: `Page ${pageNumber}`,
+            content: pageText,
+            pageNumber
+          });
+        }
+      }
     });
     
     return sections;
   };
   
-  const findBestMatch = (query: string, sections: DocumentSection[]): DocumentSection | null => {
+  const findBestMatch = (query: string, sections: DocumentSection[]): DocumentSection[] => {
+    // Convert query to lowercase and extract meaningful words
     const queryWords = query.toLowerCase()
       .split(/\s+/)
       .filter(word => word.length > 3)
       .map(word => word.replace(/[^\w\s]/g, ''));
     
-    if (queryWords.length === 0) return null;
+    if (queryWords.length === 0) return [];
     
+    // Score each section based on relevance to query
     const scoredSections = sections.map(section => {
       const contentLower = section.content.toLowerCase();
       const titleLower = section.title.toLowerCase();
       
       let score = 0;
       
+      // Title matches (weighted higher)
       queryWords.forEach(word => {
-        if (titleLower.includes(word)) score += 3;
+        if (titleLower.includes(word)) score += 5;
       });
       
+      // Content matches
       queryWords.forEach(word => {
         const regex = new RegExp(`\\b${word}\\b`, 'gi');
         const matches = contentLower.match(regex);
         if (matches) score += matches.length;
       });
       
+      // Exact phrase matches (weighted highest)
       const queryPhrase = query.toLowerCase();
-      if (contentLower.includes(queryPhrase)) score += 5;
-      if (titleLower.includes(queryPhrase)) score += 10;
+      if (contentLower.includes(queryPhrase)) score += 10;
+      if (titleLower.includes(queryPhrase)) score += 15;
       
       return { section, score };
     });
     
+    // Sort by score (highest first) and return top 3 matches
     scoredSections.sort((a, b) => b.score - a.score);
     
-    return scoredSections.length > 0 && scoredSections[0].score > 0 
-      ? scoredSections[0].section 
-      : null;
+    // Only return sections with a minimum score
+    return scoredSections
+      .filter(item => item.score > 0)
+      .slice(0, 3)
+      .map(item => item.section);
   };
 
   const generateFormattedResponse = (text: string, article: string, section: string): string => {
@@ -218,8 +268,10 @@ export const ChatBot = () => {
   };
 
   const findRelevantInformation = async (query: string): Promise<string> => {
+    // If no reference documents are available, use Mistral API directly
     if (referenceDocuments.length === 0) {
       try {
+        console.log("No reference documents found, using Mistral API directly");
         const { data, error } = await supabase.functions.invoke('mistral-chat', {
           body: { query, context: "" }
         });
@@ -233,79 +285,103 @@ export const ChatBot = () => {
         );
       } catch (err) {
         console.error("Error calling Mistral API:", err);
-        return generateFormattedResponse(
-          "I'm sorry, I encountered an error while processing your question. Please try again later.",
-          "I",
-          "1.A"
-        );
+        return "I'm sorry, I encountered an error while processing your question. Please try again later.";
       }
     }
 
     try {
       const allSections: DocumentSection[] = [];
       
+      // Process each reference document
       for (const doc of referenceDocuments) {
         if (!doc.text_content) {
           console.log(`Processing document: ${doc.file_name}`);
-          const { data: fileData } = await supabase.storage
-            .from('policy_documents')
-            .createSignedUrl(doc.file_path, 3600);
-            
-          if (fileData?.signedUrl) {
-            try {
-              const text = await extractTextFromPDF(fileData.signedUrl);
-              const docWithContent = { ...doc, text_content: text };
+          try {
+            // Get signed URL for the document
+            const { data: fileData } = await supabase.storage
+              .from('policy_documents')
+              .createSignedUrl(doc.file_path, 3600);
               
+            if (fileData?.signedUrl) {
+              // Extract text from PDF
+              const text = await extractTextFromPDF(fileData.signedUrl);
+              
+              // Update document with extracted text
+              const docWithContent = { ...doc, text_content: text };
               setReferenceDocuments(prev => 
                 prev.map(d => d.id === doc.id ? docWithContent : d)
               );
               
+              // Extract sections from document
               const sections = extractDocumentSections(text);
               allSections.push(...sections);
-            } catch (err) {
-              console.error(`Error extracting text from ${doc.file_name}:`, err);
+              console.log(`Extracted ${sections.length} sections from ${doc.file_name}`);
             }
+          } catch (err) {
+            console.error(`Error extracting text from ${doc.file_name}:`, err);
           }
         } else {
+          // Use already extracted sections
           const sections = extractDocumentSections(doc.text_content);
           allSections.push(...sections);
+          console.log(`Using ${sections.length} sections from cached document ${doc.file_name}`);
         }
       }
       
-      console.log(`Extracted ${allSections.length} total sections from all documents`);
+      console.log(`Total sections available: ${allSections.length}`);
       
-      const bestMatch = findBestMatch(query, allSections);
+      // Find best matching sections for the query
+      const bestMatches = findBestMatch(query, allSections);
       
-      if (bestMatch) {
-        const context = `${bestMatch.title}\n${bestMatch.content}`;
+      if (bestMatches.length > 0) {
+        console.log(`Found ${bestMatches.length} relevant sections`);
+        
+        // Create context from best matching sections
+        const context = bestMatches
+          .map(match => `${match.title}\n${match.content}`)
+          .join('\n\n');
+        
+        console.log("Context length: ", context.length);
+        console.log("Sending query to Mistral with context");
         
         try {
+          // Call Mistral API with context
           const { data, error } = await supabase.functions.invoke('mistral-chat', {
             body: { query, context }
           });
 
           if (error) throw new Error(error.message);
           
+          // Use article/section from best match if available
+          const articleRef = bestMatches[0].articleNumber || data.article;
+          const sectionRef = bestMatches[0].sectionId || data.section;
+          
           return generateFormattedResponse(
             data.answer,
-            bestMatch.articleNumber || data.article,
-            bestMatch.sectionId || data.section
+            articleRef,
+            sectionRef
           );
         } catch (err) {
           console.error("Error calling Mistral API with context:", err);
+          
+          // Fallback to returning the best match content directly
           return generateFormattedResponse(
-            bestMatch.content,
-            bestMatch.articleNumber || "I",
-            bestMatch.sectionId || "1.A"
+            `Based on the policy documents, here's what I found:\n\n${bestMatches[0].content}`,
+            bestMatches[0].articleNumber || "I",
+            bestMatches[0].sectionId || "1.A"
           );
         }
       } else {
+        console.log("No specific matches found. Using general context");
+        
+        // If no specific matches, use some general context from documents
         const generalContext = allSections
-          .slice(0, 3)
+          .slice(0, 5)
           .map(section => `${section.title}\n${section.content}`)
           .join('\n\n');
           
         try {
+          // Call Mistral API with general context
           const { data, error } = await supabase.functions.invoke('mistral-chat', {
             body: { query, context: generalContext }
           });
@@ -318,21 +394,13 @@ export const ChatBot = () => {
             data.section
           );
         } catch (err) {
-          console.error("Error calling Mistral API without specific context:", err);
-          return generateFormattedResponse(
-            "I couldn't find specific information about this in the policy documents. Please check the university handbook or ask an administrator.",
-            "I",
-            "1.A"
-          );
+          console.error("Error calling Mistral API with general context:", err);
+          return "I couldn't find specific information about this in the policy documents. Please check the university handbook or ask an administrator.";
         }
       }
     } catch (error) {
       console.error("Error searching reference documents:", error);
-      return generateFormattedResponse(
-        "I encountered an error while searching the policy documents. Please try again later.",
-        "I",
-        "1.A"
-      );
+      return "I encountered an error while searching the policy documents. Please try again later.";
     }
   };
 
@@ -368,6 +436,16 @@ export const ChatBot = () => {
         description: "Failed to generate a response. Please try again.",
         variant: "destructive",
       });
+      
+      // Add error message to chat
+      const errorMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        text: "I'm sorry, I encountered an error while processing your question. Please try again later.",
+        sender: "bot",
+        timestamp: new Date()
+      };
+      
+      setMessages(prev => [...prev, errorMessage]);
     } finally {
       setIsLoading(false);
     }

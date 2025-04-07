@@ -30,15 +30,31 @@ serve(async (req) => {
       );
     }
 
-    // Create a system prompt that instructs the model to be a university policy expert
-    const systemPrompt = `You are NEUPoliSeek, an AI assistant specialized in Northeastern University policies and procedures. 
-    Your answers should be helpful, concise, and based only on factual information from the university's official documents.
-    When answering questions, use a formal, professional tone appropriate for an educational institution.
-    If you're unsure about a policy, state that clearly rather than providing potentially incorrect information.
+    // Create a more detailed system prompt based on whether we have context or not
+    let systemPrompt;
     
-    ${context ? `Here is additional context from university policy documents that may help answer the query:\n\n${context}` : ""}`;
+    if (context) {
+      systemPrompt = `You are NEUPoliSeek, an AI assistant specialized in Northeastern University policies and procedures. 
+      Your answers should be helpful, accurate, and based on the provided context from university documents.
+      When answering questions, use a formal, professional tone appropriate for an educational institution.
+      If you're unsure about a policy, state that clearly rather than providing potentially incorrect information.
+      
+      IMPORTANT: Base your response directly on the following context from university policy documents:
+
+      ${context}
+      
+      If the context doesn't address the query directly, acknowledge this and provide the most relevant information from the context, 
+      or say you don't have enough information to answer accurately.`;
+    } else {
+      systemPrompt = `You are NEUPoliSeek, an AI assistant specialized in Northeastern University policies and procedures. 
+      Your answers should be helpful, concise, and based only on factual information from the university's official documents.
+      When answering questions, use a formal, professional tone appropriate for an educational institution.
+      If you're unsure about a policy, state that clearly rather than providing potentially incorrect information.
+      If you don't have enough information to answer a specific question, let the user know that they can check official university resources.`;
+    }
 
     console.log("Calling Mistral API with query:", query);
+    console.log("Context length:", context ? context.length : 0);
     
     const response = await fetch(MISTRAL_API_URL, {
       method: "POST",
@@ -58,8 +74,8 @@ serve(async (req) => {
             content: query
           }
         ],
-        temperature: 0.3, // Lower temperature for more factual responses
-        max_tokens: 500
+        temperature: 0.2, // Lower temperature for more factual responses
+        max_tokens: 800
       })
     });
 
@@ -77,6 +93,7 @@ serve(async (req) => {
     }
 
     const generatedText = responseData.choices[0].message.content;
+    console.log("Generated response successfully");
     
     // Find any article and section references in the generated text
     const articleMatch = generatedText.match(/ARTICLE\s+([IVX\d]+)/i);
@@ -87,8 +104,6 @@ serve(async (req) => {
       article: articleMatch ? articleMatch[1] : "I",
       section: sectionMatch ? sectionMatch[1] : "1.A"
     };
-
-    console.log("Generated response successfully");
     
     return new Response(
       JSON.stringify(result),
