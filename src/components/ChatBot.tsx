@@ -1,3 +1,4 @@
+
 import { useState, useRef, useEffect } from "react";
 import { Send, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -46,6 +47,17 @@ export const ChatBot = () => {
   const [referenceDocuments, setReferenceDocuments] = useState<ReferenceDocument[]>([]);
   const [loadingDocuments, setLoadingDocuments] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const scrollAreaRef = useRef<HTMLDivElement>(null);
+
+  // Scroll to bottom of messages when new messages are added
+  useEffect(() => {
+    if (scrollAreaRef.current) {
+      const scrollContainer = scrollAreaRef.current.querySelector('[data-radix-scroll-area-viewport]');
+      if (scrollContainer) {
+        scrollContainer.scrollTop = scrollContainer.scrollHeight;
+      }
+    }
+  }, [messages]);
 
   useEffect(() => {
     fetchReferenceDocuments();
@@ -531,7 +543,7 @@ export const ChatBot = () => {
 
   return (
     <div className="flex flex-col bg-white shadow-[0px_4px_4px_rgba(0,0,0,0.25)] border border-[rgba(0,0,0,0.2)] rounded-[30px] p-4 w-full max-w-[1002px] mx-auto">
-      <ScrollArea className="h-[350px] w-full">
+      <ScrollArea ref={scrollAreaRef} className="h-[350px] w-full">
         <div className="flex flex-col gap-4 p-2">
           {messages.map((message) => (
             <div 
