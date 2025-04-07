@@ -42,3 +42,15 @@
 .read-the-docs {
   color: #888;
 }
+
+/* Policy category buttons */
+.policy-card-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  width: 100%;
+  text-align: center;
+  word-break: break-word;
+  hyphens: auto;
+}

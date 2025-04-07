@@ -63,7 +63,7 @@ export const PolicyGrid = () => {
             <p>Loading categories...</p>
           </div>
         ) : categories.length > 0 ? (
-          <div className="grid grid-cols-3 gap-5 max-md:grid-cols-1">
+          <div className="grid grid-cols-3 gap-8 max-md:grid-cols-1">
             {categories.map((category) => (
               <PolicyCard key={category.id} title={category.title} id={category.id} />
             ))}
