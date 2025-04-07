@@ -55,6 +55,13 @@
   hyphens: auto;
 }
 
+/* Remove overlapping gray layer in header */
+header {
+  position: relative;
+  z-index: 10;
+  border-bottom: 1px solid #e5e7eb;
+}
+
 /* Markdown styling for chat messages */
 .markdown-content strong {
   font-weight: 700;
@@ -65,3 +72,4 @@
   font-style: italic;
   color: #e0e0e0; /* Light gray for italic text for better readability */
 }
+

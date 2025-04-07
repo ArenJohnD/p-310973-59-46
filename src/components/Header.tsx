@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { LogOut, Settings, Bell } from "lucide-react";
 import { useState } from "react";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 export const Header = () => {
   const { user, isAdmin, isLoading, signOut } = useAuth();
@@ -21,6 +21,9 @@ export const Header = () => {
     await signOut();
     // No need for navigation here - AuthContext will handle it
   };
+
+  // Extract avatar URL from user metadata if available
+  const avatarUrl = user?.user_metadata?.avatar_url || null;
 
   return (
     <header className="bg-[#F0F0F0] shadow-sm">
@@ -34,8 +37,8 @@ export const Header = () => {
           />
         </div>
         
-        {/* Navigation - Centered */}
-        <nav className="flex-grow flex justify-center">
+        {/* Navigation - Shifted slightly left */}
+        <nav className="flex justify-center mr-auto ml-12 flex-grow">
           <div className="text-black text-lg font-medium flex gap-8">
             <Link to="/" className="hover:text-gray-700 transition-colors">
               Home
@@ -50,16 +53,20 @@ export const Header = () => {
         </nav>
         
         {/* Right side icons */}
-        <div className="flex items-center gap-4">
-          <Bell className="h-6 w-6 text-gray-700" />
+        <div className="flex items-center gap-6">
+          <Bell className="h-7 w-7 text-gray-700" />
           
           {user && (
             <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
               <DropdownMenuTrigger className="focus:outline-none">
                 <Avatar className="h-10 w-10 bg-white border border-gray-200">
-                  <AvatarFallback className="bg-white text-gray-800">
-                    {user.email?.substring(0, 2).toUpperCase() || "U"}
-                  </AvatarFallback>
+                  {avatarUrl ? (
+                    <AvatarImage src={avatarUrl} alt={user.email || "User"} />
+                  ) : (
+                    <AvatarFallback className="bg-white text-gray-800">
+                      {user.email?.substring(0, 2).toUpperCase() || "U"}
+                    </AvatarFallback>
+                  )}
                 </Avatar>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56 bg-white">
