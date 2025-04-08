@@ -5,11 +5,13 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/use-toast";
 import { Loader2 } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 const Login = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [initializing, setInitializing] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [initTimeout, setInitTimeout] = useState<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
@@ -39,7 +41,22 @@ const Login = () => {
           
           if (data.session) {
             console.log("Received session from OAuth callback");
-            // If we have a session, clear the hash and navigate to home page
+
+            // Verify that the email domain is valid
+            const email = data.session.user.email;
+            if (email && !email.toLowerCase().endsWith('@neu.edu.ph')) {
+              console.error("Invalid email domain:", email);
+              
+              // Sign out the user since they don't have the correct domain
+              await supabase.auth.signOut();
+              
+              setError("Only emails with @neu.edu.ph domain are allowed to sign in.");
+              setLoading(false);
+              window.location.hash = '';
+              return;
+            }
+            
+            // If we have a session with valid domain, clear the hash and navigate to home page
             window.location.hash = '';
             navigate('/', { replace: true });
           }
@@ -63,6 +80,19 @@ const Login = () => {
         try {
           const { data } = await supabase.auth.getSession();
           if (data.session) {
+            // Verify that the email domain is valid
+            const email = data.session.user.email;
+            if (email && !email.toLowerCase().endsWith('@neu.edu.ph')) {
+              console.error("Invalid email domain:", email);
+              
+              // Sign out the user since they don't have the correct domain
+              await supabase.auth.signOut();
+              
+              setError("Only emails with @neu.edu.ph domain are allowed to sign in.");
+              setLoading(false);
+              return;
+            }
+            
             console.log("User already has a session, redirecting to home");
             navigate('/', { replace: true });
             return;
@@ -87,35 +117,30 @@ const Login = () => {
     };
   }, [navigate, initTimeout]);
 
-  const handleGoogleLogin = async () => {
+  const handleGoogleSignIn = async () => {
+    setLoading(true);
+    setError(null);
+    
     try {
-      setLoading(true);
-      console.log("Initiating Google login");
+      // Use parameter to specify login_hint for Google to restrict domain
       const { error } = await supabase.auth.signInWithOAuth({
-        provider: "google",
+        provider: 'google',
         options: {
           queryParams: {
-            access_type: "offline",
-            prompt: "consent",
+            hd: 'neu.edu.ph', // This restricts the Google accounts shown to this domain
+            login_hint: '@neu.edu.ph',
+            access_type: 'offline',
+            prompt: 'select_account',
           },
-          redirectTo: window.location.origin + "/login",
         },
       });
-
-      if (error) {
-        console.error("Login failed:", error);
-        toast({
-          title: "Login failed",
-          description: error.message,
-          variant: "destructive",
-        });
-        setLoading(false);
-      }
+      
+      if (error) throw error;
     } catch (error) {
-      console.error("Error logging in:", error);
+      console.error("Error signing in with Google:", error);
       toast({
-        title: "Login error",
-        description: "An unexpected error occurred",
+        title: "Sign in error",
+        description: "Failed to sign in with Google. Please try again.",
         variant: "destructive",
       });
       setLoading(false);
@@ -127,50 +152,55 @@ const Login = () => {
       <div className="min-h-screen flex items-center justify-center bg-[rgba(233,233,233,1)]">
         <div className="flex flex-col items-center gap-2">
           <Loader2 className="h-8 w-8 animate-spin text-[rgba(49,159,67,1)]" />
-          <p className="text-lg font-medium">Checking login status...</p>
+          <p className="text-lg font-medium">Initializing...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen flex flex-col items-center bg-[rgba(233,233,233,1)]">
-      <div className="w-full max-w-md mt-20 px-6 py-8 bg-white rounded-3xl shadow-lg">
+    <div className="min-h-screen flex items-center justify-center bg-[rgba(233,233,233,1)]">
+      <div className="bg-white p-8 rounded-2xl shadow-lg w-full max-w-md">
         <div className="flex flex-col items-center mb-8">
           <img
             src="https://cdn.builder.io/api/v1/image/assets/e3c6b0ec50df45b58e99e24af78e19b0/1cb33a4f0fb596171796038573ac1522f5a08704?placeholderIfAbsent=true"
-            alt="NEUPoliSeek Logo"
-            className="aspect-[1] object-contain w-[101px]"
+            alt="NEU Logo"
+            className="h-24 w-24 object-contain mb-4"
           />
-          <h1 className="text-black text-3xl font-bold mt-6">NEUPoliSeek</h1>
-          <p className="text-black text-xl font-semibold mt-2 text-center">
-            Find, Understand, and Navigate School Policies with Ease.
+          <h1 className="text-2xl font-bold text-center">Welcome to NEUPoliSeek!</h1>
+          <p className="text-gray-500 text-center mt-2">
+            Sign in to access New Era University policies.
           </p>
         </div>
 
-        <div className="text-center mb-8">
-          <p className="text-black text-lg">
-            Login with your NEU email address to access school policies.
-          </p>
-          <p className="text-sm text-gray-500 mt-1">
-            (Only @neu.edu.ph email addresses are allowed)
+        {error && (
+          <Alert variant="destructive" className="mb-6">
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
+
+        <div className="space-y-4">
+          <Button
+            onClick={handleGoogleSignIn}
+            disabled={loading}
+            className="w-full bg-[rgba(49,159,67,1)] hover:bg-[rgba(39,139,57,1)] py-6"
+          >
+            {loading ? (
+              <Loader2 className="h-5 w-5 animate-spin mr-2" />
+            ) : (
+              <img
+                src="https://developers.google.com/identity/images/g-logo.png"
+                alt="Google"
+                className="h-5 w-5 mr-2"
+              />
+            )}
+            <span>Sign in with Google (@neu.edu.ph only)</span>
+          </Button>
+          
+          <p className="text-sm text-center text-gray-500">
+            Only New Era University accounts (@neu.edu.ph) are allowed to sign in.
           </p>
         </div>
-
-        <Button 
-          onClick={handleGoogleLogin}
-          disabled={loading}
-          className="w-full bg-[rgba(49,159,67,1)] hover:bg-[rgba(39,139,57,1)] h-12 text-lg font-semibold"
-        >
-          {loading ? (
-            <span className="flex items-center">
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" /> 
-              Signing in...
-            </span>
-          ) : (
-            "Sign in with Google"
-          )}
-        </Button>
       </div>
     </div>
   );
