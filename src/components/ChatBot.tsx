@@ -50,7 +50,11 @@ interface DocumentSection {
   sectionId?: string;
 }
 
-export const ChatBot = () => {
+interface ChatBotProps {
+  isMaximized?: boolean;
+}
+
+export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
   const { user } = useAuth();
   const [messages, setMessages] = useState<Message[]>([{
     id: "welcome",
@@ -755,21 +759,41 @@ export const ChatBot = () => {
 
   const generateChatTitle = async (userMessage: string, botResponse: string) => {
     try {
-      let title = userMessage.split(' ').slice(0, 4).join(' ');
+      let topic = '';
       
-      if (title.length > 30) {
-        title = title.substring(0, 30) + '...';
-      } else if (title.length < 10 && botResponse) {
-        const botWords = botResponse.split(' ').slice(0, 3).join(' ');
-        title = `${title} - ${botWords}...`;
-      } else {
-        title = title + '...';
+      const botFirstSentence = botResponse.split('.')[0].trim();
+      if (botFirstSentence.length > 5 && botFirstSentence.length < 50) {
+        if (botFirstSentence.includes('policy') || botFirstSentence.includes('regulation') || 
+            botFirstSentence.includes('procedure') || botFirstSentence.includes('guideline')) {
+          topic = botFirstSentence;
+        }
       }
       
-      return title;
+      if (!topic) {
+        const questionMatch = userMessage.match(/(?:what|how|where|when|who|can|is|are|do|does).+?(\w+(?:\s+\w+){0,5})\??$/i);
+        if (questionMatch && questionMatch[1]) {
+          topic = `About ${questionMatch[1].trim()}`;
+        } else {
+          const words = userMessage.split(/\s+/);
+          const keyWords = words.filter(word => word.length > 3).slice(0, 3);
+          
+          if (keyWords.length > 0) {
+            const firstWord = keyWords[0].charAt(0).toUpperCase() + keyWords[0].slice(1);
+            topic = `${firstWord} ${keyWords.slice(1).join(' ')}`;
+          } else {
+            topic = "New Conversation";
+          }
+        }
+      }
+      
+      if (topic.length > 30) {
+        topic = topic.substring(0, 30) + '...';
+      }
+      
+      return topic;
     } catch (error) {
       console.error("Error generating title:", error);
-      return "New Chat";
+      return "New Conversation";
     }
   };
 
@@ -953,8 +977,8 @@ export const ChatBot = () => {
   );
 
   return (
-    <div className="flex flex-col bg-white shadow-[0px_4px_4px_rgba(0,0,0,0.25)] border border-[rgba(0,0,0,0.2)] rounded-[30px] p-4 w-full max-w-[1002px] mx-auto">
-      <style jsx global>{`
+    <div className={`flex flex-col bg-white shadow-[0px_4px_4px_rgba(0,0,0,0.25)] border border-[rgba(0,0,0,0.2)] rounded-[30px] p-4 w-full ${isMaximized ? 'h-full' : 'max-w-[1002px] mx-auto'}`}>
+      <style>{`
         @keyframes blink {
           0% { opacity: 0.3; }
           50% { opacity: 1; }
@@ -976,7 +1000,7 @@ export const ChatBot = () => {
       `}</style>
       
       {user ? (
-        <div className="flex h-[450px] relative">
+        <div className={`flex ${isMaximized ? 'h-full' : 'h-[450px]'} relative`}>
           {isMobile && <MobileChatSidebar />}
           
           {!isMobile && (
@@ -1035,16 +1059,18 @@ export const ChatBot = () => {
                   )}
                 </ScrollArea>
                 
-                <div className="absolute bottom-0 left-0 right-0 p-4 border-t bg-white">
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    onClick={createNewSession}
-                    className="w-full flex items-center justify-center gap-2"
-                  >
-                    <Plus className="h-4 w-4" /> New Chat
-                  </Button>
-                </div>
+                {!isCollapsed && (
+                  <div className="absolute bottom-0 left-0 right-0 p-4 border-t bg-white">
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={createNewSession}
+                      className="w-full flex items-center justify-center gap-2"
+                    >
+                      <Plus className="h-4 w-4" /> New Chat
+                    </Button>
+                  </div>
+                )}
               </div>
               
               <CollapsibleTrigger asChild>
@@ -1079,7 +1105,7 @@ export const ChatBot = () => {
               </Button>
             )}
             
-            <ScrollArea ref={scrollAreaRef} className="flex-1 w-full pt-10 md:pt-0 px-2">
+            <ScrollArea ref={scrollAreaRef} className={`flex-1 w-full ${isMobile ? 'pt-10' : ''} px-2`}>
               <div className="flex flex-col gap-4 p-2">
                 {messages.map((message) => (
                   <div 
@@ -1136,8 +1162,8 @@ export const ChatBot = () => {
           </div>
         </div>
       ) : (
-        <div>
-          <ScrollArea ref={scrollAreaRef} className="h-[350px] w-full">
+        <div className={isMaximized ? 'h-full' : ''}>
+          <ScrollArea ref={scrollAreaRef} className={isMaximized ? 'h-[80vh]' : 'h-[350px]'}>
             <div className="flex flex-col gap-4 p-2">
               {messages.map((message) => (
                 <div 
