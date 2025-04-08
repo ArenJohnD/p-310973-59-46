@@ -16,7 +16,6 @@ import {
   DrawerTrigger,
 } from "@/components/ui/drawer";
 
-// Initialize PDF.js worker
 GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
 
 interface Message {
@@ -924,7 +923,7 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
                 {chatSessions.map((session) => (
                   <div 
                     key={session.id} 
-                    className={`flex items-center justify-between rounded-md px-3 py-2 ${
+                    className={`flex items-center justify-between rounded-md px-3 py-2 mr-2 ${
                       currentSessionId === session.id
                         ? "bg-green-100 text-green-900"
                         : "hover:bg-gray-100"
@@ -1029,7 +1028,7 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
                       {chatSessions.map((session) => (
                         <div 
                           key={session.id} 
-                          className={`group/menu-item relative flex items-center justify-between rounded-md px-3 py-2 ${
+                          className={`group/menu-item relative flex items-center justify-between rounded-md px-3 py-2 mr-3 ${
                             currentSessionId === session.id
                               ? "bg-green-100 text-green-900"
                               : "hover:bg-gray-100"
