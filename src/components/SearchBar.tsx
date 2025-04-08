@@ -1,8 +1,8 @@
 
 import { useState } from "react";
-import { ChatBot } from "./ChatBot";
 import { Maximize2, Minimize2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ChatBot } from "./ChatBot";
 
 export const SearchBar = () => {
   const [isMaximized, setIsMaximized] = useState(false);
