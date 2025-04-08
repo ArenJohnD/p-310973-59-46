@@ -15,17 +15,6 @@ import {
   DrawerContent,
   DrawerTrigger,
 } from "@/components/ui/drawer";
-import {
-  SidebarProvider,
-  Sidebar,
-  SidebarHeader,
-  SidebarContent,
-  SidebarTrigger,
-  SidebarMenu,
-  SidebarMenuItem,
-  SidebarMenuButton,
-  SidebarFooter,
-} from "@/components/ui/sidebar";
 
 // Initialize PDF.js worker
 GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
@@ -42,6 +31,8 @@ interface ChatSession {
   title: string;
   created_at: string;
   is_active: boolean;
+  user_id?: string;
+  updated_at?: string;
 }
 
 interface ReferenceDocument {
@@ -127,7 +118,7 @@ export const ChatBot = () => {
       if (error) throw error;
       
       if (data && data.length > 0) {
-        setChatSessions(data);
+        setChatSessions(data as ChatSession[]);
         
         // Check for active session
         const activeSession = data.find(session => session.is_active);
@@ -244,7 +235,7 @@ export const ChatBot = () => {
       
       if (sessionData && sessionData.length > 0) {
         // Update local state
-        setChatSessions(prev => [sessionData[0], ...prev.map(s => ({ ...s, is_active: false }))]);
+        setChatSessions(prev => [sessionData[0] as ChatSession, ...prev.map(s => ({ ...s, is_active: false }))]);
         setCurrentSessionId(sessionData[0].id);
         
         // Reset messages
@@ -937,142 +928,156 @@ export const ChatBot = () => {
     </Drawer>
   );
 
-  // Hide the sidebar if not logged in
-  if (!user) {
-    return (
-      <div className="flex flex-col bg-white shadow-[0px_4px_4px_rgba(0,0,0,0.25)] border border-[rgba(0,0,0,0.2)] rounded-[30px] p-4 w-full max-w-[1002px] mx-auto">
-        <ScrollArea ref={scrollAreaRef} className="h-[350px] w-full">
-          <div className="flex flex-col gap-4 p-2">
-            {messages.map((message) => (
-              <div 
-                key={message.id}
-                className={`flex ${message.sender === "user" ? "justify-end" : "justify-start"}`}
-              >
-                <div 
-                  className={`max-w-[80%] rounded-[20px] px-4 py-3 ${
-                    message.sender === "user" 
-                      ? "bg-[rgba(49,159,67,0.1)] text-black" 
-                      : "bg-[rgba(49,159,67,1)] text-white"
-                  }`}
-                >
-                  {message.sender === "bot" ? (
-                    <ReactMarkdown className="text-[16px] whitespace-pre-line markdown-content">
-                      {message.text}
-                    </ReactMarkdown>
-                  ) : (
-                    <p className="text-[16px] whitespace-pre-line">{message.text}</p>
-                  )}
-                  <p className="text-[12px] opacity-70 mt-1">
-                    {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                  </p>
-                </div>
-              </div>
-            ))}
-            <div ref={messagesEndRef} />
-          </div>
-        </ScrollArea>
-        
-        <div className="flex items-center gap-2 mt-4">
-          <Input
-            type="text"
-            value={inputText}
-            onChange={(e) => setInputText(e.target.value)}
-            placeholder="Ask about school policies..."
-            className="rounded-full bg-transparent border-[rgba(0,0,0,0.2)]"
-            onKeyPress={(e) => e.key === "Enter" && handleSendMessage()}
-            disabled={isLoading}
-          />
-          <Button 
-            onClick={handleSendMessage} 
-            className="rounded-full aspect-square p-2 bg-[rgba(49,159,67,1)] hover:bg-[rgba(39,139,57,1)]"
-            disabled={isLoading || !user}
-          >
-            {isLoading ? (
-              <Loader2 className="h-5 w-5 animate-spin" />
-            ) : (
-              <Send className="h-5 w-5" />
-            )}
+  // Create a desktop sidebar for the ChatBot component specifically
+  const DesktopSidebar = () => (
+    <div className="hidden md:flex flex-col w-64 bg-white border-r border-gray-200 h-full">
+      <div className="p-4 border-b">
+        <div className="flex items-center justify-between">
+          <h2 className="text-xl font-semibold">Your Chats</h2>
+          <Button onClick={createNewSession} size="sm" className="h-8 w-8 p-0">
+            <Plus className="h-4 w-4" />
           </Button>
         </div>
       </div>
-    );
-  }
+      
+      <ScrollArea className="flex-1 overflow-auto">
+        {loadingSessions ? (
+          <div className="flex justify-center items-center h-20">
+            <Loader2 className="h-5 w-5 animate-spin text-gray-500" />
+          </div>
+        ) : chatSessions.length === 0 ? (
+          <div className="text-center text-gray-500 py-8 px-4">
+            <p>No chat history found</p>
+          </div>
+        ) : (
+          <div className="p-2 space-y-1">
+            {chatSessions.map((session) => (
+              <div 
+                key={session.id} 
+                className={`group relative flex items-center justify-between rounded-md px-3 py-2 ${
+                  currentSessionId === session.id
+                    ? "bg-green-100 text-green-900"
+                    : "hover:bg-gray-100"
+                }`}
+              >
+                <button
+                  className="flex-1 truncate text-left"
+                  onClick={() => loadChatMessages(session.id)}
+                >
+                  <div className="flex items-center gap-2">
+                    <MessageSquare className="h-4 w-4 flex-shrink-0" />
+                    <span className="truncate">{session.title}</span>
+                  </div>
+                </button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => deleteSession(session.id)}
+                  className="h-6 w-6 rounded-full opacity-0 transition-opacity group-hover:opacity-100"
+                >
+                  <Trash2 className="h-3 w-3" />
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
+      </ScrollArea>
+      
+      <div className="p-4 border-t">
+        <Button 
+          variant="outline" 
+          size="sm" 
+          onClick={createNewSession}
+          className="w-full flex items-center justify-center gap-2"
+        >
+          <Plus className="h-4 w-4" /> New Chat
+        </Button>
+      </div>
+    </div>
+  );
 
   return (
-    <SidebarProvider>
-      <div className="flex min-h-[calc(100vh-80px)] w-full">
-        {/* Mobile Sidebar */}
-        {isMobile && <MobileSidebar />}
-        
-        {/* Desktop Sidebar */}
-        <Sidebar
-          className="hidden md:flex border-r border-gray-200 bg-white"
-          collapsible="icon"
-        >
-          <SidebarHeader className="p-4">
-            <div className="flex items-center justify-between">
-              <h2 className="text-xl font-semibold">Your Chats</h2>
-              <Button onClick={createNewSession} size="sm" className="h-8 w-8 p-0">
-                <Plus className="h-4 w-4" />
+    <div className="flex flex-col bg-white shadow-[0px_4px_4px_rgba(0,0,0,0.25)] border border-[rgba(0,0,0,0.2)] rounded-[30px] p-4 w-full max-w-[1002px] mx-auto">
+      {user ? (
+        <div className="flex h-[450px]">
+          {/* Mobile Sidebar */}
+          {isMobile && <MobileSidebar />}
+          
+          {/* Desktop Sidebar */}
+          {!isMobile && <DesktopSidebar />}
+          
+          {/* Main chat area */}
+          <div className="flex-1 flex flex-col relative h-full">
+            {/* Sidebar trigger for mobile */}
+            {isMobile && (
+              <Button 
+                variant="outline" 
+                size="icon" 
+                className="absolute left-0 top-0 z-10 md:hidden"
+                onClick={() => setSidebarOpen(true)}
+              >
+                <Menu className="h-5 w-5" />
+              </Button>
+            )}
+            
+            <ScrollArea ref={scrollAreaRef} className="flex-1 w-full pt-10 md:pt-0 px-2">
+              <div className="flex flex-col gap-4 p-2">
+                {messages.map((message) => (
+                  <div 
+                    key={message.id}
+                    className={`flex ${message.sender === "user" ? "justify-end" : "justify-start"}`}
+                  >
+                    <div 
+                      className={`max-w-[80%] rounded-[20px] px-4 py-3 ${
+                        message.sender === "user" 
+                          ? "bg-[rgba(49,159,67,0.1)] text-black" 
+                          : "bg-[rgba(49,159,67,1)] text-white"
+                      }`}
+                    >
+                      {message.sender === "bot" ? (
+                        <ReactMarkdown className="text-[16px] whitespace-pre-line markdown-content">
+                          {message.text}
+                        </ReactMarkdown>
+                      ) : (
+                        <p className="text-[16px] whitespace-pre-line">{message.text}</p>
+                      )}
+                      <p className="text-[12px] opacity-70 mt-1">
+                        {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+                <div ref={messagesEndRef} />
+              </div>
+            </ScrollArea>
+            
+            <div className="flex items-center gap-2 mt-4">
+              <Input
+                type="text"
+                value={inputText}
+                onChange={(e) => setInputText(e.target.value)}
+                placeholder="Ask about school policies..."
+                className="rounded-full bg-transparent border-[rgba(0,0,0,0.2)]"
+                onKeyPress={(e) => e.key === "Enter" && handleSendMessage()}
+                disabled={isLoading}
+              />
+              <Button 
+                onClick={handleSendMessage} 
+                className="rounded-full aspect-square p-2 bg-[rgba(49,159,67,1)] hover:bg-[rgba(39,139,57,1)]"
+                disabled={isLoading || !user}
+              >
+                {isLoading ? (
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                ) : (
+                  <Send className="h-5 w-5" />
+                )}
               </Button>
             </div>
-          </SidebarHeader>
-          
-          <SidebarContent>
-            {loadingSessions ? (
-              <div className="flex justify-center items-center h-20">
-                <Loader2 className="h-5 w-5 animate-spin text-gray-500" />
-              </div>
-            ) : chatSessions.length === 0 ? (
-              <div className="text-center text-gray-500 py-8 px-4">
-                <p>No chat history found</p>
-              </div>
-            ) : (
-              <SidebarMenu>
-                {chatSessions.map((session) => (
-                  <SidebarMenuItem key={session.id}>
-                    <SidebarMenuButton
-                      isActive={currentSessionId === session.id}
-                      onClick={() => loadChatMessages(session.id)}
-                      tooltip={session.title}
-                    >
-                      <MessageSquare className="h-4 w-4" />
-                      <span className="truncate">{session.title}</span>
-                    </SidebarMenuButton>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => deleteSession(session.id)}
-                      className="absolute right-2 top-1 h-6 w-6 rounded-full opacity-0 transition-opacity group-hover:opacity-100"
-                    >
-                      <Trash2 className="h-3 w-3" />
-                    </Button>
-                  </SidebarMenuItem>
-                ))}
-              </SidebarMenu>
-            )}
-          </SidebarContent>
-          
-          <SidebarFooter className="p-4">
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={createNewSession}
-              className="w-full flex items-center justify-center gap-2"
-            >
-              <Plus className="h-4 w-4" /> New Chat
-            </Button>
-          </SidebarFooter>
-        </Sidebar>
-        
-        {/* Main chat area */}
-        <div className="flex-1 flex flex-col bg-white shadow-[0px_4px_4px_rgba(0,0,0,0.25)] border border-[rgba(0,0,0,0.2)] rounded-[30px] p-4 ml-0 md:ml-2 relative">
-          {/* Sidebar trigger for desktop */}
-          <div className="hidden md:block absolute left-4 top-4">
-            <SidebarTrigger className="h-8 w-8" />
           </div>
-          
-          <ScrollArea ref={scrollAreaRef} className="h-[350px] w-full mt-8 md:mt-0">
+        </div>
+      ) : (
+        <div>
+          <ScrollArea ref={scrollAreaRef} className="h-[350px] w-full">
             <div className="flex flex-col gap-4 p-2">
               {messages.map((message) => (
                 <div 
@@ -1116,7 +1121,7 @@ export const ChatBot = () => {
             <Button 
               onClick={handleSendMessage} 
               className="rounded-full aspect-square p-2 bg-[rgba(49,159,67,1)] hover:bg-[rgba(39,139,57,1)]"
-              disabled={isLoading}
+              disabled={isLoading || !user}
             >
               {isLoading ? (
                 <Loader2 className="h-5 w-5 animate-spin" />
@@ -1126,7 +1131,7 @@ export const ChatBot = () => {
             </Button>
           </div>
         </div>
-      </div>
-    </SidebarProvider>
+      )}
+    </div>
   );
 };
