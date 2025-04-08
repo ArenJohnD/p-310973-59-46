@@ -71,7 +71,6 @@ export const ChatBot = () => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
 
-  // Check if mobile device
   useEffect(() => {
     const checkIfMobile = () => {
       setIsMobile(window.innerWidth < 768);
@@ -85,7 +84,6 @@ export const ChatBot = () => {
     };
   }, []);
 
-  // Scroll to bottom of messages when new messages are added
   useEffect(() => {
     if (scrollAreaRef.current) {
       const scrollContainer = scrollAreaRef.current.querySelector('[data-radix-scroll-area-viewport]');
@@ -103,7 +101,6 @@ export const ChatBot = () => {
     }
   }, [user]);
 
-  // Fetch chat sessions for the current user
   const fetchChatSessions = async () => {
     if (!user) return;
     
@@ -121,7 +118,6 @@ export const ChatBot = () => {
       if (data && data.length > 0) {
         setChatSessions(data as ChatSession[]);
         
-        // Check for active session
         const activeSession = data.find(session => session.is_active);
         if (activeSession) {
           setCurrentSessionId(activeSession.id);
@@ -144,7 +140,6 @@ export const ChatBot = () => {
     }
   };
 
-  // Load messages for a specific chat session
   const loadChatMessages = async (sessionId: string) => {
     if (!user) return;
     
@@ -176,7 +171,6 @@ export const ChatBot = () => {
         
         setCurrentSessionId(sessionId);
         
-        // Set all sessions as inactive and the current one as active
         await supabase
           .from('chat_sessions')
           .update({ is_active: false })
@@ -187,7 +181,6 @@ export const ChatBot = () => {
           .update({ is_active: true })
           .eq('id', sessionId);
           
-        // Update local state
         setChatSessions(prev => 
           prev.map(session => ({
             ...session,
@@ -207,14 +200,12 @@ export const ChatBot = () => {
     }
   };
 
-  // Create a new chat session
   const createNewSession = async () => {
     if (!user) return;
     
     try {
       setIsLoading(true);
       
-      // Set all existing sessions to inactive
       if (chatSessions.length > 0) {
         await supabase
           .from('chat_sessions')
@@ -222,7 +213,6 @@ export const ChatBot = () => {
           .eq('user_id', user.id);
       }
       
-      // Create new session
       const { data: sessionData, error: sessionError } = await supabase
         .from('chat_sessions')
         .insert([{
@@ -235,11 +225,9 @@ export const ChatBot = () => {
       if (sessionError) throw sessionError;
       
       if (sessionData && sessionData.length > 0) {
-        // Update local state
         setChatSessions(prev => [sessionData[0] as ChatSession, ...prev.map(s => ({ ...s, is_active: false }))]);
         setCurrentSessionId(sessionData[0].id);
         
-        // Reset messages
         setMessages([{
           id: "welcome",
           text: "Hi! I'm Poli, your NEU policy assistant. I can help you find information about university policies, answer questions about academic regulations, and guide you through administrative procedures. How can I assist you today?",
@@ -247,7 +235,6 @@ export const ChatBot = () => {
           timestamp: new Date()
         }]);
         
-        // Save welcome message
         await supabase
           .from('chat_messages')
           .insert([{
@@ -271,27 +258,22 @@ export const ChatBot = () => {
     }
   };
 
-  // Delete a chat session
   const deleteSession = async (sessionId: string) => {
     if (!user) return;
     
     try {
-      // First delete all messages in this session
       await supabase
         .from('chat_messages')
         .delete()
         .eq('session_id', sessionId);
         
-      // Then delete the session
       await supabase
         .from('chat_sessions')
         .delete()
         .eq('id', sessionId);
         
-      // Update local state
       setChatSessions(prev => prev.filter(session => session.id !== sessionId));
       
-      // If we deleted the current session, create a new one or load another
       if (currentSessionId === sessionId) {
         const remainingSessions = chatSessions.filter(session => session.id !== sessionId);
         if (remainingSessions.length > 0) {
@@ -315,12 +297,10 @@ export const ChatBot = () => {
     }
   };
 
-  // Update session title based on first user message
   const updateSessionTitle = async (sessionId: string, message: string) => {
     if (!user) return;
     
     try {
-      // Generate a title from the first few words of the message
       const title = message.split(' ').slice(0, 4).join(' ') + '...';
       
       await supabase
@@ -328,7 +308,6 @@ export const ChatBot = () => {
         .update({ title })
         .eq('id', sessionId);
         
-      // Update local state
       setChatSessions(prev => 
         prev.map(session => 
           session.id === sessionId ? { ...session, title } : session
@@ -798,7 +777,6 @@ export const ChatBot = () => {
     setIsLoading(true);
     
     try {
-      // Save user message to database
       const { error: userMsgError } = await supabase
         .from('chat_messages')
         .insert([{
@@ -809,7 +787,6 @@ export const ChatBot = () => {
         
       if (userMsgError) throw userMsgError;
       
-      // Update session title if this is the first user message
       const currentMessages = messages.filter(m => m.sender === "user");
       if (currentMessages.length === 0) {
         updateSessionTitle(currentSessionId, inputText);
@@ -826,7 +803,6 @@ export const ChatBot = () => {
       
       setMessages(prev => [...prev, botMessage]);
       
-      // Save bot message to database
       await supabase
         .from('chat_messages')
         .insert([{
@@ -855,7 +831,6 @@ export const ChatBot = () => {
     }
   };
 
-  // Mobile sidebar for ChatBot
   const MobileChatSidebar = () => (
     <Drawer open={sidebarOpen} onOpenChange={setSidebarOpen}>
       <DrawerTrigger asChild>
@@ -936,10 +911,8 @@ export const ChatBot = () => {
     <div className="flex flex-col bg-white shadow-[0px_4px_4px_rgba(0,0,0,0.25)] border border-[rgba(0,0,0,0.2)] rounded-[30px] p-4 w-full max-w-[1002px] mx-auto">
       {user ? (
         <div className="flex h-[450px] relative">
-          {/* For mobile devices */}
           {isMobile && <MobileChatSidebar />}
           
-          {/* For desktop - collapsible sidebar */}
           {!isMobile && (
             <Collapsible
               open={!isCollapsed}
@@ -950,13 +923,10 @@ export const ChatBot = () => {
                 <div className="p-4 border-b">
                   <div className="flex items-center justify-between">
                     <h2 className="text-xl font-semibold">Your Chats</h2>
-                    <Button onClick={createNewSession} size="sm" className="h-8 w-8 p-0">
-                      <Plus className="h-4 w-4" />
-                    </Button>
                   </div>
                 </div>
                 
-                <ScrollArea className="h-[calc(100%-70px)] overflow-auto">
+                <ScrollArea className="h-[calc(100%-130px)] overflow-auto">
                   {loadingSessions ? (
                     <div className="flex justify-center items-center h-20">
                       <Loader2 className="h-5 w-5 animate-spin text-gray-500" />
@@ -1031,7 +1001,6 @@ export const ChatBot = () => {
             </Collapsible>
           )}
           
-          {/* Main chat area */}
           <div className={`flex-1 flex flex-col relative h-full ${isMobile ? 'pt-10' : ''}`}>
             {isMobile && (
               <Button 
