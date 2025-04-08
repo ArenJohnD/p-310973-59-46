@@ -1,6 +1,5 @@
-
 import { useState, useRef, useEffect } from "react";
-import { Send, Loader2, Plus, Trash2, Menu, MessageSquare, X } from "lucide-react";
+import { Send, Loader2, Plus, Trash2, Menu, MessageSquare, X, ChevronRight, ChevronLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/components/ui/use-toast";
@@ -10,6 +9,7 @@ import { GlobalWorkerOptions } from 'pdfjs-dist';
 import ReactMarkdown from 'react-markdown';
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useAuth } from "@/context/AuthContext";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
   Drawer,
   DrawerContent,
@@ -67,6 +67,7 @@ export const ChatBot = () => {
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const [isCollapsed, setIsCollapsed] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
 
@@ -854,14 +855,14 @@ export const ChatBot = () => {
     }
   };
 
-  // Component to render for mobile
-  const MobileSidebar = () => (
+  // Mobile sidebar for ChatBot
+  const MobileChatSidebar = () => (
     <Drawer open={sidebarOpen} onOpenChange={setSidebarOpen}>
       <DrawerTrigger asChild>
         <Button 
           variant="outline" 
           size="icon" 
-          className="md:hidden absolute left-4 top-4"
+          className="absolute left-2 top-2 z-10"
         >
           <Menu className="h-5 w-5" />
         </Button>
@@ -870,7 +871,10 @@ export const ChatBot = () => {
         <div className="px-4 py-6 h-full flex flex-col overflow-hidden">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-xl font-semibold">Your Chats</h2>
-            <Button onClick={createNewSession} className="flex items-center gap-2">
+            <Button onClick={() => {
+              createNewSession();
+              setSidebarOpen(false);
+            }} className="flex items-center gap-2">
               <Plus className="h-4 w-4" /> New Chat
             </Button>
           </div>
@@ -928,92 +932,112 @@ export const ChatBot = () => {
     </Drawer>
   );
 
-  // Create a desktop sidebar for the ChatBot component specifically
-  const DesktopSidebar = () => (
-    <div className="hidden md:flex flex-col w-64 bg-white border-r border-gray-200 h-full">
-      <div className="p-4 border-b">
-        <div className="flex items-center justify-between">
-          <h2 className="text-xl font-semibold">Your Chats</h2>
-          <Button onClick={createNewSession} size="sm" className="h-8 w-8 p-0">
-            <Plus className="h-4 w-4" />
-          </Button>
-        </div>
-      </div>
-      
-      <ScrollArea className="flex-1 overflow-auto">
-        {loadingSessions ? (
-          <div className="flex justify-center items-center h-20">
-            <Loader2 className="h-5 w-5 animate-spin text-gray-500" />
-          </div>
-        ) : chatSessions.length === 0 ? (
-          <div className="text-center text-gray-500 py-8 px-4">
-            <p>No chat history found</p>
-          </div>
-        ) : (
-          <div className="p-2 space-y-1">
-            {chatSessions.map((session) => (
-              <div 
-                key={session.id} 
-                className={`group relative flex items-center justify-between rounded-md px-3 py-2 ${
-                  currentSessionId === session.id
-                    ? "bg-green-100 text-green-900"
-                    : "hover:bg-gray-100"
-                }`}
-              >
-                <button
-                  className="flex-1 truncate text-left"
-                  onClick={() => loadChatMessages(session.id)}
-                >
-                  <div className="flex items-center gap-2">
-                    <MessageSquare className="h-4 w-4 flex-shrink-0" />
-                    <span className="truncate">{session.title}</span>
-                  </div>
-                </button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => deleteSession(session.id)}
-                  className="h-6 w-6 rounded-full opacity-0 transition-opacity group-hover:opacity-100"
-                >
-                  <Trash2 className="h-3 w-3" />
-                </Button>
-              </div>
-            ))}
-          </div>
-        )}
-      </ScrollArea>
-      
-      <div className="p-4 border-t">
-        <Button 
-          variant="outline" 
-          size="sm" 
-          onClick={createNewSession}
-          className="w-full flex items-center justify-center gap-2"
-        >
-          <Plus className="h-4 w-4" /> New Chat
-        </Button>
-      </div>
-    </div>
-  );
-
   return (
     <div className="flex flex-col bg-white shadow-[0px_4px_4px_rgba(0,0,0,0.25)] border border-[rgba(0,0,0,0.2)] rounded-[30px] p-4 w-full max-w-[1002px] mx-auto">
       {user ? (
-        <div className="flex h-[450px]">
-          {/* Mobile Sidebar */}
-          {isMobile && <MobileSidebar />}
+        <div className="flex h-[450px] relative">
+          {/* For mobile devices */}
+          {isMobile && <MobileChatSidebar />}
           
-          {/* Desktop Sidebar */}
-          {!isMobile && <DesktopSidebar />}
+          {/* For desktop - collapsible sidebar */}
+          {!isMobile && (
+            <Collapsible
+              open={!isCollapsed}
+              onOpenChange={(open) => setIsCollapsed(!open)}
+              className="relative"
+            >
+              <div className={`h-full bg-white border-r border-gray-200 transition-all ${isCollapsed ? 'w-0 overflow-hidden' : 'w-64'}`}>
+                <div className="p-4 border-b">
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-xl font-semibold">Your Chats</h2>
+                    <Button onClick={createNewSession} size="sm" className="h-8 w-8 p-0">
+                      <Plus className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+                
+                <ScrollArea className="h-[calc(100%-70px)] overflow-auto">
+                  {loadingSessions ? (
+                    <div className="flex justify-center items-center h-20">
+                      <Loader2 className="h-5 w-5 animate-spin text-gray-500" />
+                    </div>
+                  ) : chatSessions.length === 0 ? (
+                    <div className="text-center text-gray-500 py-8 px-4">
+                      <p>No chat history found</p>
+                    </div>
+                  ) : (
+                    <div className="p-2 space-y-1">
+                      {chatSessions.map((session) => (
+                        <div 
+                          key={session.id} 
+                          className={`group relative flex items-center justify-between rounded-md px-3 py-2 ${
+                            currentSessionId === session.id
+                              ? "bg-green-100 text-green-900"
+                              : "hover:bg-gray-100"
+                          }`}
+                        >
+                          <button
+                            className="flex-1 truncate text-left"
+                            onClick={() => loadChatMessages(session.id)}
+                          >
+                            <div className="flex items-center gap-2">
+                              <MessageSquare className="h-4 w-4 flex-shrink-0" />
+                              <span className="truncate">{session.title}</span>
+                            </div>
+                          </button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => deleteSession(session.id)}
+                            className="h-6 w-6 rounded-full opacity-0 transition-opacity group-hover:opacity-100"
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </ScrollArea>
+                
+                <div className="absolute bottom-0 left-0 right-0 p-4 border-t bg-white">
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={createNewSession}
+                    className="w-full flex items-center justify-center gap-2"
+                  >
+                    <Plus className="h-4 w-4" /> New Chat
+                  </Button>
+                </div>
+              </div>
+              
+              <CollapsibleTrigger asChild>
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  className="absolute -right-4 top-1/2 transform -translate-y-1/2 h-8 w-8 rounded-full border shadow-sm z-10 bg-white"
+                >
+                  {isCollapsed ? (
+                    <ChevronRight className="h-4 w-4" />
+                  ) : (
+                    <ChevronLeft className="h-4 w-4" />
+                  )}
+                </Button>
+              </CollapsibleTrigger>
+              
+              <CollapsibleContent className="flex-1">
+                {/* Main chat area appears here when sidebar is collapsed */}
+              </CollapsibleContent>
+            </Collapsible>
+          )}
           
           {/* Main chat area */}
-          <div className="flex-1 flex flex-col relative h-full">
-            {/* Sidebar trigger for mobile */}
+          <div className={`flex-1 flex flex-col relative h-full ${isMobile ? 'pt-10' : ''}`}>
             {isMobile && (
               <Button 
                 variant="outline" 
                 size="icon" 
-                className="absolute left-0 top-0 z-10 md:hidden"
+                className="absolute left-2 top-2"
                 onClick={() => setSidebarOpen(true)}
               >
                 <Menu className="h-5 w-5" />
