@@ -68,6 +68,9 @@ export const ChatBot = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [typingAnimation, setTypingAnimation] = useState(false);
+  const [currentResponseText, setCurrentResponseText] = useState("");
+  const [showTypingMessage, setShowTypingMessage] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
 
@@ -297,11 +300,11 @@ export const ChatBot = () => {
     }
   };
 
-  const updateSessionTitle = async (sessionId: string, message: string) => {
+  const updateSessionTitle = async (sessionId: string, message: string, botResponse: string = "") => {
     if (!user) return;
     
     try {
-      const title = message.split(' ').slice(0, 4).join(' ') + '...';
+      const title = await generateChatTitle(message, botResponse);
       
       await supabase
         .from('chat_sessions')
@@ -750,6 +753,26 @@ export const ChatBot = () => {
     }
   };
 
+  const generateChatTitle = async (userMessage: string, botResponse: string) => {
+    try {
+      let title = userMessage.split(' ').slice(0, 4).join(' ');
+      
+      if (title.length > 30) {
+        title = title.substring(0, 30) + '...';
+      } else if (title.length < 10 && botResponse) {
+        const botWords = botResponse.split(' ').slice(0, 3).join(' ');
+        title = `${title} - ${botWords}...`;
+      } else {
+        title = title + '...';
+      }
+      
+      return title;
+    } catch (error) {
+      console.error("Error generating title:", error);
+      return "New Chat";
+    }
+  };
+
   const handleSendMessage = async () => {
     if (!inputText.trim() || !user) return;
     
@@ -775,6 +798,8 @@ export const ChatBot = () => {
     setMessages(prev => [...prev, userMessage]);
     setInputText("");
     setIsLoading(true);
+    setTypingAnimation(true);
+    setShowTypingMessage(true);
     
     try {
       const { error: userMsgError } = await supabase
@@ -794,6 +819,8 @@ export const ChatBot = () => {
       
       const botResponse = await findRelevantInformation(inputText);
       
+      updateSessionTitle(currentSessionId, inputText, botResponse);
+      
       const botMessage: Message = {
         id: (Date.now() + 1).toString(),
         text: botResponse,
@@ -801,6 +828,8 @@ export const ChatBot = () => {
         timestamp: new Date()
       };
       
+      setTypingAnimation(false);
+      setShowTypingMessage(false);
       setMessages(prev => [...prev, botMessage]);
       
       await supabase
@@ -817,6 +846,9 @@ export const ChatBot = () => {
         description: "Failed to generate a response. Please try again.",
         variant: "destructive",
       });
+      
+      setTypingAnimation(false);
+      setShowTypingMessage(false);
       
       const errorMessage: Message = {
         id: (Date.now() + 1).toString(),
@@ -907,8 +939,42 @@ export const ChatBot = () => {
     </Drawer>
   );
 
+  const TypingIndicator = () => (
+    <div className="flex justify-start">
+      <div className="max-w-[80%] rounded-[20px] px-4 py-3 bg-[rgba(49,159,67,1)] text-white">
+        <div className="flex items-center">
+          <span className="mr-2">Typing</span>
+          <span className="typing-dot">.</span>
+          <span className="typing-dot">.</span>
+          <span className="typing-dot">.</span>
+        </div>
+      </div>
+    </div>
+  );
+
   return (
     <div className="flex flex-col bg-white shadow-[0px_4px_4px_rgba(0,0,0,0.25)] border border-[rgba(0,0,0,0.2)] rounded-[30px] p-4 w-full max-w-[1002px] mx-auto">
+      <style jsx global>{`
+        @keyframes blink {
+          0% { opacity: 0.3; }
+          50% { opacity: 1; }
+          100% { opacity: 0.3; }
+        }
+        
+        .typing-dot {
+          animation: blink 1.4s infinite;
+          animation-fill-mode: both;
+        }
+        
+        .typing-dot:nth-child(2) {
+          animation-delay: 0.2s;
+        }
+        
+        .typing-dot:nth-child(3) {
+          animation-delay: 0.4s;
+        }
+      `}</style>
+      
       {user ? (
         <div className="flex h-[450px] relative">
           {isMobile && <MobileChatSidebar />}
@@ -1040,6 +1106,7 @@ export const ChatBot = () => {
                     </div>
                   </div>
                 ))}
+                {showTypingMessage && <TypingIndicator />}
                 <div ref={messagesEndRef} />
               </div>
             </ScrollArea>
