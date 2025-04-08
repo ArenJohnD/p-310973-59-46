@@ -1,6 +1,6 @@
 
 import { useState, useRef, useEffect } from "react";
-import { Send, Loader2 } from "lucide-react";
+import { Send, Loader2, Plus, Trash2, Menu, MessageSquare, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/components/ui/use-toast";
@@ -9,6 +9,23 @@ import * as pdfjsLib from 'pdfjs-dist';
 import { GlobalWorkerOptions } from 'pdfjs-dist';
 import ReactMarkdown from 'react-markdown';
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { useAuth } from "@/context/AuthContext";
+import {
+  Drawer,
+  DrawerContent,
+  DrawerTrigger,
+} from "@/components/ui/drawer";
+import {
+  SidebarProvider,
+  Sidebar,
+  SidebarHeader,
+  SidebarContent,
+  SidebarTrigger,
+  SidebarMenu,
+  SidebarMenuItem,
+  SidebarMenuButton,
+  SidebarFooter,
+} from "@/components/ui/sidebar";
 
 // Initialize PDF.js worker
 GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
@@ -18,6 +35,13 @@ interface Message {
   text: string;
   sender: "user" | "bot";
   timestamp: Date;
+}
+
+interface ChatSession {
+  id: string;
+  title: string;
+  created_at: string;
+  is_active: boolean;
 }
 
 interface ReferenceDocument {
@@ -36,6 +60,7 @@ interface DocumentSection {
 }
 
 export const ChatBot = () => {
+  const { user } = useAuth();
   const [messages, setMessages] = useState<Message[]>([{
     id: "welcome",
     text: "Hi! I'm Poli, your NEU policy assistant. I can help you find information about university policies, answer questions about academic regulations, and guide you through administrative procedures. How can I assist you today?",
@@ -46,8 +71,27 @@ export const ChatBot = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [referenceDocuments, setReferenceDocuments] = useState<ReferenceDocument[]>([]);
   const [loadingDocuments, setLoadingDocuments] = useState(true);
+  const [chatSessions, setChatSessions] = useState<ChatSession[]>([]);
+  const [loadingSessions, setLoadingSessions] = useState(false);
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
+
+  // Check if mobile device
+  useEffect(() => {
+    const checkIfMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    
+    checkIfMobile();
+    window.addEventListener('resize', checkIfMobile);
+    
+    return () => {
+      window.removeEventListener('resize', checkIfMobile);
+    };
+  }, []);
 
   // Scroll to bottom of messages when new messages are added
   useEffect(() => {
@@ -61,7 +105,247 @@ export const ChatBot = () => {
 
   useEffect(() => {
     fetchReferenceDocuments();
-  }, []);
+    
+    if (user) {
+      fetchChatSessions();
+    }
+  }, [user]);
+
+  // Fetch chat sessions for the current user
+  const fetchChatSessions = async () => {
+    if (!user) return;
+    
+    try {
+      setLoadingSessions(true);
+      
+      const { data, error } = await supabase
+        .from('chat_sessions')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+        
+      if (error) throw error;
+      
+      if (data && data.length > 0) {
+        setChatSessions(data);
+        
+        // Check for active session
+        const activeSession = data.find(session => session.is_active);
+        if (activeSession) {
+          setCurrentSessionId(activeSession.id);
+          loadChatMessages(activeSession.id);
+        } else {
+          createNewSession();
+        }
+      } else {
+        createNewSession();
+      }
+    } catch (error) {
+      console.error("Error fetching chat sessions:", error);
+      toast({
+        title: "Error",
+        description: "Failed to load chat sessions.",
+        variant: "destructive",
+      });
+    } finally {
+      setLoadingSessions(false);
+    }
+  };
+
+  // Load messages for a specific chat session
+  const loadChatMessages = async (sessionId: string) => {
+    if (!user) return;
+    
+    try {
+      setIsLoading(true);
+      
+      const { data, error } = await supabase
+        .from('chat_messages')
+        .select('*')
+        .eq('session_id', sessionId)
+        .order('timestamp', { ascending: true });
+        
+      if (error) throw error;
+      
+      if (data) {
+        const formattedMessages: Message[] = data.map(msg => ({
+          id: msg.id,
+          text: msg.text,
+          sender: msg.sender as "user" | "bot",
+          timestamp: new Date(msg.timestamp)
+        }));
+        
+        setMessages(formattedMessages.length > 0 ? formattedMessages : [{
+          id: "welcome",
+          text: "Hi! I'm Poli, your NEU policy assistant. I can help you find information about university policies, answer questions about academic regulations, and guide you through administrative procedures. How can I assist you today?",
+          sender: "bot",
+          timestamp: new Date()
+        }]);
+        
+        setCurrentSessionId(sessionId);
+        
+        // Set all sessions as inactive and the current one as active
+        await supabase
+          .from('chat_sessions')
+          .update({ is_active: false })
+          .eq('user_id', user.id);
+          
+        await supabase
+          .from('chat_sessions')
+          .update({ is_active: true })
+          .eq('id', sessionId);
+          
+        // Update local state
+        setChatSessions(prev => 
+          prev.map(session => ({
+            ...session,
+            is_active: session.id === sessionId
+          }))
+        );
+      }
+    } catch (error) {
+      console.error("Error loading chat messages:", error);
+      toast({
+        title: "Error",
+        description: "Failed to load chat messages.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Create a new chat session
+  const createNewSession = async () => {
+    if (!user) return;
+    
+    try {
+      setIsLoading(true);
+      
+      // Set all existing sessions to inactive
+      if (chatSessions.length > 0) {
+        await supabase
+          .from('chat_sessions')
+          .update({ is_active: false })
+          .eq('user_id', user.id);
+      }
+      
+      // Create new session
+      const { data: sessionData, error: sessionError } = await supabase
+        .from('chat_sessions')
+        .insert([{
+          user_id: user.id,
+          title: 'New Chat',
+          is_active: true
+        }])
+        .select();
+        
+      if (sessionError) throw sessionError;
+      
+      if (sessionData && sessionData.length > 0) {
+        // Update local state
+        setChatSessions(prev => [sessionData[0], ...prev.map(s => ({ ...s, is_active: false }))]);
+        setCurrentSessionId(sessionData[0].id);
+        
+        // Reset messages
+        setMessages([{
+          id: "welcome",
+          text: "Hi! I'm Poli, your NEU policy assistant. I can help you find information about university policies, answer questions about academic regulations, and guide you through administrative procedures. How can I assist you today?",
+          sender: "bot",
+          timestamp: new Date()
+        }]);
+        
+        // Save welcome message
+        await supabase
+          .from('chat_messages')
+          .insert([{
+            session_id: sessionData[0].id,
+            text: "Hi! I'm Poli, your NEU policy assistant. I can help you find information about university policies, answer questions about academic regulations, and guide you through administrative procedures. How can I assist you today?",
+            sender: "bot"
+          }]);
+      }
+    } catch (error) {
+      console.error("Error creating new session:", error);
+      toast({
+        title: "Error",
+        description: "Failed to create new chat session.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+      if (isMobile) {
+        setSidebarOpen(false);
+      }
+    }
+  };
+
+  // Delete a chat session
+  const deleteSession = async (sessionId: string) => {
+    if (!user) return;
+    
+    try {
+      // First delete all messages in this session
+      await supabase
+        .from('chat_messages')
+        .delete()
+        .eq('session_id', sessionId);
+        
+      // Then delete the session
+      await supabase
+        .from('chat_sessions')
+        .delete()
+        .eq('id', sessionId);
+        
+      // Update local state
+      setChatSessions(prev => prev.filter(session => session.id !== sessionId));
+      
+      // If we deleted the current session, create a new one or load another
+      if (currentSessionId === sessionId) {
+        const remainingSessions = chatSessions.filter(session => session.id !== sessionId);
+        if (remainingSessions.length > 0) {
+          loadChatMessages(remainingSessions[0].id);
+        } else {
+          createNewSession();
+        }
+      }
+      
+      toast({
+        title: "Success",
+        description: "Chat session deleted successfully.",
+      });
+    } catch (error) {
+      console.error("Error deleting session:", error);
+      toast({
+        title: "Error",
+        description: "Failed to delete chat session.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Update session title based on first user message
+  const updateSessionTitle = async (sessionId: string, message: string) => {
+    if (!user) return;
+    
+    try {
+      // Generate a title from the first few words of the message
+      const title = message.split(' ').slice(0, 4).join(' ') + '...';
+      
+      await supabase
+        .from('chat_sessions')
+        .update({ title })
+        .eq('id', sessionId);
+        
+      // Update local state
+      setChatSessions(prev => 
+        prev.map(session => 
+          session.id === sessionId ? { ...session, title } : session
+        )
+      );
+    } catch (error) {
+      console.error("Error updating session title:", error);
+    }
+  };
 
   const fetchReferenceDocuments = async () => {
     try {
@@ -496,7 +780,19 @@ export const ChatBot = () => {
   };
 
   const handleSendMessage = async () => {
-    if (!inputText.trim()) return;
+    if (!inputText.trim() || !user) return;
+    
+    if (!currentSessionId) {
+      await createNewSession();
+      if (!currentSessionId) {
+        toast({
+          title: "Error",
+          description: "Failed to create chat session. Please log in and try again.",
+          variant: "destructive",
+        });
+        return;
+      }
+    }
     
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -510,6 +806,23 @@ export const ChatBot = () => {
     setIsLoading(true);
     
     try {
+      // Save user message to database
+      const { error: userMsgError } = await supabase
+        .from('chat_messages')
+        .insert([{
+          session_id: currentSessionId,
+          text: userMessage.text,
+          sender: "user"
+        }]);
+        
+      if (userMsgError) throw userMsgError;
+      
+      // Update session title if this is the first user message
+      const currentMessages = messages.filter(m => m.sender === "user");
+      if (currentMessages.length === 0) {
+        updateSessionTitle(currentSessionId, inputText);
+      }
+      
       const botResponse = await findRelevantInformation(inputText);
       
       const botMessage: Message = {
@@ -520,6 +833,15 @@ export const ChatBot = () => {
       };
       
       setMessages(prev => [...prev, botMessage]);
+      
+      // Save bot message to database
+      await supabase
+        .from('chat_messages')
+        .insert([{
+          session_id: currentSessionId,
+          text: botResponse,
+          sender: "bot"
+        }]);
     } catch (error) {
       console.error("Error generating response:", error);
       toast({
@@ -541,61 +863,270 @@ export const ChatBot = () => {
     }
   };
 
-  return (
-    <div className="flex flex-col bg-white shadow-[0px_4px_4px_rgba(0,0,0,0.25)] border border-[rgba(0,0,0,0.2)] rounded-[30px] p-4 w-full max-w-[1002px] mx-auto">
-      <ScrollArea ref={scrollAreaRef} className="h-[350px] w-full">
-        <div className="flex flex-col gap-4 p-2">
-          {messages.map((message) => (
-            <div 
-              key={message.id}
-              className={`flex ${message.sender === "user" ? "justify-end" : "justify-start"}`}
-            >
-              <div 
-                className={`max-w-[80%] rounded-[20px] px-4 py-3 ${
-                  message.sender === "user" 
-                    ? "bg-[rgba(49,159,67,0.1)] text-black" 
-                    : "bg-[rgba(49,159,67,1)] text-white"
-                }`}
-              >
-                {message.sender === "bot" ? (
-                  <ReactMarkdown className="text-[16px] whitespace-pre-line markdown-content">
-                    {message.text}
-                  </ReactMarkdown>
-                ) : (
-                  <p className="text-[16px] whitespace-pre-line">{message.text}</p>
-                )}
-                <p className="text-[12px] opacity-70 mt-1">
-                  {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                </p>
-              </div>
-            </div>
-          ))}
-          <div ref={messagesEndRef} />
-        </div>
-      </ScrollArea>
-      
-      <div className="flex items-center gap-2 mt-4">
-        <Input
-          type="text"
-          value={inputText}
-          onChange={(e) => setInputText(e.target.value)}
-          placeholder="Ask about school policies..."
-          className="rounded-full bg-transparent border-[rgba(0,0,0,0.2)]"
-          onKeyPress={(e) => e.key === "Enter" && handleSendMessage()}
-          disabled={isLoading}
-        />
+  // Component to render for mobile
+  const MobileSidebar = () => (
+    <Drawer open={sidebarOpen} onOpenChange={setSidebarOpen}>
+      <DrawerTrigger asChild>
         <Button 
-          onClick={handleSendMessage} 
-          className="rounded-full aspect-square p-2 bg-[rgba(49,159,67,1)] hover:bg-[rgba(39,139,57,1)]"
-          disabled={isLoading}
+          variant="outline" 
+          size="icon" 
+          className="md:hidden absolute left-4 top-4"
         >
-          {isLoading ? (
-            <Loader2 className="h-5 w-5 animate-spin" />
-          ) : (
-            <Send className="h-5 w-5" />
-          )}
+          <Menu className="h-5 w-5" />
         </Button>
+      </DrawerTrigger>
+      <DrawerContent className="h-[80vh]">
+        <div className="px-4 py-6 h-full flex flex-col overflow-hidden">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-xl font-semibold">Your Chats</h2>
+            <Button onClick={createNewSession} className="flex items-center gap-2">
+              <Plus className="h-4 w-4" /> New Chat
+            </Button>
+          </div>
+          
+          <ScrollArea className="flex-1 overflow-auto">
+            {loadingSessions ? (
+              <div className="flex justify-center items-center h-20">
+                <Loader2 className="h-5 w-5 animate-spin text-gray-500" />
+              </div>
+            ) : chatSessions.length === 0 ? (
+              <div className="text-center text-gray-500 py-8">
+                <p>No chat history found</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {chatSessions.map((session) => (
+                  <div 
+                    key={session.id} 
+                    className={`flex items-center justify-between rounded-md px-3 py-2 ${
+                      currentSessionId === session.id
+                        ? "bg-green-100 text-green-900"
+                        : "hover:bg-gray-100"
+                    }`}
+                  >
+                    <button
+                      className="flex-1 truncate text-left"
+                      onClick={() => {
+                        loadChatMessages(session.id);
+                        setSidebarOpen(false);
+                      }}
+                    >
+                      <div className="flex items-center gap-2">
+                        <MessageSquare className="h-4 w-4 flex-shrink-0" />
+                        <span className="truncate">{session.title}</span>
+                      </div>
+                    </button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        deleteSession(session.id);
+                      }}
+                      className="h-8 w-8 text-gray-500 hover:text-red-500"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </ScrollArea>
+        </div>
+      </DrawerContent>
+    </Drawer>
+  );
+
+  // Hide the sidebar if not logged in
+  if (!user) {
+    return (
+      <div className="flex flex-col bg-white shadow-[0px_4px_4px_rgba(0,0,0,0.25)] border border-[rgba(0,0,0,0.2)] rounded-[30px] p-4 w-full max-w-[1002px] mx-auto">
+        <ScrollArea ref={scrollAreaRef} className="h-[350px] w-full">
+          <div className="flex flex-col gap-4 p-2">
+            {messages.map((message) => (
+              <div 
+                key={message.id}
+                className={`flex ${message.sender === "user" ? "justify-end" : "justify-start"}`}
+              >
+                <div 
+                  className={`max-w-[80%] rounded-[20px] px-4 py-3 ${
+                    message.sender === "user" 
+                      ? "bg-[rgba(49,159,67,0.1)] text-black" 
+                      : "bg-[rgba(49,159,67,1)] text-white"
+                  }`}
+                >
+                  {message.sender === "bot" ? (
+                    <ReactMarkdown className="text-[16px] whitespace-pre-line markdown-content">
+                      {message.text}
+                    </ReactMarkdown>
+                  ) : (
+                    <p className="text-[16px] whitespace-pre-line">{message.text}</p>
+                  )}
+                  <p className="text-[12px] opacity-70 mt-1">
+                    {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </p>
+                </div>
+              </div>
+            ))}
+            <div ref={messagesEndRef} />
+          </div>
+        </ScrollArea>
+        
+        <div className="flex items-center gap-2 mt-4">
+          <Input
+            type="text"
+            value={inputText}
+            onChange={(e) => setInputText(e.target.value)}
+            placeholder="Ask about school policies..."
+            className="rounded-full bg-transparent border-[rgba(0,0,0,0.2)]"
+            onKeyPress={(e) => e.key === "Enter" && handleSendMessage()}
+            disabled={isLoading}
+          />
+          <Button 
+            onClick={handleSendMessage} 
+            className="rounded-full aspect-square p-2 bg-[rgba(49,159,67,1)] hover:bg-[rgba(39,139,57,1)]"
+            disabled={isLoading || !user}
+          >
+            {isLoading ? (
+              <Loader2 className="h-5 w-5 animate-spin" />
+            ) : (
+              <Send className="h-5 w-5" />
+            )}
+          </Button>
+        </div>
       </div>
-    </div>
+    );
+  }
+
+  return (
+    <SidebarProvider>
+      <div className="flex min-h-[calc(100vh-80px)] w-full">
+        {/* Mobile Sidebar */}
+        {isMobile && <MobileSidebar />}
+        
+        {/* Desktop Sidebar */}
+        <Sidebar
+          className="hidden md:flex border-r border-gray-200 bg-white"
+          collapsible="icon"
+        >
+          <SidebarHeader className="p-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-xl font-semibold">Your Chats</h2>
+              <Button onClick={createNewSession} size="sm" className="h-8 w-8 p-0">
+                <Plus className="h-4 w-4" />
+              </Button>
+            </div>
+          </SidebarHeader>
+          
+          <SidebarContent>
+            {loadingSessions ? (
+              <div className="flex justify-center items-center h-20">
+                <Loader2 className="h-5 w-5 animate-spin text-gray-500" />
+              </div>
+            ) : chatSessions.length === 0 ? (
+              <div className="text-center text-gray-500 py-8 px-4">
+                <p>No chat history found</p>
+              </div>
+            ) : (
+              <SidebarMenu>
+                {chatSessions.map((session) => (
+                  <SidebarMenuItem key={session.id}>
+                    <SidebarMenuButton
+                      isActive={currentSessionId === session.id}
+                      onClick={() => loadChatMessages(session.id)}
+                      tooltip={session.title}
+                    >
+                      <MessageSquare className="h-4 w-4" />
+                      <span className="truncate">{session.title}</span>
+                    </SidebarMenuButton>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => deleteSession(session.id)}
+                      className="absolute right-2 top-1 h-6 w-6 rounded-full opacity-0 transition-opacity group-hover:opacity-100"
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </Button>
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            )}
+          </SidebarContent>
+          
+          <SidebarFooter className="p-4">
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={createNewSession}
+              className="w-full flex items-center justify-center gap-2"
+            >
+              <Plus className="h-4 w-4" /> New Chat
+            </Button>
+          </SidebarFooter>
+        </Sidebar>
+        
+        {/* Main chat area */}
+        <div className="flex-1 flex flex-col bg-white shadow-[0px_4px_4px_rgba(0,0,0,0.25)] border border-[rgba(0,0,0,0.2)] rounded-[30px] p-4 ml-0 md:ml-2 relative">
+          {/* Sidebar trigger for desktop */}
+          <div className="hidden md:block absolute left-4 top-4">
+            <SidebarTrigger className="h-8 w-8" />
+          </div>
+          
+          <ScrollArea ref={scrollAreaRef} className="h-[350px] w-full mt-8 md:mt-0">
+            <div className="flex flex-col gap-4 p-2">
+              {messages.map((message) => (
+                <div 
+                  key={message.id}
+                  className={`flex ${message.sender === "user" ? "justify-end" : "justify-start"}`}
+                >
+                  <div 
+                    className={`max-w-[80%] rounded-[20px] px-4 py-3 ${
+                      message.sender === "user" 
+                        ? "bg-[rgba(49,159,67,0.1)] text-black" 
+                        : "bg-[rgba(49,159,67,1)] text-white"
+                    }`}
+                  >
+                    {message.sender === "bot" ? (
+                      <ReactMarkdown className="text-[16px] whitespace-pre-line markdown-content">
+                        {message.text}
+                      </ReactMarkdown>
+                    ) : (
+                      <p className="text-[16px] whitespace-pre-line">{message.text}</p>
+                    )}
+                    <p className="text-[12px] opacity-70 mt-1">
+                      {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </p>
+                  </div>
+                </div>
+              ))}
+              <div ref={messagesEndRef} />
+            </div>
+          </ScrollArea>
+          
+          <div className="flex items-center gap-2 mt-4">
+            <Input
+              type="text"
+              value={inputText}
+              onChange={(e) => setInputText(e.target.value)}
+              placeholder="Ask about school policies..."
+              className="rounded-full bg-transparent border-[rgba(0,0,0,0.2)]"
+              onKeyPress={(e) => e.key === "Enter" && handleSendMessage()}
+              disabled={isLoading}
+            />
+            <Button 
+              onClick={handleSendMessage} 
+              className="rounded-full aspect-square p-2 bg-[rgba(49,159,67,1)] hover:bg-[rgba(39,139,57,1)]"
+              disabled={isLoading}
+            >
+              {isLoading ? (
+                <Loader2 className="h-5 w-5 animate-spin" />
+              ) : (
+                <Send className="h-5 w-5" />
+              )}
+            </Button>
+          </div>
+        </div>
+      </div>
+    </SidebarProvider>
   );
 };
