@@ -931,7 +931,7 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
                     }`}
                   >
                     <button
-                      className="flex-1 truncate text-left"
+                      className="flex-1 truncate text-left pr-2"
                       onClick={() => {
                         loadChatMessages(session.id);
                         setSidebarOpen(false);
@@ -949,7 +949,7 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
                         e.stopPropagation();
                         deleteSession(session.id);
                       }}
-                      className="h-8 w-8 text-gray-500 hover:text-red-500"
+                      className="h-8 w-8 text-gray-500 hover:text-red-500 flex-shrink-0"
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
@@ -1029,14 +1029,14 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
                       {chatSessions.map((session) => (
                         <div 
                           key={session.id} 
-                          className={`group relative flex items-center justify-between rounded-md px-3 py-2 ${
+                          className={`group/menu-item relative flex items-center justify-between rounded-md px-3 py-2 ${
                             currentSessionId === session.id
                               ? "bg-green-100 text-green-900"
                               : "hover:bg-gray-100"
                           }`}
                         >
                           <button
-                            className="flex-1 truncate text-left"
+                            className="flex-1 truncate text-left pr-3"
                             onClick={() => loadChatMessages(session.id)}
                           >
                             <div className="flex items-center gap-2">
@@ -1047,8 +1047,11 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
                           <Button
                             variant="ghost"
                             size="icon"
-                            onClick={() => deleteSession(session.id)}
-                            className="h-6 w-6 rounded-full opacity-0 transition-opacity group-hover:opacity-100"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              deleteSession(session.id);
+                            }}
+                            className="h-6 w-6 rounded-full opacity-0 transition-opacity group-hover/menu-item:opacity-100 flex-shrink-0 ml-1"
                           >
                             <Trash2 className="h-3 w-3" />
                           </Button>
