@@ -28,18 +28,21 @@ export const ChatSidebar = ({
 }: ChatSidebarProps) => {
   const [deletingSessionId, setDeletingSessionId] = useState<string | null>(null);
   const [localSessions, setLocalSessions] = useState<ChatSession[]>(chatSessions);
+  const deletedSessionIds = useRef(new Set<string>());
 
   // Update local sessions when chatSessions prop changes, but maintain any deletions in progress
   useEffect(() => {
-    if (!deletingSessionId) {
-      setLocalSessions(chatSessions);
-    } else {
-      // If a deletion is in progress, update all sessions except the one being deleted
-      setLocalSessions(prevSessions => {
-        const updatedSessions = chatSessions.filter(session => session.id !== deletingSessionId);
-        return updatedSessions;
-      });
-    }
+    setLocalSessions(prevSessions => {
+      // Filter out any sessions that have been marked as deleted
+      const filteredSessions = chatSessions.filter(session => !deletedSessionIds.current.has(session.id));
+      
+      // If there's a session being deleted, make sure it's excluded
+      if (deletingSessionId) {
+        return filteredSessions.filter(session => session.id !== deletingSessionId);
+      }
+      
+      return filteredSessions;
+    });
   }, [chatSessions, deletingSessionId]);
 
   const handleDeleteSession = async (sessionId: string, event: React.MouseEvent) => {
@@ -47,6 +50,9 @@ export const ChatSidebar = ({
     
     // Mark this session as being deleted (for animation)
     setDeletingSessionId(sessionId);
+    
+    // Add to our local set of deleted session IDs to prevent re-appearance
+    deletedSessionIds.current.add(sessionId);
     
     // Update local state immediately for responsive UI
     setLocalSessions(prev => prev.filter(session => session.id !== sessionId));
@@ -68,8 +74,17 @@ export const ChatSidebar = ({
         variant: "destructive",
       });
       
-      // If deletion failed, restore the session in UI
-      setLocalSessions(chatSessions);
+      // If deletion failed, remove from our deleted set
+      deletedSessionIds.current.delete(sessionId);
+      
+      // Restore the session in UI
+      setLocalSessions(prev => {
+        const sessionToRestore = chatSessions.find(s => s.id === sessionId);
+        if (sessionToRestore && !prev.some(s => s.id === sessionId)) {
+          return [...prev, sessionToRestore];
+        }
+        return prev;
+      });
     } finally {
       setDeletingSessionId(null);
     }

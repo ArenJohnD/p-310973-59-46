@@ -37,22 +37,52 @@ export const loadChatMessages = async (sessionId: string): Promise<Message[]> =>
 };
 
 export const createNewSession = async (userId: string): Promise<ChatSession | null> => {
-  // Check if user already has an empty session (no messages)
+  // Check if user already has an empty session (no messages or only welcome message)
   const { data: existingEmptySessions, error: checkError } = await supabase
     .from('chat_sessions')
     .select('id, chat_messages:chat_messages(count)')
     .eq('user_id', userId)
-    .is('is_active', true)
+    .eq('is_active', true)
     .limit(1);
     
   if (checkError) throw checkError;
 
-  // If there's an existing active session with no messages, use that instead of creating a new one
+  // If there's an existing active session with no messages or only welcome message, use that
   if (existingEmptySessions && existingEmptySessions.length > 0) {
     const session = existingEmptySessions[0];
     const messageCount = session.chat_messages[0]?.count || 0;
     
     if (messageCount <= 1) { // Only bot welcome message or none
+      // Get the full session data
+      const { data: sessionData } = await supabase
+        .from('chat_sessions')
+        .select('*')
+        .eq('id', session.id)
+        .single();
+      
+      if (sessionData) {
+        return sessionData as ChatSession;
+      }
+    }
+  }
+  
+  // Also check if user has any other empty sessions (not active)
+  const { data: otherEmptySessions, error: otherCheckError } = await supabase
+    .from('chat_sessions')
+    .select('id, chat_messages:chat_messages(count)')
+    .eq('user_id', userId)
+    .eq('is_active', false)
+    .order('created_at', { ascending: false })
+    .limit(1);
+    
+  if (!otherCheckError && otherEmptySessions && otherEmptySessions.length > 0) {
+    const session = otherEmptySessions[0];
+    const messageCount = session.chat_messages[0]?.count || 0;
+    
+    if (messageCount <= 1) { // Only bot welcome message or none
+      // Reuse this session and set it as active
+      await setSessionActive(userId, session.id);
+      
       // Get the full session data
       const { data: sessionData } = await supabase
         .from('chat_sessions')
@@ -120,10 +150,15 @@ export const deleteSession = async (sessionId: string): Promise<void> => {
     .eq('session_id', sessionId);
   
   // Then delete the session
-  await supabase
+  const { error } = await supabase
     .from('chat_sessions')
     .delete()
     .eq('id', sessionId);
+    
+  if (error) {
+    console.error("Error deleting session:", error);
+    throw error;
+  }
 };
 
 export const updateSessionTitle = async (sessionId: string, title: string): Promise<void> => {
