@@ -1,3 +1,4 @@
+
 import { useState, useRef, useEffect } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -91,6 +92,51 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
     
     if (user) {
       fetchChatSessionsFromServer();
+      
+      // Set up real-time subscription for chat_sessions table
+      const chatSessionsChannel = supabase
+        .channel('chat_sessions_changes')
+        .on('postgres_changes', {
+          event: '*',
+          schema: 'public',
+          table: 'chat_sessions',
+          filter: user ? `user_id=eq.${user.id}` : undefined
+        }, (payload) => {
+          if (payload.eventType === 'DELETE') {
+            // Handle deleted session
+            const deletedSessionId = payload.old.id;
+            setChatSessions(prev => prev.filter(session => session.id !== deletedSessionId));
+            
+            // If the deleted session was the current one, switch to another session
+            if (deletedSessionId === currentSessionId) {
+              const remainingSessions = chatSessions.filter(session => session.id !== deletedSessionId);
+              if (remainingSessions.length > 0) {
+                setCurrentSessionId(remainingSessions[0].id);
+                loadChatMessagesFromServer(remainingSessions[0].id);
+              } else {
+                // If no sessions left, create a new one
+                handleCreateNewSession();
+              }
+            }
+          } else if (payload.eventType === 'INSERT') {
+            // Handle new session
+            const newSession = payload.new as ChatSession;
+            setChatSessions(prev => [newSession, ...prev.filter(s => s.id !== newSession.id)]);
+          } else if (payload.eventType === 'UPDATE') {
+            // Handle updated session
+            const updatedSession = payload.new as ChatSession;
+            setChatSessions(prev => 
+              prev.map(session => 
+                session.id === updatedSession.id ? updatedSession : session
+              )
+            );
+          }
+        })
+        .subscribe();
+        
+      return () => {
+        supabase.removeChannel(chatSessionsChannel);
+      };
     }
   }, [user]);
 
@@ -302,6 +348,7 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
               currentSessionId={currentSessionId}
               onSessionLoaded={handleSessionLoaded}
               onNewSession={handleCreateNewSession}
+              isCollapsed={isCollapsed}
             />
           )}
           
@@ -318,6 +365,7 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
                   currentSessionId={currentSessionId}
                   onSessionLoaded={handleSessionLoaded}
                   onNewSession={handleCreateNewSession}
+                  isCollapsed={isCollapsed}
                 />
               </div>
               
@@ -339,6 +387,17 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
                 {/* Content appears here when sidebar is collapsed */}
               </CollapsibleContent>
             </Collapsible>
+          )}
+          
+          {isCollapsed && !isMobile && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleCreateNewSession}
+              className="absolute left-6 top-4 z-10 flex items-center gap-1"
+            >
+              <Plus className="h-4 w-4" /> New Chat
+            </Button>
           )}
           
           <div className={`flex-1 flex flex-col relative h-full ${isMobile ? 'pt-10' : ''}`}>

@@ -14,6 +14,7 @@ interface ChatSidebarProps {
   onSessionLoaded: (sessionId: string) => void;
   onNewSession: () => void;
   closeSidebar?: () => void;
+  isCollapsed?: boolean;
 }
 
 export const ChatSidebar = ({
@@ -22,9 +23,11 @@ export const ChatSidebar = ({
   currentSessionId,
   onSessionLoaded,
   onNewSession,
-  closeSidebar
+  closeSidebar,
+  isCollapsed = false
 }: ChatSidebarProps) => {
-  const handleDeleteSession = async (sessionId: string) => {
+  const handleDeleteSession = async (sessionId: string, event: React.MouseEvent) => {
+    event.stopPropagation();
     try {
       await deleteSession(sessionId);
       
@@ -90,10 +93,7 @@ export const ChatSidebar = ({
                 <Button
                   variant="ghost"
                   size="icon"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleDeleteSession(session.id);
-                  }}
+                  onClick={(e) => handleDeleteSession(session.id, e)}
                   className="h-6 w-6 rounded-full opacity-0 transition-opacity group-hover/menu-item:opacity-100 flex-shrink-0 absolute right-2"
                 >
                   <Trash2 className="h-3 w-3" />
@@ -104,7 +104,7 @@ export const ChatSidebar = ({
         )}
       </ScrollArea>
       
-      <div className="absolute bottom-0 left-0 right-0 p-4 border-t bg-white group-data-[state=collapsed]:hidden">
+      <div className={`absolute bottom-0 left-0 right-0 p-4 border-t bg-white ${isCollapsed ? 'hidden' : ''}`}>
         <Button 
           variant="outline" 
           size="sm" 
