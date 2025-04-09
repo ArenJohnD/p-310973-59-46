@@ -25,19 +25,19 @@ export const Header = () => {
 
   return (
     <header className="bg-[#F1F1F1] shadow-sm">
-      <div className="container mx-auto px-4 py-4 flex items-center">
+      <div className="container mx-auto px-4 py-5 flex items-center">
         {/* Logo and Navigation together */}
-        <div className="flex items-center space-x-8">
+        <div className="flex items-center space-x-10">
           {/* Logo */}
           <img
             src="https://cdn.builder.io/api/v1/image/assets/e3c6b0ec50df45b58e99e24af78e19b0/1cb33a4f0fb596171796038573ac1522f5a08704?placeholderIfAbsent=true"
             alt="NEU Logo"
-            className="h-16 w-16 object-contain"
+            className="h-20 w-20 object-contain"
           />
         
           {/* Navigation */}
           <nav className="flex items-center">
-            <div className="text-black text-lg font-medium flex gap-6">
+            <div className="text-black text-xl font-medium flex gap-8">
               <Link to="/" className="hover:text-gray-700 transition-colors">
                 Home
               </Link>
@@ -52,24 +52,24 @@ export const Header = () => {
         </div>
         
         {/* Right side icons - pushed to the right */}
-        <div className="ml-auto flex items-center gap-6">
-          <Bell className="h-7 w-7 text-gray-700" />
+        <div className="ml-auto flex items-center gap-8">
+          <Bell className="h-8 w-8 text-gray-700" />
           
           {user && (
             <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
               <DropdownMenuTrigger className="focus:outline-none">
-                <Avatar className="h-10 w-10 bg-white border border-gray-200">
+                <Avatar className="h-12 w-12 bg-white border border-gray-200">
                   {avatarUrl ? (
                     <AvatarImage src={avatarUrl} alt={user.email || "User"} />
                   ) : (
-                    <AvatarFallback className="bg-white text-gray-800">
+                    <AvatarFallback className="bg-white text-gray-800 text-lg">
                       {user.email?.substring(0, 2).toUpperCase() || "U"}
                     </AvatarFallback>
                   )}
                 </Avatar>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-full min-w-[200px] bg-white z-50">
-                <div className="px-3 py-2 text-sm font-medium break-words">
+              <DropdownMenuContent align="end" className="w-full min-w-[220px] bg-white z-50 text-base">
+                <div className="px-4 py-3 text-base font-medium break-words">
                   {user.email}
                   {isLoading && <span className="ml-2 text-xs">(checking permissions...)</span>}
                   {!isLoading && isAdmin && <span className="ml-2 text-xs text-green-600">(admin)</span>}
@@ -78,9 +78,9 @@ export const Header = () => {
                 <DropdownMenuSeparator />
                 
                 {isAdmin && (
-                  <DropdownMenuItem asChild className="cursor-pointer">
+                  <DropdownMenuItem asChild className="cursor-pointer text-base">
                     <Link to="/admin" className="flex items-center">
-                      <Settings className="mr-2 h-4 w-4" />
+                      <Settings className="mr-2 h-5 w-5" />
                       Admin Dashboard
                     </Link>
                   </DropdownMenuItem>
@@ -88,9 +88,9 @@ export const Header = () => {
                 
                 <DropdownMenuItem 
                   onClick={handleSignOut}
-                  className="cursor-pointer text-red-500 focus:text-red-500 focus:bg-red-50"
+                  className="cursor-pointer text-red-500 focus:text-red-500 focus:bg-red-50 text-base"
                 >
-                  <LogOut className="mr-2 h-4 w-4" />
+                  <LogOut className="mr-2 h-5 w-5" />
                   Sign out
                 </DropdownMenuItem>
               </DropdownMenuContent>
