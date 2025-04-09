@@ -15,6 +15,7 @@ interface MobileChatSidebarProps {
   onNewSession: () => void;
   isCollapsed?: boolean;
   isCreatingNewSession?: boolean;
+  onLastSessionDeleted?: () => void;
 }
 
 export const MobileChatSidebar = ({
@@ -26,7 +27,8 @@ export const MobileChatSidebar = ({
   onSessionLoaded,
   onNewSession,
   isCollapsed = false,
-  isCreatingNewSession = false
+  isCreatingNewSession = false,
+  onLastSessionDeleted
 }: MobileChatSidebarProps) => {
   return (
     <Drawer open={open} onOpenChange={onOpenChange}>
@@ -50,6 +52,7 @@ export const MobileChatSidebar = ({
             closeSidebar={() => onOpenChange(false)}
             isCollapsed={isCollapsed}
             isCreatingNewSession={isCreatingNewSession}
+            onLastSessionDeleted={onLastSessionDeleted}
           />
         </div>
       </DrawerContent>

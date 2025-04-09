@@ -1,4 +1,3 @@
-
 import { useState, useRef, useEffect } from "react";
 import { MessageSquare, Trash2, Loader2, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -17,6 +16,7 @@ interface ChatSidebarProps {
   closeSidebar?: () => void;
   isCollapsed?: boolean;
   isCreatingNewSession?: boolean;
+  onLastSessionDeleted?: () => void;
 }
 
 export const ChatSidebar = ({
@@ -27,7 +27,8 @@ export const ChatSidebar = ({
   onNewSession,
   closeSidebar,
   isCollapsed = false,
-  isCreatingNewSession = false
+  isCreatingNewSession = false,
+  onLastSessionDeleted
 }: ChatSidebarProps) => {
   const [deletingSessionId, setDeletingSessionId] = useState<string | null>(null);
   const [localSessions, setLocalSessions] = useState<ChatSession[]>([]);
@@ -64,13 +65,6 @@ export const ChatSidebar = ({
     // Check if this is the only session
     const isLastSession = localSessions.length <= 1;
     
-    if (isLastSession) {
-      toast({
-        title: "Information",
-        description: "A new chat will be created automatically.",
-      });
-    }
-    
     // Mark this session as being deleted (for animation)
     setDeletingSessionId(sessionId);
     
@@ -84,11 +78,8 @@ export const ChatSidebar = ({
       // Actual deletion in the background
       await deleteSession(sessionId);
       
-      if (!isLastSession) {
-        toast({
-          title: "Success",
-          description: "Chat session deleted successfully.",
-        });
+      if (isLastSession && onLastSessionDeleted) {
+        onLastSessionDeleted();
       }
     } catch (error) {
       console.error("Error deleting session:", error);

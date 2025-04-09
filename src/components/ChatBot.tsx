@@ -1,3 +1,4 @@
+
 import { useState, useRef, useEffect } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -55,6 +56,12 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
   const [pendingSession, setPendingSession] = useState<string | null>(null);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const initialSetupDone = useRef(false);
+  const welcomeMessage: Message = {
+    id: "welcome",
+    text: "Hi! I'm Poli, your NEU policy assistant. I can help you find information about university policies, answer questions about academic regulations, and guide you through administrative procedures. How can I assist you today?",
+    sender: "bot",
+    timestamp: new Date()
+  };
 
   useEffect(() => {
     const checkIfMobile = () => {
@@ -107,22 +114,14 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
             setChatSessions(prev => {
               const updatedSessions = prev.filter(session => session.id !== deletedSessionId);
               
-              if (updatedSessions.length === 0 && !creatingNewSession && initialSetupDone.current) {
-                setTimeout(() => handleCreateNewSession(), 0);
+              if (updatedSessions.length === 0 && currentSessionId === deletedSessionId) {
+                // Last session was deleted, display welcome message
+                setCurrentSessionId(null);
+                setMessages([welcomeMessage]);
               }
               
               return updatedSessions;
             });
-            
-            if (deletedSessionId === currentSessionId) {
-              const remainingSessions = chatSessions.filter(session => session.id !== deletedSessionId);
-              if (remainingSessions.length > 0) {
-                setCurrentSessionId(remainingSessions[0].id);
-                loadChatMessagesFromServer(remainingSessions[0].id);
-              } else if (!creatingNewSession && initialSetupDone.current) {
-                setTimeout(() => handleCreateNewSession(), 0);
-              }
-            }
           } else if (payload.eventType === 'INSERT') {
             const newSession = payload.new as ChatSession;
             setChatSessions(prev => [newSession, ...prev.filter(s => s.id !== newSession.id)]);
@@ -141,7 +140,7 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
         supabase.removeChannel(chatSessionsChannel);
       };
     }
-  }, [user, creatingNewSession]);
+  }, [user]);
 
   useEffect(() => {
     if (chatSessions.length === 0) return;
@@ -173,10 +172,14 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
           setCurrentSessionId(activeSession.id);
           await loadChatMessagesFromServer(activeSession.id, false);
         } else {
-          await handleCreateNewSession(false);
+          // Don't create a new session, just show the welcome message
+          setMessages([welcomeMessage]);
+          setCurrentSessionId(null);
         }
       } else {
-        await handleCreateNewSession(false);
+        // Don't create a new session, just show the welcome message
+        setMessages([welcomeMessage]);
+        setCurrentSessionId(null);
       }
       
       initialSetupDone.current = true;
@@ -205,12 +208,7 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
       if (messageData.length > 0) {
         setMessages(messageData);
       } else {
-        setMessages([{
-          id: "welcome",
-          text: "Hi! I'm Poli, your NEU policy assistant. I can help you find information about university policies, answer questions about academic regulations, and guide you through administrative procedures. How can I assist you today?",
-          sender: "bot",
-          timestamp: new Date()
-        }]);
+        setMessages([welcomeMessage]);
       }
       
       setCurrentSessionId(sessionId);
@@ -253,12 +251,7 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
         
         setPendingSession(newSession.id);
         
-        setMessages([{
-          id: "welcome",
-          text: "Hi! I'm Poli, your NEU policy assistant. I can help you find information about university policies, answer questions about academic regulations, and guide you through administrative procedures. How can I assist you today?",
-          sender: "bot",
-          timestamp: new Date()
-        }]);
+        setMessages([welcomeMessage]);
       }
     } catch (error) {
       console.error("Error creating new session:", error);
@@ -281,19 +274,49 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
   const handleSessionLoaded = async (sessionId: string) => {
     await loadChatMessagesFromServer(sessionId);
   };
+  
+  const handleLastSessionDeleted = () => {
+    // When the last session is deleted, show the welcome message without creating a new session
+    setCurrentSessionId(null);
+    setMessages([welcomeMessage]);
+  };
 
   const handleSendMessage = async (inputText: string) => {
     if (!inputText.trim() || !user) return;
     
-    if (!currentSessionId) {
-      await handleCreateNewSession();
-      if (!currentSessionId) {
+    let sessionId = currentSessionId;
+    
+    // If there's no current session, create one
+    if (!sessionId) {
+      try {
+        setIsLoading(true);
+        setCreatingNewSession(true);
+        
+        const newSession = await createNewSession(user.id);
+        
+        if (newSession) {
+          sessionId = newSession.id;
+          setCurrentSessionId(sessionId);
+          setChatSessions(prev => [newSession, ...prev.map(s => ({ ...s, is_active: false }))]);
+          setPendingSession(newSession.id);
+        } else {
+          toast({
+            title: "Error",
+            description: "Failed to create chat session. Please log in and try again.",
+            variant: "destructive",
+          });
+          return;
+        }
+      } catch (error) {
+        console.error("Error creating new session:", error);
         toast({
           title: "Error",
-          description: "Failed to create chat session. Please log in and try again.",
+          description: "Failed to create new chat session.",
           variant: "destructive",
         });
         return;
+      } finally {
+        setCreatingNewSession(false);
       }
     }
     
@@ -309,23 +332,23 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
     setShowTypingMessage(true);
     
     try {
-      await saveMessage(currentSessionId, userMessage.text, "user");
+      await saveMessage(sessionId, userMessage.text, "user");
       
       const botResponse = await findRelevantInformation(inputText, referenceDocuments);
       
-      const currentMessages = await loadChatMessages(currentSessionId);
+      const currentMessages = await loadChatMessages(sessionId);
       const userMessages = currentMessages.filter(m => m.sender === "user");
       
       if (userMessages.length <= 1) {
         const title = await generateChatTitle(inputText, botResponse);
-        await updateSessionTitle(currentSessionId, title);
+        await updateSessionTitle(sessionId, title);
         setChatSessions(prev => 
           prev.map(session => 
-            session.id === currentSessionId ? { ...session, title } : session
+            session.id === sessionId ? { ...session, title } : session
           )
         );
         
-        if (pendingSession === currentSessionId) {
+        if (pendingSession === sessionId) {
           setPendingSession(null);
         }
       }
@@ -340,7 +363,7 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
       setShowTypingMessage(false);
       setMessages(prev => [...prev, botMessage]);
       
-      await saveMessage(currentSessionId, botResponse, "bot");
+      await saveMessage(sessionId, botResponse, "bot");
     } catch (error) {
       console.error("Error generating response:", error);
       toast({
@@ -378,6 +401,7 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
               onNewSession={handleCreateNewSession}
               isCollapsed={isCollapsed}
               isCreatingNewSession={creatingNewSession}
+              onLastSessionDeleted={handleLastSessionDeleted}
             />
           )}
           
@@ -395,6 +419,7 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
                   onNewSession={handleCreateNewSession}
                   isCollapsed={isCollapsed}
                   isCreatingNewSession={creatingNewSession}
+                  onLastSessionDeleted={handleLastSessionDeleted}
                 />
               </div>
               
