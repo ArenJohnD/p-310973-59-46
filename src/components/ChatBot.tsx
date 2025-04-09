@@ -1,3 +1,4 @@
+
 import { useState, useRef, useEffect } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -350,7 +351,7 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
               onOpenChange={(open) => setIsCollapsed(!open)}
               className="relative group"
             >
-              <div className={`h-full bg-white border-r border-gray-200 transition-all ${isCollapsed ? 'w-0 overflow-hidden' : 'w-64'}`}>
+              <div className={`h-full bg-white border-r border-gray-200 transition-all duration-300 ease-in-out ${isCollapsed ? 'w-0 overflow-hidden' : 'w-64'}`}>
                 <ChatSidebar
                   chatSessions={chatSessions}
                   loadingSessions={loadingSessions}
@@ -365,12 +366,12 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
                 <Button 
                   variant="ghost" 
                   size="icon" 
-                  className="absolute -right-4 top-1/2 transform -translate-y-1/2 h-8 w-8 rounded-full border shadow-sm z-10 bg-white"
+                  className="absolute -right-4 top-1/2 transform -translate-y-1/2 h-8 w-8 rounded-full border shadow-sm z-10 bg-white transition-transform duration-300 ease-in-out hover:bg-gray-100"
                 >
                   {isCollapsed ? (
-                    <ChevronRight className="h-4 w-4" />
+                    <ChevronRight className="h-4 w-4 transition-transform duration-300 ease-in-out" />
                   ) : (
-                    <ChevronLeft className="h-4 w-4" />
+                    <ChevronLeft className="h-4 w-4 transition-transform duration-300 ease-in-out" />
                   )}
                 </Button>
               </CollapsibleTrigger>

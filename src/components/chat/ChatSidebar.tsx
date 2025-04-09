@@ -1,11 +1,11 @@
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { MessageSquare, Trash2, Loader2, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { toast } from "@/components/ui/use-toast";
 import { ChatSession } from "@/types/chat";
-import { deleteSession, loadChatMessages, createNewSession } from "@/services/chatService";
+import { deleteSession } from "@/services/chatService";
 
 interface ChatSidebarProps {
   chatSessions: ChatSession[];
@@ -26,9 +26,25 @@ export const ChatSidebar = ({
   closeSidebar,
   isCollapsed = false
 }: ChatSidebarProps) => {
+  const [deletingSessionId, setDeletingSessionId] = useState<string | null>(null);
+  const [sessionItems, setSessionItems] = useState<ChatSession[]>(chatSessions);
+
+  // Update session items when chatSessions prop changes
+  useEffect(() => {
+    setSessionItems(chatSessions);
+  }, [chatSessions]);
+
   const handleDeleteSession = async (sessionId: string, event: React.MouseEvent) => {
     event.stopPropagation();
+    
+    // Mark this session as being deleted (for animation)
+    setDeletingSessionId(sessionId);
+    
+    // Update local state immediately for responsive UI
+    setSessionItems(prev => prev.filter(session => session.id !== sessionId));
+    
     try {
+      // Actual deletion in the background
       await deleteSession(sessionId);
       
       toast({
@@ -36,12 +52,6 @@ export const ChatSidebar = ({
         description: "Chat session deleted successfully.",
       });
       
-      if (sessionId === currentSessionId && chatSessions.length > 1) {
-        const remainingSessions = chatSessions.filter(session => session.id !== sessionId);
-        if (remainingSessions.length > 0) {
-          onSessionLoaded(remainingSessions[0].id);
-        }
-      }
     } catch (error) {
       console.error("Error deleting session:", error);
       toast({
@@ -49,6 +59,11 @@ export const ChatSidebar = ({
         description: "Failed to delete chat session.",
         variant: "destructive",
       });
+      
+      // If deletion failed, restore the session in UI
+      setSessionItems(chatSessions);
+    } finally {
+      setDeletingSessionId(null);
     }
   };
 
@@ -63,19 +78,23 @@ export const ChatSidebar = ({
           <div className="flex justify-center items-center h-20">
             <Loader2 className="h-5 w-5 animate-spin text-gray-500" />
           </div>
-        ) : chatSessions.length === 0 ? (
+        ) : sessionItems.length === 0 ? (
           <div className="text-center text-gray-500 py-8 px-4">
             <p>No chat history found</p>
           </div>
         ) : (
           <div className="p-2 space-y-1">
-            {chatSessions.map((session) => (
+            {sessionItems.map((session) => (
               <div 
                 key={session.id} 
-                className="group/menu-item relative flex items-center justify-between"
+                className={`
+                  group/menu-item relative flex items-center justify-between
+                  transition-all duration-300 ease-in-out
+                  ${deletingSessionId === session.id ? 'opacity-0 h-0 scale-0 m-0 p-0 transform-gpu' : 'opacity-100 transform-gpu'}
+                `}
               >
                 <button
-                  className={`flex-1 truncate text-left rounded-md px-3 py-2 mx-2 ${
+                  className={`flex-1 truncate text-left rounded-md px-3 py-2 mx-2 transition-colors duration-200 ${
                     currentSessionId === session.id
                       ? "bg-green-100 text-green-900"
                       : "hover:bg-gray-100"
@@ -95,8 +114,13 @@ export const ChatSidebar = ({
                   size="icon"
                   onClick={(e) => handleDeleteSession(session.id, e)}
                   className="h-6 w-6 rounded-full opacity-0 transition-opacity group-hover/menu-item:opacity-100 flex-shrink-0 absolute right-2"
+                  disabled={deletingSessionId === session.id}
                 >
-                  <Trash2 className="h-3 w-3" />
+                  {deletingSessionId === session.id ? (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  ) : (
+                    <Trash2 className="h-3 w-3" />
+                  )}
                 </Button>
               </div>
             ))}

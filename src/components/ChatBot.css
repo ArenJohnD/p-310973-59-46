@@ -17,3 +17,35 @@
 .typing-dot:nth-child(3) {
   animation-delay: 0.4s;
 }
+
+@keyframes fadeOut {
+  from { opacity: 1; height: auto; margin: 0.25rem 0; }
+  to { opacity: 0; height: 0; margin: 0; }
+}
+
+.session-deleting {
+  animation: fadeOut 0.3s ease-in-out forwards;
+}
+
+/* Sidebar transition animations */
+.sidebar-enter {
+  width: 0;
+  opacity: 0;
+}
+
+.sidebar-enter-active {
+  width: 16rem;
+  opacity: 1;
+  transition: width 300ms ease-in-out, opacity 300ms ease-in-out;
+}
+
+.sidebar-exit {
+  width: 16rem;
+  opacity: 1;
+}
+
+.sidebar-exit-active {
+  width: 0;
+  opacity: 0;
+  transition: width 300ms ease-in-out, opacity 300ms ease-in-out;
+}
