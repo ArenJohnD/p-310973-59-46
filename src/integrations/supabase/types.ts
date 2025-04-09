@@ -68,6 +68,56 @@ export type Database = {
         }
         Relationships: []
       }
+      document_sections: {
+        Row: {
+          article_number: string | null
+          content: string
+          created_at: string
+          document_id: string
+          file_name: string | null
+          id: string
+          page_number: number | null
+          raw_text: string | null
+          score: number | null
+          section_id: string | null
+          title: string
+        }
+        Insert: {
+          article_number?: string | null
+          content: string
+          created_at?: string
+          document_id: string
+          file_name?: string | null
+          id?: string
+          page_number?: number | null
+          raw_text?: string | null
+          score?: number | null
+          section_id?: string | null
+          title: string
+        }
+        Update: {
+          article_number?: string | null
+          content?: string
+          created_at?: string
+          document_id?: string
+          file_name?: string | null
+          id?: string
+          page_number?: number | null
+          raw_text?: string | null
+          score?: number | null
+          section_id?: string | null
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "document_sections_document_id_fkey"
+            columns: ["document_id"]
+            isOneToOne: false
+            referencedRelation: "reference_documents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       policy_categories: {
         Row: {
           created_at: string
