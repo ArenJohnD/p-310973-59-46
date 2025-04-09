@@ -1,4 +1,3 @@
-
 import { useState, useRef, useEffect } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -215,7 +214,17 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
       const newSession = await createNewSession(user.id);
       
       if (newSession) {
-        setChatSessions(prev => [newSession, ...prev.map(s => ({ ...s, is_active: false }))]);
+        const isReusedSession = chatSessions.some(s => s.id === newSession.id);
+        
+        if (isReusedSession) {
+          setChatSessions(prev => prev.map(s => ({
+            ...s,
+            is_active: s.id === newSession.id
+          })));
+        } else {
+          setChatSessions(prev => [newSession, ...prev.map(s => ({ ...s, is_active: false }))]);
+        }
+        
         setCurrentSessionId(newSession.id);
         
         setMessages([{
@@ -273,8 +282,8 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
     try {
       await saveMessage(currentSessionId, userMessage.text, "user");
       
-      const currentMessages = messages.filter(m => m.sender === "user");
-      if (currentMessages.length === 0) {
+      const currentUserMessages = messages.filter(m => m.sender === "user");
+      if (currentUserMessages.length === 0) {
         const title = await generateChatTitle(inputText);
         await updateSessionTitle(currentSessionId, title);
         setChatSessions(prev => 
