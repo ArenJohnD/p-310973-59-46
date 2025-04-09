@@ -27,12 +27,20 @@ export const ChatSidebar = ({
   isCollapsed = false
 }: ChatSidebarProps) => {
   const [deletingSessionId, setDeletingSessionId] = useState<string | null>(null);
-  const [sessionItems, setSessionItems] = useState<ChatSession[]>(chatSessions);
+  const [localSessions, setLocalSessions] = useState<ChatSession[]>(chatSessions);
 
-  // Update session items when chatSessions prop changes
+  // Update local sessions when chatSessions prop changes, but maintain any deletions in progress
   useEffect(() => {
-    setSessionItems(chatSessions);
-  }, [chatSessions]);
+    if (!deletingSessionId) {
+      setLocalSessions(chatSessions);
+    } else {
+      // If a deletion is in progress, update all sessions except the one being deleted
+      setLocalSessions(prevSessions => {
+        const updatedSessions = chatSessions.filter(session => session.id !== deletingSessionId);
+        return updatedSessions;
+      });
+    }
+  }, [chatSessions, deletingSessionId]);
 
   const handleDeleteSession = async (sessionId: string, event: React.MouseEvent) => {
     event.stopPropagation();
@@ -41,7 +49,7 @@ export const ChatSidebar = ({
     setDeletingSessionId(sessionId);
     
     // Update local state immediately for responsive UI
-    setSessionItems(prev => prev.filter(session => session.id !== sessionId));
+    setLocalSessions(prev => prev.filter(session => session.id !== sessionId));
     
     try {
       // Actual deletion in the background
@@ -61,7 +69,7 @@ export const ChatSidebar = ({
       });
       
       // If deletion failed, restore the session in UI
-      setSessionItems(chatSessions);
+      setLocalSessions(chatSessions);
     } finally {
       setDeletingSessionId(null);
     }
@@ -78,13 +86,13 @@ export const ChatSidebar = ({
           <div className="flex justify-center items-center h-20">
             <Loader2 className="h-5 w-5 animate-spin text-gray-500" />
           </div>
-        ) : sessionItems.length === 0 ? (
+        ) : localSessions.length === 0 ? (
           <div className="text-center text-gray-500 py-8 px-4">
             <p>No chat history found</p>
           </div>
         ) : (
           <div className="p-2 space-y-1">
-            {sessionItems.map((session) => (
+            {localSessions.map((session) => (
               <div 
                 key={session.id} 
                 className={`

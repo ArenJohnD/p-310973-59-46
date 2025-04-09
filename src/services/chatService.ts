@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { ChatSession, DocumentSection, Message, ReferenceDocument } from "@/types/chat";
 import { extractDocumentSections, extractTextFromPDF } from "@/utils/pdfUtils";
@@ -38,6 +37,35 @@ export const loadChatMessages = async (sessionId: string): Promise<Message[]> =>
 };
 
 export const createNewSession = async (userId: string): Promise<ChatSession | null> => {
+  // Check if user already has an empty session (no messages)
+  const { data: existingEmptySessions, error: checkError } = await supabase
+    .from('chat_sessions')
+    .select('id, chat_messages:chat_messages(count)')
+    .eq('user_id', userId)
+    .is('is_active', true)
+    .limit(1);
+    
+  if (checkError) throw checkError;
+
+  // If there's an existing active session with no messages, use that instead of creating a new one
+  if (existingEmptySessions && existingEmptySessions.length > 0) {
+    const session = existingEmptySessions[0];
+    const messageCount = session.chat_messages[0]?.count || 0;
+    
+    if (messageCount <= 1) { // Only bot welcome message or none
+      // Get the full session data
+      const { data: sessionData } = await supabase
+        .from('chat_sessions')
+        .select('*')
+        .eq('id', session.id)
+        .single();
+      
+      if (sessionData) {
+        return sessionData as ChatSession;
+      }
+    }
+  }
+  
   // First, deactivate all existing sessions
   await supabase
     .from('chat_sessions')
@@ -85,11 +113,13 @@ export const setSessionActive = async (userId: string, sessionId: string): Promi
 };
 
 export const deleteSession = async (sessionId: string): Promise<void> => {
+  // Delete the chat messages first
   await supabase
     .from('chat_messages')
     .delete()
     .eq('session_id', sessionId);
-    
+  
+  // Then delete the session
   await supabase
     .from('chat_sessions')
     .delete()
@@ -105,41 +135,40 @@ export const updateSessionTitle = async (sessionId: string, title: string): Prom
 
 export const generateChatTitle = async (userMessage: string, botResponse: string = ""): Promise<string> => {
   try {
-    let topic = '';
+    // Extract 3-5 words that describe the main topic
+    const cleanedMessage = userMessage.replace(/[^\w\s]/gi, ' ').toLowerCase();
+    const words = cleanedMessage.split(/\s+/).filter(word => word.length > 2);
     
-    const botFirstSentence = botResponse.split('.')[0].trim();
-    if (botFirstSentence.length > 5 && botFirstSentence.length < 50) {
-      if (botFirstSentence.includes('policy') || botFirstSentence.includes('regulation') || 
-          botFirstSentence.includes('procedure') || botFirstSentence.includes('guideline')) {
-        topic = botFirstSentence;
+    // Remove common filler words
+    const fillerWords = ['the', 'and', 'that', 'for', 'what', 'how', 'when', 'where', 'why', 'who', 'which', 'about'];
+    const filteredWords = words.filter(word => !fillerWords.includes(word));
+    
+    // Take 3-5 most relevant words
+    const keyWords = filteredWords.slice(0, 5);
+    
+    if (keyWords.length > 0) {
+      // Capitalize the first word
+      const firstWord = keyWords[0].charAt(0).toUpperCase() + keyWords[0].slice(1);
+      let title = firstWord;
+      
+      // Add up to 4 more words if available
+      if (keyWords.length > 1) {
+        const additionalWords = keyWords.slice(1, Math.min(5, keyWords.length));
+        title += ' ' + additionalWords.join(' ');
       }
-    }
-    
-    if (!topic) {
-      const questionMatch = userMessage.match(/(?:what|how|where|when|who|can|is|are|do|does).+?(\w+(?:\s+\w+){0,5})\??$/i);
-      if (questionMatch && questionMatch[1]) {
-        topic = `About ${questionMatch[1].trim()}`;
-      } else {
-        const words = userMessage.split(/\s+/);
-        const keyWords = words.filter(word => word.length > 3).slice(0, 3);
-        
-        if (keyWords.length > 0) {
-          const firstWord = keyWords[0].charAt(0).toUpperCase() + keyWords[0].slice(1);
-          topic = `${firstWord} ${keyWords.slice(1).join(' ')}`;
-        } else {
-          topic = "New Conversation";
-        }
+      
+      // Make sure the title is not too long
+      if (title.length > 30) {
+        title = title.substring(0, 27) + '...';
       }
+      
+      return title;
     }
     
-    if (topic.length > 30) {
-      topic = topic.substring(0, 30) + '...';
-    }
-    
-    return topic;
+    return "New Chat";
   } catch (error) {
     console.error("Error generating title:", error);
-    return "New Conversation";
+    return "New Chat";
   }
 };
 

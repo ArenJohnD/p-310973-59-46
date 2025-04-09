@@ -20,7 +20,7 @@
 
 @keyframes fadeOut {
   from { opacity: 1; height: auto; margin: 0.25rem 0; }
-  to { opacity: 0; height: 0; margin: 0; }
+  to { opacity: 0; height: 0; margin: 0; overflow: hidden; }
 }
 
 .session-deleting {
@@ -48,4 +48,34 @@
   width: 0;
   opacity: 0;
   transition: width 300ms ease-in-out, opacity 300ms ease-in-out;
+}
+
+/* Add animation for collapsible sidebar */
+.sidebar-collapse-enter {
+  width: 16rem;
+}
+
+.sidebar-collapse-enter-active {
+  width: 0;
+  transition: width 300ms ease-in-out;
+}
+
+.sidebar-collapse-exit {
+  width: 0;
+}
+
+.sidebar-collapse-exit-active {
+  width: 16rem;
+  transition: width 300ms ease-in-out;
+}
+
+/* Make session deletion animation smoother */
+@keyframes collapse {
+  0% { max-height: 40px; opacity: 1; }
+  100% { max-height: 0; opacity: 0; padding: 0; margin: 0; overflow: hidden; }
+}
+
+.deleting-session {
+  animation: collapse 0.3s ease-out forwards;
+  overflow: hidden;
 }
