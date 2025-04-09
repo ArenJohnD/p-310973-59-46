@@ -104,19 +104,21 @@ export const ChatSidebar = ({
         )}
       </ScrollArea>
       
-      <div className={`absolute bottom-0 left-0 right-0 p-4 border-t bg-white ${isCollapsed ? 'hidden' : ''}`}>
-        <Button 
-          variant="outline" 
-          size="sm" 
-          onClick={() => {
-            onNewSession();
-            if (closeSidebar) closeSidebar();
-          }}
-          className="w-full flex items-center justify-center gap-2"
-        >
-          <Plus className="h-4 w-4" /> New Chat
-        </Button>
-      </div>
+      {!isCollapsed && (
+        <div className="absolute bottom-0 left-0 right-0 p-4 border-t bg-white">
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={() => {
+              onNewSession();
+              if (closeSidebar) closeSidebar();
+            }}
+            className="w-full flex items-center justify-center gap-2"
+          >
+            <Plus className="h-4 w-4" /> New Chat
+          </Button>
+        </div>
+      )}
     </>
   );
 };
