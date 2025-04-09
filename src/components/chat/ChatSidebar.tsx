@@ -54,6 +54,20 @@ export const ChatSidebar = ({
   const handleDeleteSession = async (sessionId: string, event: React.MouseEvent) => {
     event.stopPropagation();
     
+    // Check if this is the only session and it's a "New Chat"
+    const isLastNewChat = localSessions.length === 1 && 
+                          localSessions[0].id === sessionId && 
+                          localSessions[0].title === "New Chat";
+    
+    if (isLastNewChat) {
+      toast({
+        title: "Cannot delete",
+        description: "You need to keep at least one chat session.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
     // Mark this session as being deleted (for animation)
     setDeletingSessionId(sessionId);
     
@@ -143,7 +157,7 @@ export const ChatSidebar = ({
                   size="icon"
                   onClick={(e) => handleDeleteSession(session.id, e)}
                   className="h-6 w-6 rounded-full opacity-0 transition-opacity group-hover/menu-item:opacity-100 flex-shrink-0 absolute right-2"
-                  disabled={deletingSessionId === session.id}
+                  disabled={deletingSessionId === session.id || (localSessions.length === 1 && session.title === "New Chat")}
                 >
                   {deletingSessionId === session.id ? (
                     <Loader2 className="h-3 w-3 animate-spin" />
