@@ -72,7 +72,7 @@ export const ChatSidebar = ({
                 className="group/menu-item relative flex items-center justify-between"
               >
                 <button
-                  className={`flex-1 truncate text-left rounded-md mx-2 px-3 py-2 ${
+                  className={`flex-1 truncate text-left rounded-md px-3 py-2 mx-2 ${
                     currentSessionId === session.id
                       ? "bg-green-100 text-green-900"
                       : "hover:bg-gray-100"
@@ -104,7 +104,7 @@ export const ChatSidebar = ({
         )}
       </ScrollArea>
       
-      <div className="absolute bottom-0 left-0 right-0 p-4 border-t bg-white">
+      <div className="absolute bottom-0 left-0 right-0 p-4 border-t bg-white hidden group-data-[state=expanded]:block">
         <Button 
           variant="outline" 
           size="sm" 

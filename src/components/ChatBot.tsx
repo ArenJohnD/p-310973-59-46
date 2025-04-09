@@ -4,7 +4,7 @@ import { useAuth } from "@/context/AuthContext";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
-import { ChevronRight, ChevronLeft } from "lucide-react";
+import { ChevronRight, ChevronLeft, Plus } from "lucide-react";
 import { toast } from "@/components/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { GlobalWorkerOptions } from 'pdfjs-dist';
@@ -310,7 +310,7 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
             <Collapsible
               open={!isCollapsed}
               onOpenChange={(open) => setIsCollapsed(!open)}
-              className="relative"
+              className="relative group"
             >
               <div className={`h-full bg-white border-r border-gray-200 transition-all ${isCollapsed ? 'w-0 overflow-hidden' : 'w-64'}`}>
                 <ChatSidebar
@@ -335,6 +335,19 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
                   )}
                 </Button>
               </CollapsibleTrigger>
+              
+              {isCollapsed && (
+                <div className="absolute bottom-4 left-2 z-10">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleCreateNewSession}
+                    className="h-8 w-8 rounded-full p-0 flex items-center justify-center"
+                  >
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                </div>
+              )}
               
               <CollapsibleContent className="flex-1">
                 {/* Content appears here when sidebar is collapsed */}
