@@ -104,7 +104,7 @@ export const ChatSidebar = ({
         )}
       </ScrollArea>
       
-      <div className="absolute bottom-0 left-0 right-0 p-4 border-t bg-white hidden group-data-[state=expanded]:block">
+      <div className="absolute bottom-0 left-0 right-0 p-4 border-t bg-white">
         <Button 
           variant="outline" 
           size="sm" 
