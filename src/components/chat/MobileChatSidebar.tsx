@@ -9,26 +9,24 @@ interface MobileChatSidebarProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   chatSessions: ChatSession[];
-  loadingSessions: boolean;
+  loadingSessions?: boolean;
   currentSessionId: string | null;
   onSessionLoaded: (sessionId: string) => void;
   onNewSession: () => void;
   isCollapsed?: boolean;
   isCreatingNewSession?: boolean;
-  hasEmptySession?: boolean;
 }
 
 export const MobileChatSidebar = ({
   open,
   onOpenChange,
   chatSessions,
-  loadingSessions,
+  loadingSessions = false,
   currentSessionId,
   onSessionLoaded,
   onNewSession,
   isCollapsed = false,
-  isCreatingNewSession = false,
-  hasEmptySession = false
+  isCreatingNewSession = false
 }: MobileChatSidebarProps) => {
   return (
     <Drawer open={open} onOpenChange={onOpenChange}>
@@ -52,7 +50,6 @@ export const MobileChatSidebar = ({
             closeSidebar={() => onOpenChange(false)}
             isCollapsed={isCollapsed}
             isCreatingNewSession={isCreatingNewSession}
-            hasEmptySession={hasEmptySession}
           />
         </div>
       </DrawerContent>

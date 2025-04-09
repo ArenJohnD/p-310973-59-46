@@ -10,26 +10,24 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 interface ChatSidebarProps {
   chatSessions: ChatSession[];
-  loadingSessions: boolean;
+  loadingSessions?: boolean;
   currentSessionId: string | null;
   onSessionLoaded: (sessionId: string) => void;
   onNewSession: () => void;
   closeSidebar?: () => void;
   isCollapsed?: boolean;
   isCreatingNewSession?: boolean;
-  hasEmptySession?: boolean;
 }
 
 export const ChatSidebar = ({
   chatSessions,
-  loadingSessions,
+  loadingSessions = false,
   currentSessionId,
   onSessionLoaded,
   onNewSession,
   closeSidebar,
   isCollapsed = false,
-  isCreatingNewSession = false,
-  hasEmptySession = false
+  isCreatingNewSession = false
 }: ChatSidebarProps) => {
   const [deletingSessionId, setDeletingSessionId] = useState<string | null>(null);
   const [localSessions, setLocalSessions] = useState<ChatSession[]>([]);
@@ -37,7 +35,6 @@ export const ChatSidebar = ({
 
   // Update local sessions when chatSessions prop changes, but maintain any deletions in progress
   useEffect(() => {
-    // If we don't have any sessions yet but we're loading, initialize with placeholder sessions
     if (chatSessions.length === 0 && loadingSessions) {
       setLocalSessions([
         { id: 'placeholder-1', title: 'Loading...', user_id: '', created_at: new Date().toISOString(), is_active: true } as ChatSession,
@@ -64,18 +61,14 @@ export const ChatSidebar = ({
   const handleDeleteSession = async (sessionId: string, event: React.MouseEvent) => {
     event.stopPropagation();
     
-    // Check if this is the only session and it's a "New Chat"
-    const isLastNewChat = localSessions.length === 1 && 
-                          localSessions[0].id === sessionId && 
-                          localSessions[0].title === "New Chat";
+    // Check if this is the only session
+    const isLastSession = localSessions.length <= 1;
     
-    if (isLastNewChat) {
+    if (isLastSession) {
       toast({
-        title: "Cannot delete",
-        description: "You need to keep at least one chat session.",
-        variant: "destructive",
+        title: "Information",
+        description: "A new chat will be created automatically.",
       });
-      return;
     }
     
     // Mark this session as being deleted (for animation)
@@ -91,11 +84,12 @@ export const ChatSidebar = ({
       // Actual deletion in the background
       await deleteSession(sessionId);
       
-      toast({
-        title: "Success",
-        description: "Chat session deleted successfully.",
-      });
-      
+      if (!isLastSession) {
+        toast({
+          title: "Success",
+          description: "Chat session deleted successfully.",
+        });
+      }
     } catch (error) {
       console.error("Error deleting session:", error);
       toast({
@@ -162,7 +156,7 @@ export const ChatSidebar = ({
           size="icon"
           onClick={(e) => handleDeleteSession(session.id, e)}
           className="h-6 w-6 rounded-full opacity-0 transition-opacity group-hover/menu-item:opacity-100 flex-shrink-0 absolute right-2"
-          disabled={deletingSessionId === session.id || (localSessions.length === 1 && session.title === "New Chat")}
+          disabled={deletingSessionId === session.id || localSessions.length === 0}
         >
           {deletingSessionId === session.id ? (
             <Loader2 className="h-3 w-3 animate-spin" />
@@ -187,7 +181,8 @@ export const ChatSidebar = ({
           </div>
         ) : localSessions.length === 0 ? (
           <div className="text-center text-gray-500 py-8 px-4">
-            <p>No chat history found</p>
+            <p>No chat history yet</p>
+            <p className="text-sm mt-2">Start a new conversation</p>
           </div>
         ) : (
           <div className="p-2 space-y-1">
@@ -206,8 +201,7 @@ export const ChatSidebar = ({
               if (closeSidebar) closeSidebar();
             }}
             className="w-full flex items-center justify-center gap-2"
-            disabled={isCreatingNewSession || hasEmptySession}
-            title={hasEmptySession ? "You already have an empty chat" : "Create a new chat"}
+            disabled={isCreatingNewSession}
           >
             {isCreatingNewSession ? (
               <Loader2 className="h-4 w-4 animate-spin mr-1" />

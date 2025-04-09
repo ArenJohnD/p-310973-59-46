@@ -43,17 +43,18 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
   }]);
   const [isLoading, setIsLoading] = useState(false);
   const [referenceDocuments, setReferenceDocuments] = useState<ReferenceDocument[]>([]);
-  const [loadingDocuments, setLoadingDocuments] = useState(true);
+  const [loadingDocuments, setLoadingDocuments] = useState(false);
   const [chatSessions, setChatSessions] = useState<ChatSession[]>([]);
-  const [loadingSessions, setLoadingSessions] = useState(false);
+  const [filteredChatSessions, setFilteredChatSessions] = useState<ChatSession[]>([]);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [showTypingMessage, setShowTypingMessage] = useState(false);
   const [creatingNewSession, setCreatingNewSession] = useState(false);
-  const [hasEmptySession, setHasEmptySession] = useState(false);
+  const [pendingSession, setPendingSession] = useState<string | null>(null);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
+  const initialSetupDone = useRef(false);
 
   useEffect(() => {
     const checkIfMobile = () => {
@@ -106,7 +107,7 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
             setChatSessions(prev => {
               const updatedSessions = prev.filter(session => session.id !== deletedSessionId);
               
-              if (updatedSessions.length === 0 && !creatingNewSession) {
+              if (updatedSessions.length === 0 && !creatingNewSession && initialSetupDone.current) {
                 setTimeout(() => handleCreateNewSession(), 0);
               }
               
@@ -118,7 +119,7 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
               if (remainingSessions.length > 0) {
                 setCurrentSessionId(remainingSessions[0].id);
                 loadChatMessagesFromServer(remainingSessions[0].id);
-              } else if (!creatingNewSession) {
+              } else if (!creatingNewSession && initialSetupDone.current) {
                 setTimeout(() => handleCreateNewSession(), 0);
               }
             }
@@ -143,37 +144,42 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
   }, [user, creatingNewSession]);
 
   useEffect(() => {
-    if (chatSessions.length > 0) {
-      const emptySession = chatSessions.find(session => {
-        return session.title === "New Chat";
-      });
-      setHasEmptySession(!!emptySession);
-    } else {
-      setHasEmptySession(false);
-    }
-  }, [chatSessions]);
+    if (chatSessions.length === 0) return;
+
+    const filtered = chatSessions.filter(session => {
+      if (session.id === currentSessionId || session.title !== "New Chat") {
+        return true;
+      }
+      if (session.id === pendingSession) {
+        return true;
+      }
+      return false;
+    });
+    
+    setFilteredChatSessions(filtered);
+  }, [chatSessions, currentSessionId, pendingSession]);
 
   const fetchChatSessionsFromServer = async () => {
     if (!user) return;
     
     try {
-      setLoadingSessions(true);
-      
       const sessionData = await fetchChatSessions(user.id);
       
+      setChatSessions(sessionData);
+      
       if (sessionData.length > 0) {
-        setChatSessions(sessionData);
-        
         const activeSession = sessionData.find(session => session.is_active);
         if (activeSession) {
           setCurrentSessionId(activeSession.id);
-          await loadChatMessagesFromServer(activeSession.id);
+          await loadChatMessagesFromServer(activeSession.id, false);
         } else {
-          await handleCreateNewSession();
+          await handleCreateNewSession(false);
         }
       } else {
-        await handleCreateNewSession();
+        await handleCreateNewSession(false);
       }
+      
+      initialSetupDone.current = true;
     } catch (error) {
       console.error("Error fetching chat sessions:", error);
       toast({
@@ -181,16 +187,18 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
         description: "Failed to load chat sessions.",
         variant: "destructive",
       });
-    } finally {
-      setLoadingSessions(false);
+      
+      initialSetupDone.current = true;
     }
   };
 
-  const loadChatMessagesFromServer = async (sessionId: string) => {
+  const loadChatMessagesFromServer = async (sessionId: string, showLoading = true) => {
     if (!user) return;
     
     try {
-      setIsLoading(true);
+      if (showLoading) {
+        setIsLoading(true);
+      }
       
       const messageData = await loadChatMessages(sessionId);
       
@@ -222,15 +230,19 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
         variant: "destructive",
       });
     } finally {
-      setIsLoading(false);
+      if (showLoading) {
+        setIsLoading(false);
+      }
     }
   };
 
-  const handleCreateNewSession = async () => {
-    if (!user || creatingNewSession || hasEmptySession) return;
+  const handleCreateNewSession = async (showLoading = true) => {
+    if (!user) return;
     
     try {
-      setIsLoading(true);
+      if (showLoading) {
+        setIsLoading(true);
+      }
       setCreatingNewSession(true);
       
       const newSession = await createNewSession(user.id);
@@ -238,7 +250,8 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
       if (newSession) {
         setChatSessions(prev => [newSession, ...prev.map(s => ({ ...s, is_active: false }))]);
         setCurrentSessionId(newSession.id);
-        setHasEmptySession(true);
+        
+        setPendingSession(newSession.id);
         
         setMessages([{
           id: "welcome",
@@ -255,7 +268,9 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
         variant: "destructive",
       });
     } finally {
-      setIsLoading(false);
+      if (showLoading) {
+        setIsLoading(false);
+      }
       setCreatingNewSession(false);
       if (isMobile) {
         setSidebarOpen(false);
@@ -282,8 +297,6 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
       }
     }
     
-    setHasEmptySession(false);
-    
     const userMessage: Message = {
       id: Date.now().toString(),
       text: inputText,
@@ -298,26 +311,24 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
     try {
       await saveMessage(currentSessionId, userMessage.text, "user");
       
-      const currentMessages = messages.filter(m => m.sender === "user");
-      if (currentMessages.length === 0) {
-        const title = await generateChatTitle(inputText);
+      const botResponse = await findRelevantInformation(inputText, referenceDocuments);
+      
+      const currentMessages = await loadChatMessages(currentSessionId);
+      const userMessages = currentMessages.filter(m => m.sender === "user");
+      
+      if (userMessages.length <= 1) {
+        const title = await generateChatTitle(inputText, botResponse);
         await updateSessionTitle(currentSessionId, title);
         setChatSessions(prev => 
           prev.map(session => 
             session.id === currentSessionId ? { ...session, title } : session
           )
         );
+        
+        if (pendingSession === currentSessionId) {
+          setPendingSession(null);
+        }
       }
-      
-      const botResponse = await findRelevantInformation(inputText, referenceDocuments);
-      
-      const title = await generateChatTitle(inputText, botResponse);
-      await updateSessionTitle(currentSessionId, title);
-      setChatSessions(prev => 
-        prev.map(session => 
-          session.id === currentSessionId ? { ...session, title } : session
-        )
-      );
       
       const botMessage: Message = {
         id: (Date.now() + 1).toString(),
@@ -361,14 +372,12 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
             <MobileChatSidebar
               open={sidebarOpen}
               onOpenChange={setSidebarOpen}
-              chatSessions={chatSessions}
-              loadingSessions={loadingSessions}
+              chatSessions={filteredChatSessions}
               currentSessionId={currentSessionId}
               onSessionLoaded={handleSessionLoaded}
               onNewSession={handleCreateNewSession}
               isCollapsed={isCollapsed}
               isCreatingNewSession={creatingNewSession}
-              hasEmptySession={hasEmptySession}
             />
           )}
           
@@ -380,14 +389,12 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
             >
               <div className={`h-full bg-white border-r border-gray-200 transition-all duration-300 ease-in-out ${isCollapsed ? 'w-0 overflow-hidden' : 'w-64'}`}>
                 <ChatSidebar
-                  chatSessions={chatSessions}
-                  loadingSessions={loadingSessions}
+                  chatSessions={filteredChatSessions}
                   currentSessionId={currentSessionId}
                   onSessionLoaded={handleSessionLoaded}
                   onNewSession={handleCreateNewSession}
                   isCollapsed={isCollapsed}
                   isCreatingNewSession={creatingNewSession}
-                  hasEmptySession={hasEmptySession}
                 />
               </div>
               
