@@ -17,43 +17,42 @@ export const Header = () => {
   const [isOpen, setIsOpen] = useState(false);
 
   const handleSignOut = async () => {
-    setIsOpen(false); // Close dropdown before sign out
+    setIsOpen(false);
     await signOut();
-    // No need for navigation here - AuthContext will handle it
   };
 
-  // Extract avatar URL from user metadata if available
   const avatarUrl = user?.user_metadata?.avatar_url || null;
 
   return (
-    <header className="bg-[#F0F0F0] shadow-sm">
-      <div className="container mx-auto px-4 py-4 flex items-center justify-between">
-        {/* Logo */}
-        <div className="flex-shrink-0">
+    <header className="bg-[#F1F1F1] shadow-sm">
+      <div className="container mx-auto px-4 py-4 flex items-center">
+        {/* Logo and Navigation together */}
+        <div className="flex items-center space-x-8">
+          {/* Logo */}
           <img
             src="https://cdn.builder.io/api/v1/image/assets/e3c6b0ec50df45b58e99e24af78e19b0/1cb33a4f0fb596171796038573ac1522f5a08704?placeholderIfAbsent=true"
             alt="NEU Logo"
             className="h-16 w-16 object-contain"
           />
+        
+          {/* Navigation */}
+          <nav className="flex items-center">
+            <div className="text-black text-lg font-medium flex gap-6">
+              <Link to="/" className="hover:text-gray-700 transition-colors">
+                Home
+              </Link>
+              <Link to="/about" className="hover:text-gray-700 transition-colors">
+                About Us
+              </Link>
+              <Link to="/contact" className="hover:text-gray-700 transition-colors">
+                Contact
+              </Link>
+            </div>
+          </nav>
         </div>
         
-        {/* Navigation - Shifted slightly left */}
-        <nav className="flex justify-center mr-auto ml-12 flex-grow">
-          <div className="text-black text-lg font-medium flex gap-8">
-            <Link to="/" className="hover:text-gray-700 transition-colors">
-              Home
-            </Link>
-            <Link to="/about" className="hover:text-gray-700 transition-colors">
-              About Us
-            </Link>
-            <Link to="/contact" className="hover:text-gray-700 transition-colors">
-              Contact
-            </Link>
-          </div>
-        </nav>
-        
-        {/* Right side icons */}
-        <div className="flex items-center gap-6">
+        {/* Right side icons - pushed to the right */}
+        <div className="ml-auto flex items-center gap-6">
           <Bell className="h-7 w-7 text-gray-700" />
           
           {user && (
