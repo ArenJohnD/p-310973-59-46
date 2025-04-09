@@ -12,7 +12,12 @@ export const fetchChatSessions = async (userId: string): Promise<ChatSession[]> 
     
   if (error) throw error;
   
-  return data as ChatSession[];
+  // Deduplicate sessions by ID before returning them
+  const uniqueSessions = Array.from(
+    new Map(data?.map(session => [session.id, session])).values()
+  );
+  
+  return uniqueSessions as ChatSession[];
 };
 
 export const loadChatMessages = async (sessionId: string): Promise<Message[]> => {
@@ -36,62 +41,65 @@ export const loadChatMessages = async (sessionId: string): Promise<Message[]> =>
   return [];
 };
 
-export const createNewSession = async (userId: string): Promise<ChatSession | null> => {
-  // Check if user already has an empty session (no messages or only welcome message)
-  const { data: existingEmptySessions, error: checkError } = await supabase
-    .from('chat_sessions')
-    .select('id, chat_messages:chat_messages(count)')
-    .eq('user_id', userId)
-    .eq('is_active', true)
-    .limit(1);
-    
-  if (checkError) throw checkError;
-
-  // If there's an existing active session with no messages or only welcome message, use that
-  if (existingEmptySessions && existingEmptySessions.length > 0) {
-    const session = existingEmptySessions[0];
-    const messageCount = session.chat_messages[0]?.count || 0;
-    
-    if (messageCount <= 1) { // Only bot welcome message or none
-      // Get the full session data
-      const { data: sessionData } = await supabase
-        .from('chat_sessions')
-        .select('*')
-        .eq('id', session.id)
-        .single();
+export const createNewSession = async (userId: string, forceNew: boolean = true): Promise<ChatSession | null> => {
+  // If forceNew is true, we won't reuse any existing sessions
+  if (!forceNew) {
+    // Check if user already has an empty session (no messages or only welcome message)
+    const { data: existingEmptySessions, error: checkError } = await supabase
+      .from('chat_sessions')
+      .select('id, chat_messages:chat_messages(count)')
+      .eq('user_id', userId)
+      .eq('is_active', true)
+      .limit(1);
       
-      if (sessionData) {
-        return sessionData as ChatSession;
+    if (checkError) throw checkError;
+
+    // If there's an existing active session with no messages or only welcome message, use that
+    if (existingEmptySessions && existingEmptySessions.length > 0) {
+      const session = existingEmptySessions[0];
+      const messageCount = session.chat_messages[0]?.count || 0;
+      
+      if (messageCount <= 1) { // Only bot welcome message or none
+        // Get the full session data
+        const { data: sessionData } = await supabase
+          .from('chat_sessions')
+          .select('*')
+          .eq('id', session.id)
+          .single();
+        
+        if (sessionData) {
+          return sessionData as ChatSession;
+        }
       }
     }
-  }
-  
-  // Also check if user has any other empty sessions (not active)
-  const { data: otherEmptySessions, error: otherCheckError } = await supabase
-    .from('chat_sessions')
-    .select('id, chat_messages:chat_messages(count)')
-    .eq('user_id', userId)
-    .eq('is_active', false)
-    .order('created_at', { ascending: false })
-    .limit(1);
     
-  if (!otherCheckError && otherEmptySessions && otherEmptySessions.length > 0) {
-    const session = otherEmptySessions[0];
-    const messageCount = session.chat_messages[0]?.count || 0;
-    
-    if (messageCount <= 1) { // Only bot welcome message or none
-      // Reuse this session and set it as active
-      await setSessionActive(userId, session.id);
+    // Also check if user has any other empty sessions (not active)
+    const { data: otherEmptySessions, error: otherCheckError } = await supabase
+      .from('chat_sessions')
+      .select('id, chat_messages:chat_messages(count)')
+      .eq('user_id', userId)
+      .eq('is_active', false)
+      .order('created_at', { ascending: false })
+      .limit(1);
       
-      // Get the full session data
-      const { data: sessionData } = await supabase
-        .from('chat_sessions')
-        .select('*')
-        .eq('id', session.id)
-        .single();
+    if (!otherCheckError && otherEmptySessions && otherEmptySessions.length > 0) {
+      const session = otherEmptySessions[0];
+      const messageCount = session.chat_messages[0]?.count || 0;
       
-      if (sessionData) {
-        return sessionData as ChatSession;
+      if (messageCount <= 1) { // Only bot welcome message or none
+        // Reuse this session and set it as active
+        await setSessionActive(userId, session.id);
+        
+        // Get the full session data
+        const { data: sessionData } = await supabase
+          .from('chat_sessions')
+          .select('*')
+          .eq('id', session.id)
+          .single();
+        
+        if (sessionData) {
+          return sessionData as ChatSession;
+        }
       }
     }
   }

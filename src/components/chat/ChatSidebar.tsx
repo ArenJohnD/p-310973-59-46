@@ -27,21 +27,23 @@ export const ChatSidebar = ({
   isCollapsed = false
 }: ChatSidebarProps) => {
   const [deletingSessionId, setDeletingSessionId] = useState<string | null>(null);
-  const [localSessions, setLocalSessions] = useState<ChatSession[]>(chatSessions);
+  const [localSessions, setLocalSessions] = useState<ChatSession[]>([]);
   const deletedSessionIds = useRef(new Set<string>());
 
   // Update local sessions when chatSessions prop changes, but maintain any deletions in progress
   useEffect(() => {
+    // Deduplicate sessions by ID before setting local state
+    const uniqueSessions = Array.from(
+      new Map(chatSessions.map(session => [session.id, session])).values()
+    ).filter(session => !deletedSessionIds.current.has(session.id));
+    
     setLocalSessions(prevSessions => {
-      // Filter out any sessions that have been marked as deleted
-      const filteredSessions = chatSessions.filter(session => !deletedSessionIds.current.has(session.id));
-      
       // If there's a session being deleted, make sure it's excluded
       if (deletingSessionId) {
-        return filteredSessions.filter(session => session.id !== deletingSessionId);
+        return uniqueSessions.filter(session => session.id !== deletingSessionId);
       }
       
-      return filteredSessions;
+      return uniqueSessions;
     });
   }, [chatSessions, deletingSessionId]);
 
