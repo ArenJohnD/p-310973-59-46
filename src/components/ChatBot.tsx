@@ -52,6 +52,7 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
   const [isMobile, setIsMobile] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [showTypingMessage, setShowTypingMessage] = useState(false);
+  const [creatingNewSession, setCreatingNewSession] = useState(false);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -102,14 +103,23 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
         }, (payload) => {
           if (payload.eventType === 'DELETE') {
             const deletedSessionId = payload.old.id;
-            setChatSessions(prev => prev.filter(session => session.id !== deletedSessionId));
+            setChatSessions(prev => {
+              const updatedSessions = prev.filter(session => session.id !== deletedSessionId);
+              
+              // If all sessions were deleted, create a new one
+              if (updatedSessions.length === 0 && !creatingNewSession) {
+                handleCreateNewSession();
+              }
+              
+              return updatedSessions;
+            });
             
             if (deletedSessionId === currentSessionId) {
               const remainingSessions = chatSessions.filter(session => session.id !== deletedSessionId);
               if (remainingSessions.length > 0) {
                 setCurrentSessionId(remainingSessions[0].id);
                 loadChatMessagesFromServer(remainingSessions[0].id);
-              } else {
+              } else if (!creatingNewSession) {
                 handleCreateNewSession();
               }
             }
@@ -207,10 +217,11 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
   };
 
   const handleCreateNewSession = async () => {
-    if (!user) return;
+    if (!user || creatingNewSession) return;
     
     try {
       setIsLoading(true);
+      setCreatingNewSession(true);
       
       const newSession = await createNewSession(user.id);
       
@@ -234,6 +245,7 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
       });
     } finally {
       setIsLoading(false);
+      setCreatingNewSession(false);
       if (isMobile) {
         setSidebarOpen(false);
       }
@@ -342,6 +354,7 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
               onSessionLoaded={handleSessionLoaded}
               onNewSession={handleCreateNewSession}
               isCollapsed={isCollapsed}
+              isCreatingNewSession={creatingNewSession}
             />
           )}
           
@@ -359,6 +372,7 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
                   onSessionLoaded={handleSessionLoaded}
                   onNewSession={handleCreateNewSession}
                   isCollapsed={isCollapsed}
+                  isCreatingNewSession={creatingNewSession}
                 />
               </div>
               
@@ -419,3 +433,4 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
     </div>
   );
 };
+
