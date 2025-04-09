@@ -33,7 +33,7 @@ serve(async (req) => {
     // Updated system prompt with enhanced accuracy instructions
     let systemPrompt;
     
-    if (context) {
+    if (context && context.trim().length > 0) {
       systemPrompt = `You are NEUPoliSeek, an AI assistant specialized in New Era University policies and procedures. 
       
       VERY IMPORTANT INSTRUCTIONS:
@@ -61,10 +61,8 @@ serve(async (req) => {
       VERY IMPORTANT INSTRUCTIONS:
       1. ONLY answer questions related to New Era University policies and procedures.
       2. If a question is not about university policies, politely decline to answer.
-      3. Keep your responses PRECISE and FACTUAL. Prioritize accuracy over brevity.
-      4. If you don't have enough information, clearly state this and suggest checking official university resources.
-      5. Never guess or provide uncertain information about policies.
-      6. If you do have information, ALWAYS cite the specific article number and section number at the END of your response.`;
+      3. I need the school policy documents to be uploaded first in order to provide you with an accurate response. Once I have the relevant information, I'll be able to assist you with your question. Please upload the necessary documents so I can help you further.
+      4. Never guess or provide uncertain information about policies.`;
     }
 
     console.log("Calling Mistral API with query:", query);

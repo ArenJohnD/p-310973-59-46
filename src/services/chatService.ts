@@ -144,14 +144,19 @@ export const generateChatTitle = async (userMessage: string, botResponse: string
 };
 
 export const fetchReferenceDocuments = async (): Promise<ReferenceDocument[]> => {
-  const { data, error } = await supabase
-    .from('reference_documents')
-    .select('id, file_name, file_path')
-    .order('created_at', { ascending: false });
-  
-  if (error) throw error;
-  
-  return data || [];
+  try {
+    const { data, error } = await supabase
+      .from('reference_documents')
+      .select('id, file_name, file_path')
+      .order('created_at', { ascending: false });
+    
+    if (error) throw error;
+    
+    return data || [];
+  } catch (error) {
+    console.error("Error fetching reference documents:", error);
+    return [];
+  }
 };
 
 export const saveMessage = async (sessionId: string, text: string, sender: "user" | "bot"): Promise<void> => {
@@ -165,6 +170,9 @@ export const saveMessage = async (sessionId: string, text: string, sender: "user
 };
 
 export const findRelevantInformation = async (query: string, referenceDocuments: ReferenceDocument[]): Promise<string> => {
+  console.log("Finding relevant information for query:", query);
+  console.log("Reference documents available:", referenceDocuments.length);
+  
   if (referenceDocuments.length === 0) {
     try {
       console.log("No reference documents found, using Mistral API directly");
@@ -185,31 +193,37 @@ export const findRelevantInformation = async (query: string, referenceDocuments:
     const allSections: DocumentSection[] = [];
     
     for (const doc of referenceDocuments) {
-      if (!doc.text_content) {
+      try {
         console.log(`Processing document: ${doc.file_name}`);
-        try {
-          const { data: fileData } = await supabase.storage
-            .from('policy_documents')
-            .createSignedUrl(doc.file_path, 3600);
-            
-          if (fileData?.signedUrl) {
-            const text = await extractTextFromPDF(fileData.signedUrl);
-            
-            const sections = extractDocumentSections(text);
-            allSections.push(...sections);
-            console.log(`Extracted ${sections.length} sections from ${doc.file_name}`);
-          }
-        } catch (err) {
-          console.error(`Error extracting text from ${doc.file_name}:`, err);
+        
+        // Get a signed URL for the document
+        const { data: fileData } = await supabase.storage
+          .from('policy_documents')
+          .createSignedUrl(doc.file_path, 3600);
+          
+        if (!fileData?.signedUrl) {
+          console.error(`Could not get signed URL for ${doc.file_path}`);
+          continue;
         }
-      } else {
-        const sections = extractDocumentSections(doc.text_content);
+        
+        // Extract text from the PDF
+        const text = await extractTextFromPDF(fileData.signedUrl);
+        console.log(`Extracted text length: ${text.length} characters from ${doc.file_name}`);
+        
+        // Extract sections from the text
+        const sections = extractDocumentSections(text);
         allSections.push(...sections);
-        console.log(`Using ${sections.length} sections from cached document ${doc.file_name}`);
+        console.log(`Extracted ${sections.length} sections from ${doc.file_name}`);
+      } catch (err) {
+        console.error(`Error processing document ${doc.file_name}:`, err);
       }
     }
     
     console.log(`Total sections available: ${allSections.length}`);
+    
+    if (allSections.length === 0) {
+      return "I don't have any information from policy documents yet. Please upload some documents so I can provide more accurate responses.";
+    }
     
     const bestMatches = findBestMatch(query, allSections);
     

@@ -20,6 +20,7 @@ export interface ReferenceDocument {
   file_name: string;
   file_path: string;
   text_content?: string;
+  processed?: boolean;
 }
 
 export interface DocumentSection {
