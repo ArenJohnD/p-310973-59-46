@@ -1,4 +1,3 @@
-
 import { useState, useRef, useEffect } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -53,6 +52,7 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [showTypingMessage, setShowTypingMessage] = useState(false);
   const [creatingNewSession, setCreatingNewSession] = useState(false);
+  const [hasEmptySession, setHasEmptySession] = useState(false);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -106,9 +106,8 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
             setChatSessions(prev => {
               const updatedSessions = prev.filter(session => session.id !== deletedSessionId);
               
-              // If all sessions were deleted, create a new one
               if (updatedSessions.length === 0 && !creatingNewSession) {
-                handleCreateNewSession();
+                setTimeout(() => handleCreateNewSession(), 0);
               }
               
               return updatedSessions;
@@ -120,7 +119,7 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
                 setCurrentSessionId(remainingSessions[0].id);
                 loadChatMessagesFromServer(remainingSessions[0].id);
               } else if (!creatingNewSession) {
-                handleCreateNewSession();
+                setTimeout(() => handleCreateNewSession(), 0);
               }
             }
           } else if (payload.eventType === 'INSERT') {
@@ -141,7 +140,18 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
         supabase.removeChannel(chatSessionsChannel);
       };
     }
-  }, [user]);
+  }, [user, creatingNewSession]);
+
+  useEffect(() => {
+    if (chatSessions.length > 0) {
+      const emptySession = chatSessions.find(session => {
+        return session.title === "New Chat";
+      });
+      setHasEmptySession(!!emptySession);
+    } else {
+      setHasEmptySession(false);
+    }
+  }, [chatSessions]);
 
   const fetchChatSessionsFromServer = async () => {
     if (!user) return;
@@ -217,7 +227,7 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
   };
 
   const handleCreateNewSession = async () => {
-    if (!user || creatingNewSession) return;
+    if (!user || creatingNewSession || hasEmptySession) return;
     
     try {
       setIsLoading(true);
@@ -228,6 +238,7 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
       if (newSession) {
         setChatSessions(prev => [newSession, ...prev.map(s => ({ ...s, is_active: false }))]);
         setCurrentSessionId(newSession.id);
+        setHasEmptySession(true);
         
         setMessages([{
           id: "welcome",
@@ -270,6 +281,8 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
         return;
       }
     }
+    
+    setHasEmptySession(false);
     
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -355,6 +368,7 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
               onNewSession={handleCreateNewSession}
               isCollapsed={isCollapsed}
               isCreatingNewSession={creatingNewSession}
+              hasEmptySession={hasEmptySession}
             />
           )}
           
@@ -373,6 +387,7 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
                   onNewSession={handleCreateNewSession}
                   isCollapsed={isCollapsed}
                   isCreatingNewSession={creatingNewSession}
+                  hasEmptySession={hasEmptySession}
                 />
               </div>
               
@@ -433,4 +448,3 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
     </div>
   );
 };
-

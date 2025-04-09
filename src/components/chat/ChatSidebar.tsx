@@ -16,6 +16,7 @@ interface ChatSidebarProps {
   closeSidebar?: () => void;
   isCollapsed?: boolean;
   isCreatingNewSession?: boolean;
+  hasEmptySession?: boolean;
 }
 
 export const ChatSidebar = ({
@@ -26,7 +27,8 @@ export const ChatSidebar = ({
   onNewSession,
   closeSidebar,
   isCollapsed = false,
-  isCreatingNewSession = false
+  isCreatingNewSession = false,
+  hasEmptySession = false
 }: ChatSidebarProps) => {
   const [deletingSessionId, setDeletingSessionId] = useState<string | null>(null);
   const [localSessions, setLocalSessions] = useState<ChatSession[]>([]);
@@ -165,7 +167,8 @@ export const ChatSidebar = ({
               if (closeSidebar) closeSidebar();
             }}
             className="w-full flex items-center justify-center gap-2"
-            disabled={isCreatingNewSession}
+            disabled={isCreatingNewSession || hasEmptySession}
+            title={hasEmptySession ? "You already have an empty chat" : "Create a new chat"}
           >
             {isCreatingNewSession ? (
               <Loader2 className="h-4 w-4 animate-spin mr-1" />
