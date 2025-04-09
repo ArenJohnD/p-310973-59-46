@@ -38,26 +38,6 @@ export const loadChatMessages = async (sessionId: string): Promise<Message[]> =>
 };
 
 export const createNewSession = async (userId: string): Promise<ChatSession | null> => {
-  // First check if user has an empty active session
-  const { data: existingSessions } = await supabase
-    .from('chat_sessions')
-    .select('id, chat_messages(count)')
-    .eq('user_id', userId)
-    .eq('is_active', true)
-    .order('created_at', { ascending: false })
-    .limit(1);
-    
-  // If there's an active session with no messages (except welcome), reuse it
-  if (existingSessions && existingSessions.length > 0) {
-    const existingSession = existingSessions[0];
-    const messageCount = existingSession.chat_messages[0]?.count || 0;
-    
-    if (messageCount <= 1) { // Only welcome message or no messages
-      return existingSession as ChatSession;
-    }
-  }
-  
-  // No reusable session found, create a new one
   // First, deactivate all existing sessions
   await supabase
     .from('chat_sessions')
@@ -125,62 +105,41 @@ export const updateSessionTitle = async (sessionId: string, title: string): Prom
 
 export const generateChatTitle = async (userMessage: string, botResponse: string = ""): Promise<string> => {
   try {
-    // Extract key phrases (3-5 words) that summarize the topic
-    const cleanUserMessage = userMessage.replace(/[^\w\s]/gi, '').toLowerCase();
-    const words = cleanUserMessage.split(/\s+/);
+    let topic = '';
     
-    // Filter out common stop words
-    const stopWords = ['the', 'is', 'at', 'which', 'on', 'a', 'an', 'and', 'or', 'but', 'in', 'with', 'about', 'to', 'from', 'how', 'what', 'when', 'where', 'who', 'why', 'can', 'could', 'would', 'should', 'do', 'does', 'did'];
-    const significantWords = words.filter(word => 
-      word.length > 2 && !stopWords.includes(word)
-    );
+    const botFirstSentence = botResponse.split('.')[0].trim();
+    if (botFirstSentence.length > 5 && botFirstSentence.length < 50) {
+      if (botFirstSentence.includes('policy') || botFirstSentence.includes('regulation') || 
+          botFirstSentence.includes('procedure') || botFirstSentence.includes('guideline')) {
+        topic = botFirstSentence;
+      }
+    }
     
-    // Try to find policy-related terms in the bot response
-    let policyTerms = [];
-    if (botResponse) {
-      const keyTerms = ['policy', 'regulation', 'procedure', 'guideline', 'rule', 'requirement'];
-      
-      for (const term of keyTerms) {
-        const regex = new RegExp(`(\\w+\\s+){0,2}${term}(\\s+\\w+){0,2}`, 'gi');
-        const matches = botResponse.match(regex);
-        if (matches && matches.length > 0) {
-          // Take the shortest match that's not just the term itself
-          const validMatches = matches
-            .filter(m => m.length > term.length + 2)
-            .sort((a, b) => a.length - b.length);
-          
-          if (validMatches.length > 0) {
-            const match = validMatches[0].trim();
-            // Make sure it's not too long
-            const words = match.split(/\s+/);
-            if (words.length <= 5) {
-              policyTerms.push(match);
-              break; // Found a good policy term
-            }
-          }
+    if (!topic) {
+      const questionMatch = userMessage.match(/(?:what|how|where|when|who|can|is|are|do|does).+?(\w+(?:\s+\w+){0,5})\??$/i);
+      if (questionMatch && questionMatch[1]) {
+        topic = `About ${questionMatch[1].trim()}`;
+      } else {
+        const words = userMessage.split(/\s+/);
+        const keyWords = words.filter(word => word.length > 3).slice(0, 3);
+        
+        if (keyWords.length > 0) {
+          const firstWord = keyWords[0].charAt(0).toUpperCase() + keyWords[0].slice(1);
+          topic = `${firstWord} ${keyWords.slice(1).join(' ')}`;
+        } else {
+          topic = "New Conversation";
         }
       }
     }
     
-    if (policyTerms.length > 0) {
-      // Use the policy term as the title (already limited to 3-5 words)
-      return policyTerms[0].charAt(0).toUpperCase() + policyTerms[0].slice(1);
+    if (topic.length > 30) {
+      topic = topic.substring(0, 30) + '...';
     }
     
-    // Get key nouns and topic words
-    if (significantWords.length > 0) {
-      // Take up to 5 significant words
-      const titleWords = significantWords.slice(0, 5);
-      
-      // Format title with first letter capitalized
-      const title = titleWords.join(' ');
-      return title.charAt(0).toUpperCase() + title.slice(1);
-    }
-    
-    return "New Chat";
+    return topic;
   } catch (error) {
     console.error("Error generating title:", error);
-    return "New Chat";
+    return "New Conversation";
   }
 };
 

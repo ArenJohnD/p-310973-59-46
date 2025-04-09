@@ -28,16 +28,11 @@ export const ChatSidebar = ({
 }: ChatSidebarProps) => {
   const [deletingSessionId, setDeletingSessionId] = useState<string | null>(null);
   const [sessionItems, setSessionItems] = useState<ChatSession[]>(chatSessions);
-  const [deletedSessions, setDeletedSessions] = useState<string[]>([]);
 
   // Update session items when chatSessions prop changes
   useEffect(() => {
-    // Filter out items that are being deleted
-    const filteredSessions = chatSessions.filter(
-      session => !deletedSessions.includes(session.id)
-    );
-    setSessionItems(filteredSessions);
-  }, [chatSessions, deletedSessions]);
+    setSessionItems(chatSessions);
+  }, [chatSessions]);
 
   const handleDeleteSession = async (sessionId: string, event: React.MouseEvent) => {
     event.stopPropagation();
@@ -45,10 +40,10 @@ export const ChatSidebar = ({
     // Mark this session as being deleted (for animation)
     setDeletingSessionId(sessionId);
     
+    // Update local state immediately for responsive UI
+    setSessionItems(prev => prev.filter(session => session.id !== sessionId));
+    
     try {
-      // Add to deleted sessions list for UI filtering
-      setDeletedSessions(prev => [...prev, sessionId]);
-      
       // Actual deletion in the background
       await deleteSession(sessionId);
       
@@ -56,11 +51,6 @@ export const ChatSidebar = ({
         title: "Success",
         description: "Chat session deleted successfully.",
       });
-      
-      // Remove from deleted sessions after animation completes
-      setTimeout(() => {
-        setDeletedSessions(prev => prev.filter(id => id !== sessionId));
-      }, 500); // Match animation duration
       
     } catch (error) {
       console.error("Error deleting session:", error);
@@ -70,8 +60,8 @@ export const ChatSidebar = ({
         variant: "destructive",
       });
       
-      // Remove from deleted sessions if deletion failed
-      setDeletedSessions(prev => prev.filter(id => id !== sessionId));
+      // If deletion failed, restore the session in UI
+      setSessionItems(chatSessions);
     } finally {
       setDeletingSessionId(null);
     }
@@ -100,9 +90,7 @@ export const ChatSidebar = ({
                 className={`
                   group/menu-item relative flex items-center justify-between
                   transition-all duration-300 ease-in-out
-                  ${deletingSessionId === session.id || deletedSessions.includes(session.id) 
-                    ? 'session-deleting' 
-                    : 'opacity-100 transform-gpu'}
+                  ${deletingSessionId === session.id ? 'opacity-0 h-0 scale-0 m-0 p-0 transform-gpu' : 'opacity-100 transform-gpu'}
                 `}
               >
                 <button
