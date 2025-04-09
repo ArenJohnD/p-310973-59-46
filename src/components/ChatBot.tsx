@@ -36,12 +36,13 @@ interface ChatBotProps {
 
 export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
   const { user } = useAuth();
-  const [messages, setMessages] = useState<Message[]>([{
+  const welcomeMessage: Message = {
     id: "welcome",
     text: "Hi! I'm Poli, your NEU policy assistant. I can help you find information about university policies, answer questions about academic regulations, and guide you through administrative procedures. How can I assist you today?",
     sender: "bot",
     timestamp: new Date()
-  }]);
+  };
+  const [messages, setMessages] = useState<Message[]>([welcomeMessage]);
   const [isLoading, setIsLoading] = useState(false);
   const [referenceDocuments, setReferenceDocuments] = useState<ReferenceDocument[]>([]);
   const [loadingDocuments, setLoadingDocuments] = useState(false);
@@ -56,12 +57,7 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
   const [pendingSession, setPendingSession] = useState<string | null>(null);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const initialSetupDone = useRef(false);
-  const welcomeMessage: Message = {
-    id: "welcome",
-    text: "Hi! I'm Poli, your NEU policy assistant. I can help you find information about university policies, answer questions about academic regulations, and guide you through administrative procedures. How can I assist you today?",
-    sender: "bot",
-    timestamp: new Date()
-  };
+  const sessionsLoaded = useRef(false);
 
   useEffect(() => {
     const checkIfMobile = () => {
@@ -86,6 +82,7 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
   }, [messages]);
 
   useEffect(() => {
+    // Load reference documents first as these don't depend on user
     fetchReferenceDocuments()
       .then(documents => setReferenceDocuments(documents))
       .catch(error => {
@@ -99,7 +96,10 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
       .finally(() => setLoadingDocuments(false));
     
     if (user) {
-      fetchChatSessionsFromServer();
+      // Start fetching chat sessions immediately after the component mounts
+      if (!sessionsLoaded.current) {
+        fetchChatSessionsFromServer();
+      }
       
       const chatSessionsChannel = supabase
         .channel('chat_sessions_changes')
@@ -139,6 +139,10 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
       return () => {
         supabase.removeChannel(chatSessionsChannel);
       };
+    } else {
+      // If no user, ensure welcome message is shown
+      setMessages([welcomeMessage]);
+      setCurrentSessionId(null);
     }
   }, [user]);
 
@@ -146,6 +150,7 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
     if (chatSessions.length === 0) return;
 
     const filtered = chatSessions.filter(session => {
+      // Only show sessions with proper titles (not "New Chat"), or the current session, or pending session
       if (session.id === currentSessionId || session.title !== "New Chat") {
         return true;
       }
@@ -165,6 +170,7 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
       const sessionData = await fetchChatSessions(user.id);
       
       setChatSessions(sessionData);
+      sessionsLoaded.current = true;
       
       if (sessionData.length > 0) {
         const activeSession = sessionData.find(session => session.is_active);
@@ -172,12 +178,12 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
           setCurrentSessionId(activeSession.id);
           await loadChatMessagesFromServer(activeSession.id, false);
         } else {
-          // Don't create a new session, just show the welcome message
+          // Just show the welcome message
           setMessages([welcomeMessage]);
           setCurrentSessionId(null);
         }
       } else {
-        // Don't create a new session, just show the welcome message
+        // Just show the welcome message
         setMessages([welcomeMessage]);
         setCurrentSessionId(null);
       }
@@ -191,11 +197,13 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
         variant: "destructive",
       });
       
+      // Still mark setup as done, but show welcome message
+      setMessages([welcomeMessage]);
       initialSetupDone.current = true;
     }
   };
 
-  const loadChatMessagesFromServer = async (sessionId: string, showLoading = true) => {
+  const loadChatMessagesFromServer = async (sessionId: string, showLoading = false) => {
     if (!user) return;
     
     try {
@@ -227,6 +235,9 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
         description: "Failed to load chat messages.",
         variant: "destructive",
       });
+      
+      // Show welcome message on error
+      setMessages([welcomeMessage]);
     } finally {
       if (showLoading) {
         setIsLoading(false);
@@ -249,6 +260,7 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
         setChatSessions(prev => [newSession, ...prev.map(s => ({ ...s, is_active: false }))]);
         setCurrentSessionId(newSession.id);
         
+        // Mark as pending - won't show in sidebar until first AI response
         setPendingSession(newSession.id);
         
         setMessages([welcomeMessage]);
@@ -260,6 +272,9 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
         description: "Failed to create new chat session.",
         variant: "destructive",
       });
+      
+      // Show welcome message on error
+      setMessages([welcomeMessage]);
     } finally {
       if (showLoading) {
         setIsLoading(false);
@@ -276,7 +291,7 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
   };
   
   const handleLastSessionDeleted = () => {
-    // When the last session is deleted, show the welcome message without creating a new session
+    // Show the welcome message when the last session is deleted
     setCurrentSessionId(null);
     setMessages([welcomeMessage]);
   };
@@ -298,6 +313,8 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
           sessionId = newSession.id;
           setCurrentSessionId(sessionId);
           setChatSessions(prev => [newSession, ...prev.map(s => ({ ...s, is_active: false }))]);
+          
+          // Mark as pending - won't show in sidebar until first AI response
           setPendingSession(newSession.id);
         } else {
           toast({
@@ -348,6 +365,7 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
           )
         );
         
+        // Once we have a title, remove this session from pending
         if (pendingSession === sessionId) {
           setPendingSession(null);
         }
@@ -480,3 +498,4 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
     </div>
   );
 };
+

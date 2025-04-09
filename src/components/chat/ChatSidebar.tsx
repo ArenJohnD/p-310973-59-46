@@ -1,3 +1,4 @@
+
 import { useState, useRef, useEffect } from "react";
 import { MessageSquare, Trash2, Loader2, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -62,7 +63,7 @@ export const ChatSidebar = ({
   const handleDeleteSession = async (sessionId: string, event: React.MouseEvent) => {
     event.stopPropagation();
     
-    // Check if this is the only session
+    // Check if this is the last session before deletion
     const isLastSession = localSessions.length <= 1;
     
     // Mark this session as being deleted (for animation)
@@ -78,6 +79,7 @@ export const ChatSidebar = ({
       // Actual deletion in the background
       await deleteSession(sessionId);
       
+      // If this was the last session, trigger the callback to show welcome message
       if (isLastSession && onLastSessionDeleted) {
         onLastSessionDeleted();
       }
