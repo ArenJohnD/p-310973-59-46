@@ -38,7 +38,7 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
   const { user } = useAuth();
   const welcomeMessage: Message = {
     id: "welcome",
-    text: "Hi! I'm Poli, your NEU policy assistant. I can help you find information about university policies, answer questions about academic regulations, and guide you through administrative procedures. How can I assist you today?",
+    text: "Hi! I'm Poli, your NEU policy assistant. I can help you find information about university policies and answer questions about academic regulations. How can I assist you today?",
     sender: "bot",
     timestamp: new Date()
   };
