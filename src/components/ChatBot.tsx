@@ -26,6 +26,8 @@ import { MobileChatSidebar } from "./chat/MobileChatSidebar";
 import { MessageBubble } from "./chat/MessageBubble";
 import { TypingIndicator } from "./chat/TypingIndicator";
 import { ChatInput } from "./chat/ChatInput";
+import { AutoScrollButton } from "./chat/AutoScrollButton";
+import { MessageSkeleton } from "./chat/MessageSkeleton";
 import "./ChatBot.css";
 
 GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
@@ -38,7 +40,7 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
   const { user } = useAuth();
   const welcomeMessage: Message = {
     id: "welcome",
-    text: "Hi! I'm Poli, your NEU policy assistant. I can help you find information about university policies and answer questions about academic regulations. How can I assist you today?",
+    text: "Hi! I'm Poli, your NEU policy assistant. I can help you find information about university policies, answer questions about academic regulations, and guide you through administrative procedures. How can I assist you today?",
     sender: "bot",
     timestamp: new Date()
   };
@@ -55,6 +57,11 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
   const [showTypingMessage, setShowTypingMessage] = useState(false);
   const [creatingNewSession, setCreatingNewSession] = useState(false);
   const [pendingSession, setPendingSession] = useState<string | null>(null);
+  const [loadingHistory, setLoadingHistory] = useState(true);
+  const [hasNewMessages, setHasNewMessages] = useState(false);
+  const [isUserScrolled, setIsUserScrolled] = useState(false);
+  const [showSkeletonMessages, setShowSkeletonMessages] = useState(false);
+  
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const initialSetupDone = useRef(false);
   const sessionsLoaded = useRef(false);
@@ -73,16 +80,49 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
   }, []);
 
   useEffect(() => {
+    if (scrollAreaRef.current && !isUserScrolled) {
+      const scrollContainer = scrollAreaRef.current.querySelector('[data-radix-scroll-area-viewport]');
+      if (scrollContainer) {
+        scrollContainer.scrollTop = scrollContainer.scrollHeight;
+        setHasNewMessages(false);
+      }
+    } else if (isUserScrolled && messages.length > 0) {
+      // If user has scrolled up and we get new messages
+      setHasNewMessages(true);
+    }
+  }, [messages, isUserScrolled]);
+
+  const handleScrollAreaScroll = () => {
+    if (scrollAreaRef.current) {
+      const scrollContainer = scrollAreaRef.current.querySelector('[data-radix-scroll-area-viewport]');
+      if (scrollContainer) {
+        const { scrollTop, scrollHeight, clientHeight } = scrollContainer;
+        // Consider user scrolled if they are not at the bottom
+        const isAtBottom = Math.abs(scrollHeight - scrollTop - clientHeight) < 10;
+        setIsUserScrolled(!isAtBottom);
+        
+        // If user scrolls to bottom, hide the new messages notification
+        if (isAtBottom) {
+          setHasNewMessages(false);
+        }
+      }
+    }
+  };
+
+  const scrollToBottom = () => {
     if (scrollAreaRef.current) {
       const scrollContainer = scrollAreaRef.current.querySelector('[data-radix-scroll-area-viewport]');
       if (scrollContainer) {
         scrollContainer.scrollTop = scrollContainer.scrollHeight;
+        setHasNewMessages(false);
+        setIsUserScrolled(false);
       }
     }
-  }, [messages]);
+  };
 
   useEffect(() => {
     // Load reference documents first as these don't depend on user
+    setLoadingDocuments(true);
     fetchReferenceDocuments()
       .then(documents => setReferenceDocuments(documents))
       .catch(error => {
@@ -97,6 +137,7 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
     
     if (user) {
       // Start fetching chat sessions immediately after the component mounts
+      setLoadingHistory(true);
       if (!sessionsLoaded.current) {
         fetchChatSessionsFromServer();
       }
@@ -143,6 +184,7 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
       // If no user, ensure welcome message is shown
       setMessages([welcomeMessage]);
       setCurrentSessionId(null);
+      setLoadingHistory(false);
     }
   }, [user]);
 
@@ -167,6 +209,7 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
     if (!user) return;
     
     try {
+      setLoadingHistory(true);
       const sessionData = await fetchChatSessions(user.id);
       
       setChatSessions(sessionData);
@@ -200,6 +243,8 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
       // Still mark setup as done, but show welcome message
       setMessages([welcomeMessage]);
       initialSetupDone.current = true;
+    } finally {
+      setLoadingHistory(false);
     }
   };
 
@@ -208,7 +253,7 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
     
     try {
       if (showLoading) {
-        setIsLoading(true);
+        setShowSkeletonMessages(true);
       }
       
       const messageData = await loadChatMessages(sessionId);
@@ -240,7 +285,7 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
       setMessages([welcomeMessage]);
     } finally {
       if (showLoading) {
-        setIsLoading(false);
+        setTimeout(() => setShowSkeletonMessages(false), 300); // Small delay for better UX
       }
     }
   };
@@ -264,6 +309,7 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
         setPendingSession(newSession.id);
         
         setMessages([welcomeMessage]);
+        scrollToBottom();
       }
     } catch (error) {
       console.error("Error creating new session:", error);
@@ -287,7 +333,10 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
   };
 
   const handleSessionLoaded = async (sessionId: string) => {
-    await loadChatMessagesFromServer(sessionId);
+    await loadChatMessagesFromServer(sessionId, true);
+    // Reset user scroll position when loading a new chat
+    setIsUserScrolled(false);
+    scrollToBottom();
   };
   
   const handleLastSessionDeleted = () => {
@@ -343,6 +392,10 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
       sender: "user",
       timestamp: new Date()
     };
+    
+    // Reset scroll to bottom when sending a new message
+    setIsUserScrolled(false);
+    scrollToBottom();
     
     setMessages(prev => [...prev, userMessage]);
     setIsLoading(true);
@@ -405,6 +458,29 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
     }
   };
 
+  // Keyboard shortcuts for sending messages with Ctrl+Enter
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Add keyboard shortcut for Ctrl+Enter to send message
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+        const textArea = document.querySelector('textarea[name="message"]') as HTMLTextAreaElement;
+        if (textArea && textArea.value.trim()) {
+          // Find and click the send button
+          const sendButton = document.querySelector('button[type="submit"]');
+          if (sendButton) {
+            sendButton.click();
+          }
+        }
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, []);
+
   return (
     <div className={`flex flex-col bg-white shadow-[0px_4px_4px_rgba(0,0,0,0.25)] border border-[rgba(0,0,0,0.2)] rounded-[30px] p-4 w-full ${isMaximized ? 'h-full' : 'max-w-[1002px] mx-auto'}`}>
       {user ? (
@@ -419,6 +495,7 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
               onNewSession={handleCreateNewSession}
               isCollapsed={isCollapsed}
               isCreatingNewSession={creatingNewSession}
+              loadingSessions={loadingHistory}
               onLastSessionDeleted={handleLastSessionDeleted}
             />
           )}
@@ -437,6 +514,7 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
                   onNewSession={handleCreateNewSession}
                   isCollapsed={isCollapsed}
                   isCreatingNewSession={creatingNewSession}
+                  loadingSessions={loadingHistory}
                   onLastSessionDeleted={handleLastSessionDeleted}
                 />
               </div>
@@ -462,14 +540,35 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
           )}
           
           <div className={`flex-1 flex flex-col relative h-full ${isMobile ? 'pt-10' : ''}`}>
-            <ScrollArea ref={scrollAreaRef} className={`flex-1 w-full ${isMobile ? 'pt-10' : ''} px-2`}>
+            <ScrollArea 
+              ref={scrollAreaRef} 
+              className={`flex-1 w-full ${isMobile ? 'pt-10' : ''} px-2`}
+              onScrollCapture={handleScrollAreaScroll}
+            >
               <div className="flex flex-col gap-4 p-2">
-                {messages.map((message) => (
+                {loadingHistory && (
+                  <>
+                    <MessageSkeleton type="bot" />
+                    <MessageSkeleton type="user" />
+                    <MessageSkeleton type="bot" />
+                  </>
+                )}
+                
+                {!loadingHistory && messages.map((message) => (
                   <MessageBubble key={message.id} message={message} />
                 ))}
+                
+                {showSkeletonMessages && (
+                  <MessageSkeleton type="bot" />
+                )}
+                
                 {showTypingMessage && <TypingIndicator />}
               </div>
             </ScrollArea>
+            
+            {hasNewMessages && (
+              <AutoScrollButton onClick={scrollToBottom} className="z-10" />
+            )}
             
             <ChatInput 
               onSendMessage={handleSendMessage} 
@@ -485,6 +584,7 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
               {messages.map((message) => (
                 <MessageBubble key={message.id} message={message} />
               ))}
+              {showTypingMessage && <TypingIndicator />}
             </div>
           </ScrollArea>
           
@@ -498,4 +598,3 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
     </div>
   );
 };
-
