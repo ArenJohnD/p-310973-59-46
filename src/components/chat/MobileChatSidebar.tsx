@@ -3,15 +3,32 @@ import { Drawer, DrawerContent, DrawerTrigger } from "@/components/ui/drawer";
 import { Button } from "@/components/ui/button";
 import { Menu } from "lucide-react";
 import { ChatSidebar } from "./ChatSidebar";
+import { ChatSession } from "@/types/chat";
 
 interface MobileChatSidebarProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  chatSessions: ChatSession[];
+  loadingSessions?: boolean;
+  currentSessionId: string | null;
+  onSessionLoaded: (sessionId: string) => void;
+  onNewSession: () => void;
+  isCollapsed?: boolean;
+  isCreatingNewSession?: boolean;
+  onLastSessionDeleted?: () => void;
 }
 
 export const MobileChatSidebar = ({
   open,
   onOpenChange,
+  chatSessions,
+  loadingSessions = false,
+  currentSessionId,
+  onSessionLoaded,
+  onNewSession,
+  isCollapsed = false,
+  isCreatingNewSession = false,
+  onLastSessionDeleted
 }: MobileChatSidebarProps) => {
   return (
     <Drawer open={open} onOpenChange={onOpenChange}>
@@ -27,7 +44,15 @@ export const MobileChatSidebar = ({
       <DrawerContent className="h-[80vh]">
         <div className="px-4 py-6 h-full flex flex-col overflow-hidden">
           <ChatSidebar
+            chatSessions={chatSessions}
+            loadingSessions={loadingSessions}
+            currentSessionId={currentSessionId}
+            onSessionLoaded={onSessionLoaded}
+            onNewSession={onNewSession}
             closeSidebar={() => onOpenChange(false)}
+            isCollapsed={isCollapsed}
+            isCreatingNewSession={isCreatingNewSession}
+            onLastSessionDeleted={onLastSessionDeleted}
           />
         </div>
       </DrawerContent>
