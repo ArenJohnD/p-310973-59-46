@@ -60,7 +60,8 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
   const [hasNewMessages, setHasNewMessages] = useState(false);
   const [isUserScrolled, setIsUserScrolled] = useState(false);
   const [showSkeletonMessages, setShowSkeletonMessages] = useState(false);
-  
+  const [visibilityChangeTimeout, setVisibilityChangeTimeout] = useState<number | null>(null);
+
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const initialSetupDone = useRef(false);
   const sessionsLoaded = useRef(false);
@@ -79,6 +80,37 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
   }, []);
 
   useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        if (visibilityChangeTimeout.current) {
+          clearTimeout(visibilityChangeTimeout.current);
+        }
+      } else if (document.visibilityState === 'visible') {
+        visibilityChangeTimeout.current = window.setTimeout(() => {
+          setShowSkeletonMessages(false);
+          setIsLoading(false);
+          setShowTypingMessage(false);
+          
+          if (loadingHistory) {
+            setLoadingHistory(false);
+          }
+          
+          visibilityChangeTimeout.current = null;
+        }, 300);
+      }
+    };
+    
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      if (visibilityChangeTimeout.current) {
+        clearTimeout(visibilityChangeTimeout.current);
+      }
+    };
+  }, [loadingHistory]);
+
+  useEffect(() => {
     if (scrollAreaRef.current && !isUserScrolled) {
       const scrollContainer = scrollAreaRef.current.querySelector('[data-radix-scroll-area-viewport]');
       if (scrollContainer) {
@@ -86,7 +118,6 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
         setHasNewMessages(false);
       }
     } else if (isUserScrolled && messages.length > 0) {
-      // If user has scrolled up and we get new messages
       setHasNewMessages(true);
     }
   }, [messages, isUserScrolled]);
@@ -96,11 +127,9 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
       const scrollContainer = scrollAreaRef.current.querySelector('[data-radix-scroll-area-viewport]');
       if (scrollContainer) {
         const { scrollTop, scrollHeight, clientHeight } = scrollContainer;
-        // Consider user scrolled if they are not at the bottom
         const isAtBottom = Math.abs(scrollHeight - scrollTop - clientHeight) < 10;
         setIsUserScrolled(!isAtBottom);
         
-        // If user scrolls to bottom, hide the new messages notification
         if (isAtBottom) {
           setHasNewMessages(false);
         }
@@ -120,7 +149,6 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
   };
 
   useEffect(() => {
-    // Load reference documents first as these don't depend on user
     setLoadingDocuments(true);
     fetchReferenceDocuments()
       .then(documents => setReferenceDocuments(documents))
@@ -135,7 +163,6 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
       .finally(() => setLoadingDocuments(false));
     
     if (user) {
-      // Start fetching chat sessions immediately after the component mounts
       setLoadingHistory(true);
       if (!sessionsLoaded.current) {
         fetchChatSessionsFromServer();
@@ -155,7 +182,6 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
               const updatedSessions = prev.filter(session => session.id !== deletedSessionId);
               
               if (updatedSessions.length === 0 && currentSessionId === deletedSessionId) {
-                // Last session was deleted, display welcome message
                 setCurrentSessionId(null);
                 setMessages([welcomeMessage]);
               }
@@ -180,7 +206,6 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
         supabase.removeChannel(chatSessionsChannel);
       };
     } else {
-      // If no user, ensure welcome message is shown
       setMessages([welcomeMessage]);
       setCurrentSessionId(null);
       setLoadingHistory(false);
@@ -191,7 +216,6 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
     if (chatSessions.length === 0) return;
 
     const filtered = chatSessions.filter(session => {
-      // Only show sessions with proper titles (not "New Chat"), or the current session, or pending session
       if (session.id === currentSessionId || session.title !== "New Chat") {
         return true;
       }
@@ -220,12 +244,10 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
           setCurrentSessionId(activeSession.id);
           await loadChatMessagesFromServer(activeSession.id, false);
         } else {
-          // Just show the welcome message
           setMessages([welcomeMessage]);
           setCurrentSessionId(null);
         }
       } else {
-        // Just show the welcome message
         setMessages([welcomeMessage]);
         setCurrentSessionId(null);
       }
@@ -239,7 +261,6 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
         variant: "destructive",
       });
       
-      // Still mark setup as done, but show welcome message
       setMessages([welcomeMessage]);
       initialSetupDone.current = true;
     } finally {
@@ -280,12 +301,13 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
         variant: "destructive",
       });
       
-      // Show welcome message on error
       setMessages([welcomeMessage]);
     } finally {
-      if (showLoading) {
-        setTimeout(() => setShowSkeletonMessages(false), 300); // Small delay for better UX
-      }
+      setTimeout(() => {
+        if (showLoading) {
+          setShowSkeletonMessages(false);
+        }
+      }, 300);
     }
   };
 
@@ -304,7 +326,6 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
         setChatSessions(prev => [newSession, ...prev.map(s => ({ ...s, is_active: false }))]);
         setCurrentSessionId(newSession.id);
         
-        // Mark as pending - won't show in sidebar until first AI response
         setPendingSession(newSession.id);
         
         setMessages([welcomeMessage]);
@@ -318,7 +339,6 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
         variant: "destructive",
       });
       
-      // Show welcome message on error
       setMessages([welcomeMessage]);
     } finally {
       if (showLoading) {
@@ -333,13 +353,11 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
 
   const handleSessionLoaded = async (sessionId: string) => {
     await loadChatMessagesFromServer(sessionId, true);
-    // Reset user scroll position when loading a new chat
     setIsUserScrolled(false);
     scrollToBottom();
   };
   
   const handleLastSessionDeleted = () => {
-    // Show the welcome message when the last session is deleted
     setCurrentSessionId(null);
     setMessages([welcomeMessage]);
   };
@@ -349,7 +367,6 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
     
     let sessionId = currentSessionId;
     
-    // If there's no current session, create one
     if (!sessionId) {
       try {
         setIsLoading(true);
@@ -362,7 +379,6 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
           setCurrentSessionId(sessionId);
           setChatSessions(prev => [newSession, ...prev.map(s => ({ ...s, is_active: false }))]);
           
-          // Mark as pending - won't show in sidebar until first AI response
           setPendingSession(newSession.id);
         } else {
           toast({
@@ -392,7 +408,6 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
       timestamp: new Date()
     };
     
-    // Reset scroll to bottom when sending a new message
     setIsUserScrolled(false);
     scrollToBottom();
     
@@ -417,7 +432,6 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
           )
         );
         
-        // Once we have a title, remove this session from pending
         if (pendingSession === sessionId) {
           setPendingSession(null);
         }
@@ -457,14 +471,11 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
     }
   };
 
-  // Keyboard shortcuts for sending messages with Ctrl+Enter
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Add keyboard shortcut for Ctrl+Enter to send message
       if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
         const textArea = document.querySelector('textarea[name="message"]') as HTMLTextAreaElement;
         if (textArea && textArea.value.trim()) {
-          // Find and click the send button
           const sendButton = document.querySelector('button[type="submit"]') as HTMLButtonElement;
           if (sendButton) {
             sendButton.click();

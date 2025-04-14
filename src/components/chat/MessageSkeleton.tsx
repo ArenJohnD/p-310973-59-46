@@ -1,7 +1,27 @@
 
 import { Skeleton } from "@/components/ui/skeleton";
+import { useEffect, useState } from "react";
 
 export const MessageSkeleton = ({ type = "bot" }: { type?: "user" | "bot" }) => {
+  const [isVisible, setIsVisible] = useState(true);
+  
+  // Add an effect to unmount the skeleton after some time if it gets "stuck"
+  useEffect(() => {
+    // Set a timeout to automatically hide the skeleton after 10 seconds
+    // This serves as a fallback in case the parent component fails to unmount it
+    const timeoutId = setTimeout(() => {
+      setIsVisible(false);
+    }, 10000);
+    
+    return () => {
+      clearTimeout(timeoutId);
+    };
+  }, []);
+  
+  if (!isVisible) {
+    return null;
+  }
+  
   return (
     <div className={`flex ${type === "bot" ? "justify-start" : "justify-end"}`}>
       <div 
