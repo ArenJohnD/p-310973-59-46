@@ -1,3 +1,4 @@
+
 import { useState, useRef, useEffect } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -60,7 +61,9 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
   const [hasNewMessages, setHasNewMessages] = useState(false);
   const [isUserScrolled, setIsUserScrolled] = useState(false);
   const [showSkeletonMessages, setShowSkeletonMessages] = useState(false);
-  const [visibilityChangeTimeout, setVisibilityChangeTimeout] = useState<number | null>(null);
+  
+  // Change from useState to useRef for the visibility change timeout
+  const visibilityChangeTimeout = useRef<number | null>(null);
 
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const initialSetupDone = useRef(false);
