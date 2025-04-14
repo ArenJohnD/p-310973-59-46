@@ -7,37 +7,34 @@ import { toast } from "@/components/ui/use-toast";
 import { ChatSession } from "@/types/chat";
 import { deleteSession } from "@/services/chatService";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useChatSessionsContext } from "./ChatSessionsContext";
 
 interface ChatSidebarProps {
-  chatSessions: ChatSession[];
-  loadingSessions?: boolean;
-  currentSessionId: string | null;
-  onSessionLoaded: (sessionId: string) => void;
-  onNewSession: () => void;
   closeSidebar?: () => void;
   isCollapsed?: boolean;
-  isCreatingNewSession?: boolean;
-  onLastSessionDeleted?: () => void;
 }
 
 export const ChatSidebar = ({
-  chatSessions,
-  loadingSessions = false,
-  currentSessionId,
-  onSessionLoaded,
-  onNewSession,
   closeSidebar,
   isCollapsed = false,
-  isCreatingNewSession = false,
-  onLastSessionDeleted
 }: ChatSidebarProps) => {
+  const { 
+    filteredChatSessions,
+    currentSessionId,
+    loadingHistory,
+    creatingNewSession,
+    handleSessionLoaded,
+    handleCreateNewSession,
+    handleLastSessionDeleted
+  } = useChatSessionsContext();
+  
   const [deletingSessionId, setDeletingSessionId] = useState<string | null>(null);
   const [localSessions, setLocalSessions] = useState<ChatSession[]>([]);
   const deletedSessionIds = useRef(new Set<string>());
 
   // Update local sessions when chatSessions prop changes, but maintain any deletions in progress
   useEffect(() => {
-    if (chatSessions.length === 0 && loadingSessions) {
+    if (filteredChatSessions.length === 0 && loadingHistory) {
       setLocalSessions([
         { id: 'placeholder-1', title: 'Loading...', user_id: '', created_at: new Date().toISOString(), is_active: true } as ChatSession,
         { id: 'placeholder-2', title: 'Loading...', user_id: '', created_at: new Date().toISOString(), is_active: false } as ChatSession,
@@ -47,7 +44,7 @@ export const ChatSidebar = ({
     
     // Deduplicate sessions by ID before setting local state
     const uniqueSessions = Array.from(
-      new Map(chatSessions.map(session => [session.id, session])).values()
+      new Map(filteredChatSessions.map(session => [session.id, session])).values()
     ).filter(session => !deletedSessionIds.current.has(session.id));
     
     setLocalSessions(prevSessions => {
@@ -58,7 +55,7 @@ export const ChatSidebar = ({
       
       return uniqueSessions;
     });
-  }, [chatSessions, deletingSessionId, loadingSessions]);
+  }, [filteredChatSessions, deletingSessionId, loadingHistory]);
 
   const handleDeleteSession = async (sessionId: string, event: React.MouseEvent) => {
     event.stopPropagation();
@@ -80,8 +77,8 @@ export const ChatSidebar = ({
       await deleteSession(sessionId);
       
       // If this was the last session, trigger the callback to show welcome message
-      if (isLastSession && onLastSessionDeleted) {
-        onLastSessionDeleted();
+      if (isLastSession && handleLastSessionDeleted) {
+        handleLastSessionDeleted();
       }
     } catch (error) {
       console.error("Error deleting session:", error);
@@ -96,7 +93,7 @@ export const ChatSidebar = ({
       
       // Restore the session in UI
       setLocalSessions(prev => {
-        const sessionToRestore = chatSessions.find(s => s.id === sessionId);
+        const sessionToRestore = filteredChatSessions.find(s => s.id === sessionId);
         if (sessionToRestore && !prev.some(s => s.id === sessionId)) {
           return [...prev, sessionToRestore];
         }
@@ -135,7 +132,7 @@ export const ChatSidebar = ({
               : "hover:bg-gray-100"
           }`}
           onClick={() => {
-            onSessionLoaded(session.id);
+            handleSessionLoaded(session.id);
             if (closeSidebar) closeSidebar();
           }}
         >
@@ -168,7 +165,7 @@ export const ChatSidebar = ({
       </div>
       
       <ScrollArea className="h-[calc(100%-130px)] overflow-auto">
-        {loadingSessions && localSessions.length === 0 ? (
+        {loadingHistory && localSessions.length === 0 ? (
           <div className="flex justify-center items-center h-20">
             <Loader2 className="h-5 w-5 animate-spin text-gray-500" />
           </div>
@@ -190,13 +187,13 @@ export const ChatSidebar = ({
             variant="outline" 
             size="sm" 
             onClick={() => {
-              onNewSession();
+              handleCreateNewSession();
               if (closeSidebar) closeSidebar();
             }}
             className="w-full flex items-center justify-center gap-2"
-            disabled={isCreatingNewSession}
+            disabled={creatingNewSession}
           >
-            {isCreatingNewSession ? (
+            {creatingNewSession ? (
               <Loader2 className="h-4 w-4 animate-spin mr-1" />
             ) : (
               <Plus className="h-4 w-4" />
