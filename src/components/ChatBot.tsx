@@ -1,4 +1,3 @@
-
 import { useState, useRef, useEffect } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -466,7 +465,7 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
         const textArea = document.querySelector('textarea[name="message"]') as HTMLTextAreaElement;
         if (textArea && textArea.value.trim()) {
           // Find and click the send button
-          const sendButton = document.querySelector('button[type="submit"]');
+          const sendButton = document.querySelector('button[type="submit"]') as HTMLButtonElement;
           if (sendButton) {
             sendButton.click();
           }

@@ -1,5 +1,6 @@
 
 .typing-dot {
+  animation-name: bounce;
   animation-duration: 1.1s;
   animation-iteration-count: infinite;
   animation-timing-function: ease-in-out;
