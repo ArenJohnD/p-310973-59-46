@@ -36,6 +36,7 @@ export const UserManagement = () => {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [updatingUserId, setUpdatingUserId] = useState<string | null>(null);
+  const [fetchError, setFetchError] = useState<string | null>(null);
 
   useEffect(() => {
     fetchUsers();
@@ -44,9 +45,23 @@ export const UserManagement = () => {
   const fetchUsers = async () => {
     try {
       setLoading(true);
+      setFetchError(null);
+      
+      console.log("Fetching users...");
       const { data, error } = await supabase.rpc("get_all_users_with_profiles");
 
-      if (error) throw error;
+      if (error) {
+        console.error("Error fetching users:", error);
+        setFetchError(`Failed to load users: ${error.message}`);
+        toast({
+          title: "Error",
+          description: `Failed to load users: ${error.message}`,
+          variant: "destructive",
+        });
+        throw error;
+      }
+      
+      console.log("Users data received:", data);
       
       // Convert role to proper type
       const typedUsers = data.map(user => ({
@@ -56,12 +71,15 @@ export const UserManagement = () => {
       
       setUsers(typedUsers);
     } catch (error) {
-      console.error("Error fetching users:", error);
-      toast({
-        title: "Error",
-        description: "Failed to load users",
-        variant: "destructive",
-      });
+      console.error("Error in fetchUsers:", error);
+      if (!fetchError) {
+        setFetchError("Failed to load users. Please try again later.");
+        toast({
+          title: "Error",
+          description: "Failed to load users. Please try again later.",
+          variant: "destructive",
+        });
+      }
     } finally {
       setLoading(false);
     }
@@ -71,12 +89,23 @@ export const UserManagement = () => {
     try {
       setUpdatingUserId(userId);
       
+      console.log(`Updating user ${userId} to role ${newRole}`);
       const { data, error } = await supabase.rpc("update_user_role", {
         user_id: userId,
         new_role: newRole
       });
 
-      if (error) throw error;
+      if (error) {
+        console.error("Error updating user role:", error);
+        toast({
+          title: "Error",
+          description: `Failed to update user role: ${error.message}`,
+          variant: "destructive",
+        });
+        throw error;
+      }
+      
+      console.log("Update role response:", data);
       
       if (data) {
         // Update local state
@@ -92,7 +121,7 @@ export const UserManagement = () => {
         throw new Error("Failed to update user role");
       }
     } catch (error) {
-      console.error("Error updating user role:", error);
+      console.error("Error in handleRoleChange:", error);
       toast({
         title: "Error",
         description: "Failed to update user role",
@@ -113,6 +142,24 @@ export const UserManagement = () => {
     return (
       <div className="flex justify-center items-center h-64">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (fetchError) {
+    return (
+      <div className="space-y-6">
+        <div className="flex justify-between items-center">
+          <h2 className="text-2xl font-bold">User Management</h2>
+          <Button onClick={fetchUsers} variant="outline" size="sm">
+            Retry
+          </Button>
+        </div>
+        
+        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative" role="alert">
+          <strong className="font-bold">Error: </strong>
+          <span className="block sm:inline">{fetchError}</span>
+        </div>
       </div>
     );
   }
