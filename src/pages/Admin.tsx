@@ -5,6 +5,7 @@ import { toast } from "@/components/ui/use-toast";
 import { Header } from "@/components/Header";
 import { AdminCategoryTable } from "@/components/AdminCategoryTable";
 import { ReferenceDocumentManager } from "@/components/ReferenceDocumentManager";
+import { UserManagement } from "@/components/UserManagement";
 import { useAuth } from "@/context/AuthContext";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
@@ -226,14 +227,15 @@ const Admin = () => {
             Admin Dashboard
           </h1>
           <p className="text-black text-xl mt-2">
-            Manage Policy Categories & AI Reference Documents
+            Manage Policy Categories, AI Reference Documents & Users
           </p>
         </section>
 
         <Tabs defaultValue="categories" className="mb-8">
-          <TabsList className="grid w-full max-w-md mx-auto grid-cols-2">
+          <TabsList className="grid w-full max-w-md mx-auto grid-cols-3">
             <TabsTrigger value="categories">Categories</TabsTrigger>
             <TabsTrigger value="references">AI Reference Documents</TabsTrigger>
+            <TabsTrigger value="users">User Management</TabsTrigger>
           </TabsList>
           <TabsContent value="categories" className="mt-6">
             <AdminCategoryTable 
@@ -246,6 +248,9 @@ const Admin = () => {
           </TabsContent>
           <TabsContent value="references" className="mt-6">
             <ReferenceDocumentManager />
+          </TabsContent>
+          <TabsContent value="users" className="mt-6">
+            <UserManagement />
           </TabsContent>
         </Tabs>
       </main>

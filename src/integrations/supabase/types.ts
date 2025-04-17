@@ -254,6 +254,17 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      get_all_users_with_profiles: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          id: string
+          email: string
+          full_name: string
+          role: string
+          created_at: string
+          last_sign_in_at: string
+        }[]
+      }
       has_role: {
         Args: { _role: Database["public"]["Enums"]["app_role"] }
         Returns: boolean
@@ -265,6 +276,13 @@ export type Database = {
       set_user_as_admin: {
         Args: { _email: string }
         Returns: undefined
+      }
+      update_user_role: {
+        Args: {
+          user_id: string
+          new_role: Database["public"]["Enums"]["app_role"]
+        }
+        Returns: boolean
       }
     }
     Enums: {
