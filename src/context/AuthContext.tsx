@@ -78,6 +78,59 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return await checkAdminStatus(user);
   };
 
+  // Update user activity status
+  const updateUserActivityStatus = async (userId: string | undefined, isActive: boolean) => {
+    if (!userId) return;
+    
+    try {
+      console.log(`Setting user ${userId} activity status to ${isActive ? 'active' : 'inactive'}`);
+      
+      const { error } = await supabase.rpc("update_user_activity_status", {
+        user_id: userId,
+        is_active: isActive
+      });
+      
+      if (error) {
+        console.error("Error updating activity status:", error);
+      }
+    } catch (error) {
+      console.error("Exception in updateUserActivityStatus:", error);
+    }
+  };
+
+  // Set up event listeners for page visibility and beforeunload
+  useEffect(() => {
+    if (!user) return;
+    
+    // Update status when user leaves/closes the page
+    const handleBeforeUnload = () => {
+      updateUserActivityStatus(user.id, false);
+    };
+    
+    // Update status when tab visibility changes
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        updateUserActivityStatus(user.id, false);
+      } else if (document.visibilityState === 'visible' && user) {
+        updateUserActivityStatus(user.id, true);
+      }
+    };
+    
+    // Set initial status as active when component mounts with a user
+    updateUserActivityStatus(user.id, true);
+    
+    // Add event listeners
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    // Remove event listeners on cleanup
+    return () => {
+      updateUserActivityStatus(user?.id, false);
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [user]);
+
   useEffect(() => {
     console.log("Setting up auth context");
     let isActive = true; // Flag to prevent state updates after unmount
@@ -92,6 +145,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setSession(currentSession);
           setUser(currentSession.user);
           
+          // Update activity status immediately
+          updateUserActivityStatus(currentSession.user.id, true);
+          
           // Use setTimeout to avoid Supabase auth deadlocks
           setTimeout(() => {
             if (isActive) {
@@ -101,6 +157,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           }, 100);
         } else if (event === 'SIGNED_OUT') {
           console.log("User signed out, clearing state");
+          
+          // Update activity status before clearing user
+          if (user) {
+            updateUserActivityStatus(user.id, false);
+          }
+          
           setUser(null);
           setSession(null);
           setIsAdmin(false);
@@ -175,12 +237,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isActive = false;
       subscription?.unsubscribe();
       clearTimeout(loadingTimeout);
+      
+      // Set user as inactive when component unmounts
+      if (user) {
+        updateUserActivityStatus(user.id, false);
+      }
     };
   }, [navigate, location.pathname]);
 
   const signOut = async () => {
     try {
       setIsLoading(true);
+      
+      // Update activity status before signing out
+      if (user) {
+        await updateUserActivityStatus(user.id, false);
+      }
       
       // Clear the session and redirect to login page
       const { error } = await supabase.auth.signOut();

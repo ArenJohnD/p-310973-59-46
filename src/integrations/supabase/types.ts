@@ -195,6 +195,8 @@ export type Database = {
           email: string
           full_name: string | null
           id: string
+          is_active: boolean | null
+          last_sign_in_at: string | null
           role: Database["public"]["Enums"]["app_role"]
           updated_at: string
         }
@@ -203,6 +205,8 @@ export type Database = {
           email: string
           full_name?: string | null
           id: string
+          is_active?: boolean | null
+          last_sign_in_at?: string | null
           role?: Database["public"]["Enums"]["app_role"]
           updated_at?: string
         }
@@ -211,6 +215,8 @@ export type Database = {
           email?: string
           full_name?: string | null
           id?: string
+          is_active?: boolean | null
+          last_sign_in_at?: string | null
           role?: Database["public"]["Enums"]["app_role"]
           updated_at?: string
         }
@@ -284,6 +290,10 @@ export type Database = {
       }
       toggle_user_block_status: {
         Args: { user_id: string; is_blocked: boolean }
+        Returns: boolean
+      }
+      update_user_activity_status: {
+        Args: { user_id: string; is_active: boolean }
         Returns: boolean
       }
       update_user_role: {

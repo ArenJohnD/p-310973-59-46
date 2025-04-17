@@ -41,7 +41,9 @@ type User = {
   role: UserRole;
   created_at: string;
   last_sign_in_at: string | null;
+  profile_last_sign_in_at: string | null;
   is_blocked: boolean;
+  is_active: boolean;
 };
 
 export const UserManagement = () => {
@@ -98,12 +100,33 @@ export const UserManagement = () => {
             full_name: profile.full_name,
             role: profile.role as UserRole,
             created_at: profile.created_at,
-            last_sign_in_at: null, // We don't have this from profiles table
-            is_blocked: false // We don't have this from profiles table
+            last_sign_in_at: null,
+            profile_last_sign_in_at: profile.last_sign_in_at,
+            is_blocked: false,
+            is_active: profile.is_active || false
           }));
         }
       } else {
         console.log("Successfully retrieved users via RPC:", data);
+        
+        // Add profile last_sign_in and is_active data
+        const { data: profilesData, error: profilesError } = await supabase
+          .from('profiles')
+          .select('id, last_sign_in_at, is_active');
+          
+        if (!profilesError && profilesData) {
+          // Create a lookup map for profiles data
+          const profilesMap = new Map(
+            profilesData.map(profile => [profile.id, profile])
+          );
+          
+          // Augment user data with profiles data
+          data = data.map(user => ({
+            ...user,
+            profile_last_sign_in_at: profilesMap.get(user.id)?.last_sign_in_at || null,
+            is_active: profilesMap.get(user.id)?.is_active || false
+          }));
+        }
       }
       
       if (!data || data.length === 0) {
@@ -120,7 +143,9 @@ export const UserManagement = () => {
         role: user.role as UserRole,
         created_at: user.created_at,
         last_sign_in_at: user.last_sign_in_at,
-        is_blocked: user.is_blocked
+        profile_last_sign_in_at: user.profile_last_sign_in_at || null,
+        is_blocked: user.is_blocked,
+        is_active: user.is_active || false
       }));
       
       setUsers(typedUsers);
@@ -333,6 +358,17 @@ export const UserManagement = () => {
     }
   };
 
+  // Get the best available last sign-in time
+  const getLastSignInTime = (user: User) => {
+    // Prefer profile last_sign_in_at if available
+    if (user.profile_last_sign_in_at) {
+      return formatDate(user.profile_last_sign_in_at);
+    }
+    
+    // Fall back to auth last_sign_in_at
+    return formatDate(user.last_sign_in_at);
+  };
+
   if (loading) {
     return (
       <div className="flex justify-center items-center h-64">
@@ -404,17 +440,23 @@ export const UserManagement = () => {
                   <TableCell>
                     <div className="flex items-center gap-1">
                       <Clock className="h-3 w-3 text-gray-500" />
-                      {formatDate(user.last_sign_in_at)}
+                      {getLastSignInTime(user)}
                     </div>
                   </TableCell>
                   <TableCell>
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                      user.is_blocked 
-                        ? "bg-red-100 text-red-800" 
-                        : "bg-green-100 text-green-800"
-                    }`}>
-                      {user.is_blocked ? "Blocked" : "Active"}
-                    </span>
+                    {user.is_blocked ? (
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                        Blocked
+                      </span>
+                    ) : (
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                        user.is_active 
+                          ? "bg-green-100 text-green-800" 
+                          : "bg-yellow-100 text-yellow-800"
+                      }`}>
+                        {user.is_active ? "Active" : "Inactive"}
+                      </span>
+                    )}
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end items-center space-x-2">
@@ -521,6 +563,7 @@ export const UserManagement = () => {
         Note: Users with "Admin" role can access the admin dashboard and manage all content.
         Users with "User" role have normal access to the application.
         Blocked users cannot sign in to the application.
+        Active/Inactive status reflects users currently logged in.
       </p>
     </div>
   );
