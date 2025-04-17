@@ -215,23 +215,42 @@ export const UserManagement = () => {
       
       console.log(`Deleting user ${userId}`);
       
-      // Delete user using our custom RPC function
+      // First, try to delete the profile directly
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .delete()
+        .eq('id', userId);
+        
+      if (profileError) {
+        console.error("Error deleting profile:", profileError);
+        console.error("Profile error details:", JSON.stringify(profileError));
+      }
+      
+      // Then, try the delete_user RPC (which tries to delete from auth.users)
       const { error } = await supabase.rpc("delete_user", {
         user_id: userId
       });
       
       if (error) {
         console.error("Error deleting user:", error);
-        
-        // Log more details about the error
         console.error("Error details:", JSON.stringify(error));
         
-        toast({
-          title: "Error",
-          description: `Failed to delete user: ${error.message}`,
-          variant: "destructive",
-        });
-        throw error;
+        // If we still get an error, try a more direct approach
+        // This is a fallback mechanism
+        if (error.message.includes("foreign key constraint")) {
+          // Try a custom approach - delete profile first manually
+          // Note: This will only work if the user has proper permissions
+          const { error: authError } = await supabase.auth.admin.deleteUser(
+            userId
+          );
+          
+          if (authError) {
+            console.error("Error with direct auth delete:", authError);
+            throw new Error(authError.message);
+          }
+        } else {
+          throw new Error(error.message);
+        }
       }
       
       // Update local state

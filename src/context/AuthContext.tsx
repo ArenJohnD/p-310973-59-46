@@ -17,7 +17,7 @@ type AuthContextType = {
   isLoading: boolean;
   isAdmin: boolean;
   signOut: () => Promise<void>;
-  refreshAdminStatus: () => Promise<boolean>; // Changed from Promise<void> to Promise<boolean>
+  refreshAdminStatus: () => Promise<boolean>; 
 };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
