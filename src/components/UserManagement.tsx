@@ -18,8 +18,19 @@ import {
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/use-toast";
-import { Loader2 } from "lucide-react";
+import { Loader2, Trash, Ban, Clock } from "lucide-react";
 import { Database } from "@/integrations/supabase/types";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 type UserRole = Database["public"]["Enums"]["app_role"];
 
@@ -30,12 +41,15 @@ type User = {
   role: UserRole;
   created_at: string;
   last_sign_in_at: string | null;
+  is_blocked?: boolean;
 };
 
 export const UserManagement = () => {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [updatingUserId, setUpdatingUserId] = useState<string | null>(null);
+  const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
+  const [blockingUserId, setBlockingUserId] = useState<string | null>(null);
   const [fetchError, setFetchError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -100,7 +114,8 @@ export const UserManagement = () => {
       // Convert role to proper type and set users
       const typedUsers = data.map(user => ({
         ...user,
-        role: user.role as UserRole
+        role: user.role as UserRole,
+        is_blocked: user.is_blocked || false
       }));
       
       setUsers(typedUsers);
@@ -189,6 +204,89 @@ export const UserManagement = () => {
     }
   };
 
+  const handleDeleteUser = async (userId: string) => {
+    try {
+      setDeletingUserId(userId);
+      
+      console.log(`Deleting user ${userId}`);
+      
+      // Delete user using the auth.users table
+      const { error } = await supabase.rpc("delete_user", {
+        user_id: userId
+      });
+      
+      if (error) {
+        console.error("Error deleting user:", error);
+        toast({
+          title: "Error",
+          description: `Failed to delete user: ${error.message}`,
+          variant: "destructive",
+        });
+        throw error;
+      }
+      
+      // Update local state
+      setUsers(users.filter(user => user.id !== userId));
+      
+      toast({
+        title: "Success",
+        description: "User deleted successfully",
+      });
+    } catch (error) {
+      console.error("Error in handleDeleteUser:", error);
+      toast({
+        title: "Error",
+        description: "Failed to delete user",
+        variant: "destructive",
+      });
+    } finally {
+      setDeletingUserId(null);
+    }
+  };
+
+  const handleBlockUser = async (userId: string, isBlocked: boolean) => {
+    try {
+      setBlockingUserId(userId);
+      
+      console.log(`${isBlocked ? 'Blocking' : 'Unblocking'} user ${userId}`);
+      
+      // Update user blocked status using RPC
+      const { error } = await supabase.rpc("toggle_user_block_status", {
+        user_id: userId,
+        is_blocked: isBlocked
+      });
+      
+      if (error) {
+        console.error("Error updating user block status:", error);
+        toast({
+          title: "Error",
+          description: `Failed to ${isBlocked ? 'block' : 'unblock'} user: ${error.message}`,
+          variant: "destructive",
+        });
+        throw error;
+      }
+      
+      // Update local state
+      setUsers(users.map(user => 
+        user.id === userId ? { ...user, is_blocked: isBlocked } : user
+      ));
+      
+      toast({
+        title: "Success",
+        description: `User ${isBlocked ? 'blocked' : 'unblocked'} successfully`,
+      });
+    } catch (error) {
+      console.error("Error in handleBlockUser:", error);
+      toast({
+        title: "Error",
+        description: `Failed to ${isBlocked ? 'block' : 'unblock'} user`,
+        variant: "destructive",
+      });
+    } finally {
+      setBlockingUserId(null);
+    }
+  };
+
   const formatDate = (dateString: string | null) => {
     if (!dateString) return "Never";
     return new Date(dateString).toLocaleDateString() + " " + 
@@ -239,19 +337,20 @@ export const UserManagement = () => {
               <TableHead>Role</TableHead>
               <TableHead>Created At</TableHead>
               <TableHead>Last Sign In</TableHead>
+              <TableHead>Status</TableHead>
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {users.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="text-center py-6">
+                <TableCell colSpan={7} className="text-center py-6">
                   No users found
                 </TableCell>
               </TableRow>
             ) : (
               users.map((user) => (
-                <TableRow key={user.id}>
+                <TableRow key={user.id} className={user.is_blocked ? "bg-gray-100" : ""}>
                   <TableCell>{user.full_name || "N/A"}</TableCell>
                   <TableCell>{user.email}</TableCell>
                   <TableCell>
@@ -262,29 +361,114 @@ export const UserManagement = () => {
                     </span>
                   </TableCell>
                   <TableCell>{formatDate(user.created_at)}</TableCell>
-                  <TableCell>{formatDate(user.last_sign_in_at)}</TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-1">
+                      <Clock className="h-3 w-3 text-gray-500" />
+                      {formatDate(user.last_sign_in_at)}
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                      user.is_blocked 
+                        ? "bg-red-100 text-red-800" 
+                        : "bg-green-100 text-green-800"
+                    }`}>
+                      {user.is_blocked ? "Blocked" : "Active"}
+                    </span>
+                  </TableCell>
                   <TableCell className="text-right">
-                    <Select
-                      value={user.role}
-                      onValueChange={(value: string) => {
-                        // Ensure value is a valid role
-                        const roleValue = value as UserRole;
-                        handleRoleChange(user.id, roleValue);
-                      }}
-                      disabled={updatingUserId === user.id}
-                    >
-                      <SelectTrigger className="w-[100px]">
-                        {updatingUserId === user.id ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <SelectValue />
-                        )}
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="admin">Admin</SelectItem>
-                        <SelectItem value="user">User</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <div className="flex justify-end items-center space-x-2">
+                      <Select
+                        value={user.role}
+                        onValueChange={(value: string) => {
+                          // Ensure value is a valid role
+                          const roleValue = value as UserRole;
+                          handleRoleChange(user.id, roleValue);
+                        }}
+                        disabled={updatingUserId === user.id}
+                      >
+                        <SelectTrigger className="w-[100px]">
+                          {updatingUserId === user.id ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <SelectValue />
+                          )}
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="admin">Admin</SelectItem>
+                          <SelectItem value="user">User</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button 
+                            variant="outline" 
+                            size="icon" 
+                            className={`w-8 h-8 p-0 ${user.is_blocked ? "bg-green-50" : "bg-red-50"}`}
+                          >
+                            <Ban className={`h-4 w-4 ${user.is_blocked ? "text-green-600" : "text-red-600"}`} />
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>
+                              {user.is_blocked ? "Unblock User" : "Block User"}
+                            </AlertDialogTitle>
+                            <AlertDialogDescription>
+                              {user.is_blocked 
+                                ? `Are you sure you want to unblock ${user.email}? They will regain access to the system.`
+                                : `Are you sure you want to block ${user.email}? They will lose access to the system.`
+                              }
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction
+                              onClick={() => handleBlockUser(user.id, !user.is_blocked)}
+                              className={user.is_blocked ? "bg-green-600 hover:bg-green-700" : "bg-red-600 hover:bg-red-700"}
+                            >
+                              {blockingUserId === user.id ? (
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              ) : null}
+                              {user.is_blocked ? "Unblock" : "Block"}
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                      
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button 
+                            variant="outline" 
+                            size="icon" 
+                            className="w-8 h-8 p-0 bg-red-50"
+                          >
+                            <Trash className="h-4 w-4 text-red-600" />
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Delete User</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              Are you sure you want to delete {user.email}? This action cannot be undone.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction
+                              onClick={() => handleDeleteUser(user.id)}
+                              className="bg-red-600 hover:bg-red-700"
+                            >
+                              {deletingUserId === user.id ? (
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              ) : null}
+                              Delete
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))
@@ -296,6 +480,7 @@ export const UserManagement = () => {
       <p className="text-sm text-gray-500">
         Note: Users with "Admin" role can access the admin dashboard and manage all content.
         Users with "User" role have normal access to the application.
+        Blocked users cannot sign in to the application.
       </p>
     </div>
   );
