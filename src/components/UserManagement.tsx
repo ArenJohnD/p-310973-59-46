@@ -47,39 +47,72 @@ export const UserManagement = () => {
       setLoading(true);
       setFetchError(null);
       
-      console.log("Fetching users...");
-      const { data, error } = await supabase.rpc("get_all_users_with_profiles");
+      console.log("Attempting to fetch users...");
+      
+      // First try using the RPC function
+      let { data, error } = await supabase.rpc("get_all_users_with_profiles");
 
+      // If that fails, fall back to direct query
       if (error) {
-        console.error("Error fetching users:", error);
-        setFetchError(`Failed to load users: ${error.message}`);
-        toast({
-          title: "Error",
-          description: `Failed to load users: ${error.message}`,
-          variant: "destructive",
-        });
-        throw error;
+        console.error("Error with RPC method:", error);
+        console.log("Falling back to direct query...");
+        
+        // Fallback: Query profiles directly
+        const { data: profilesData, error: profilesError } = await supabase
+          .from('profiles')
+          .select('*')
+          .order('created_at', { ascending: false });
+          
+        if (profilesError) {
+          console.error("Error with fallback query:", profilesError);
+          setFetchError(`Failed to load users: ${profilesError.message}`);
+          toast({
+            title: "Error",
+            description: `Failed to load users: ${profilesError.message}`,
+            variant: "destructive",
+          });
+          throw profilesError;
+        }
+        
+        if (profilesData) {
+          console.log("Retrieved profiles via direct query:", profilesData);
+          
+          // Map the profiles data to match our User type
+          data = profilesData.map(profile => ({
+            id: profile.id,
+            email: profile.email,
+            full_name: profile.full_name,
+            role: profile.role as UserRole,
+            created_at: profile.created_at,
+            last_sign_in_at: null // We don't have this from profiles table
+          }));
+        }
+      } else {
+        console.log("Successfully retrieved users via RPC:", data);
       }
       
-      console.log("Users data received:", data);
-      
-      // Convert role to proper type
+      if (!data || data.length === 0) {
+        console.log("No users found in the database");
+        setUsers([]);
+        return;
+      }
+
+      // Convert role to proper type and set users
       const typedUsers = data.map(user => ({
         ...user,
         role: user.role as UserRole
       }));
       
       setUsers(typedUsers);
+      setFetchError(null);
     } catch (error) {
       console.error("Error in fetchUsers:", error);
-      if (!fetchError) {
-        setFetchError("Failed to load users. Please try again later.");
-        toast({
-          title: "Error",
-          description: "Failed to load users. Please try again later.",
-          variant: "destructive",
-        });
-      }
+      setFetchError("Failed to load users. Please try again later.");
+      toast({
+        title: "Error",
+        description: "Failed to load users. Please try again later.",
+        variant: "destructive",
+      });
     } finally {
       setLoading(false);
     }
@@ -90,25 +123,49 @@ export const UserManagement = () => {
       setUpdatingUserId(userId);
       
       console.log(`Updating user ${userId} to role ${newRole}`);
+      
+      // First try the RPC method
       const { data, error } = await supabase.rpc("update_user_role", {
         user_id: userId,
         new_role: newRole
       });
 
       if (error) {
-        console.error("Error updating user role:", error);
+        console.error("Error using RPC to update user role:", error);
+        
+        // Fallback: Update directly
+        console.log("Falling back to direct update...");
+        const { data: updateData, error: updateError } = await supabase
+          .from('profiles')
+          .update({ role: newRole })
+          .eq('id', userId);
+          
+        if (updateError) {
+          console.error("Error with direct update:", updateError);
+          toast({
+            title: "Error",
+            description: `Failed to update user role: ${updateError.message}`,
+            variant: "destructive",
+          });
+          throw updateError;
+        }
+        
+        // Update local state on successful direct update
+        setUsers(users.map(user => 
+          user.id === userId ? { ...user, role: newRole } : user
+        ));
+        
         toast({
-          title: "Error",
-          description: `Failed to update user role: ${error.message}`,
-          variant: "destructive",
+          title: "Success",
+          description: "User role updated successfully",
         });
-        throw error;
+        return;
       }
       
       console.log("Update role response:", data);
       
       if (data) {
-        // Update local state
+        // Update local state on successful RPC update
         setUsers(users.map(user => 
           user.id === userId ? { ...user, role: newRole } : user
         ));
