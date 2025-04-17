@@ -55,24 +55,29 @@ export const UserManagement = () => {
 
   useEffect(() => {
     fetchUsers();
+    
+    const interval = setInterval(() => {
+      fetchUsers(false);
+    }, 15000);
+    
+    return () => clearInterval(interval);
   }, []);
 
-  const fetchUsers = async () => {
+  const fetchUsers = async (showLoading = true) => {
     try {
-      setLoading(true);
+      if (showLoading) {
+        setLoading(true);
+      }
       setFetchError(null);
       
       console.log("Attempting to fetch users...");
       
-      // First try using the RPC function
       let { data, error } = await supabase.rpc("get_all_users_with_profiles");
 
-      // If that fails, fall back to direct query
       if (error) {
         console.error("Error with RPC method:", error);
         console.log("Falling back to direct query...");
         
-        // Fallback: Query profiles directly
         const { data: profilesData, error: profilesError } = await supabase
           .from('profiles')
           .select('*')
@@ -92,7 +97,6 @@ export const UserManagement = () => {
         if (profilesData) {
           console.log("Retrieved profiles via direct query:", profilesData);
           
-          // Map the profiles data to match our User type
           data = profilesData.map(profile => ({
             id: profile.id,
             email: profile.email,
@@ -115,7 +119,6 @@ export const UserManagement = () => {
         return;
       }
 
-      // Ensure data conforms to the User type
       const typedUsers = data.map(user => ({
         id: user.id,
         email: user.email,
@@ -133,13 +136,17 @@ export const UserManagement = () => {
     } catch (error) {
       console.error("Error in fetchUsers:", error);
       setFetchError("Failed to load users. Please try again later.");
-      toast({
-        title: "Error",
-        description: "Failed to load users. Please try again later.",
-        variant: "destructive",
-      });
+      if (showLoading) {
+        toast({
+          title: "Error",
+          description: "Failed to load users. Please try again later.",
+          variant: "destructive",
+        });
+      }
     } finally {
-      setLoading(false);
+      if (showLoading) {
+        setLoading(false);
+      }
     }
   };
 
@@ -149,7 +156,6 @@ export const UserManagement = () => {
       
       console.log(`Updating user ${userId} to role ${newRole}`);
       
-      // First try the RPC method
       const { data, error } = await supabase.rpc("update_user_role", {
         user_id: userId,
         new_role: newRole
@@ -158,8 +164,6 @@ export const UserManagement = () => {
       if (error) {
         console.error("Error using RPC to update user role:", error);
         
-        // Fallback: Update directly
-        console.log("Falling back to direct update...");
         const { data: updateData, error: updateError } = await supabase
           .from('profiles')
           .update({ role: newRole })
@@ -175,7 +179,6 @@ export const UserManagement = () => {
           throw updateError;
         }
         
-        // Update local state on successful direct update
         setUsers(users.map(user => 
           user.id === userId ? { ...user, role: newRole } : user
         ));
@@ -190,7 +193,6 @@ export const UserManagement = () => {
       console.log("Update role response:", data);
       
       if (data) {
-        // Update local state on successful RPC update
         setUsers(users.map(user => 
           user.id === userId ? { ...user, role: newRole } : user
         ));
@@ -220,7 +222,6 @@ export const UserManagement = () => {
       
       console.log(`Deleting user ${userId}`);
       
-      // First, try to delete the profile directly
       const { error: profileError } = await supabase
         .from('profiles')
         .delete()
@@ -231,7 +232,6 @@ export const UserManagement = () => {
         console.error("Profile error details:", JSON.stringify(profileError));
       }
       
-      // Then, try the delete_user RPC (which tries to delete from auth.users)
       const { error } = await supabase.rpc("delete_user", {
         user_id: userId
       });
@@ -240,11 +240,7 @@ export const UserManagement = () => {
         console.error("Error deleting user:", error);
         console.error("Error details:", JSON.stringify(error));
         
-        // If we still get an error, try a more direct approach
-        // This is a fallback mechanism
         if (error.message.includes("foreign key constraint")) {
-          // Try a custom approach - delete profile first manually
-          // Note: This will only work if the user has proper permissions
           const { error: authError } = await supabase.auth.admin.deleteUser(
             userId
           );
@@ -258,7 +254,6 @@ export const UserManagement = () => {
         }
       }
       
-      // Update local state
       setUsers(users.filter(user => user.id !== userId));
       
       toast({
@@ -283,7 +278,6 @@ export const UserManagement = () => {
       
       console.log(`${isBlocked ? 'Blocking' : 'Unblocking'} user ${userId}`);
       
-      // Update user blocked status using RPC
       const { error } = await supabase.rpc("toggle_user_block_status", {
         user_id: userId,
         is_blocked: isBlocked
@@ -299,7 +293,6 @@ export const UserManagement = () => {
         throw error;
       }
       
-      // Update local state
       setUsers(users.map(user => 
         user.id === userId ? { ...user, is_blocked: isBlocked } : user
       ));
@@ -324,7 +317,6 @@ export const UserManagement = () => {
     if (!dateString) return "Never";
     
     try {
-      // Check if the date is valid
       const date = new Date(dateString);
       if (isNaN(date.getTime())) {
         console.error("Invalid date format:", dateString);
@@ -338,14 +330,11 @@ export const UserManagement = () => {
     }
   };
 
-  // Get the best available last sign-in time
   const getLastSignInTime = (user: User) => {
-    // Prefer profile last_sign_in_at if available
     if (user.profile_last_sign_in_at) {
       return formatDate(user.profile_last_sign_in_at);
     }
     
-    // Fall back to auth last_sign_in_at
     return formatDate(user.last_sign_in_at);
   };
 
@@ -443,7 +432,6 @@ export const UserManagement = () => {
                       <Select
                         value={user.role}
                         onValueChange={(value: string) => {
-                          // Ensure value is a valid role
                           const roleValue = value as UserRole;
                           handleRoleChange(user.id, roleValue);
                         }}

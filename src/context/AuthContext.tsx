@@ -76,9 +76,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const updateUserActivityStatus = async (userId: string | undefined, isActive: boolean) => {
     if (!userId) return;
     
+    console.log(`Setting user ${userId} activity status to ${isActive ? 'active' : 'inactive'}`);
+    
     try {
-      console.log(`Setting user ${userId} activity status to ${isActive ? 'active' : 'inactive'}`);
-      
       const { error } = await supabase.rpc("update_user_activity_status", {
         user_id: userId,
         is_active: isActive
@@ -114,10 +114,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     window.addEventListener('beforeunload', handleBeforeUnload);
     document.addEventListener('visibilitychange', handleVisibilityChange);
     
+    const pingInterval = setInterval(() => {
+      if (user && document.visibilityState === 'visible') {
+        updateUserActivityStatus(user.id, true);
+      }
+    }, 60000);
+    
     return () => {
       updateUserActivityStatus(user?.id, false);
       window.removeEventListener('beforeunload', handleBeforeUnload);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
+      clearInterval(pingInterval);
     };
   }, [user]);
 
