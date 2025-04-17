@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -38,7 +37,7 @@ type User = {
   id: string;
   email: string;
   full_name: string | null;
-  role: UserRole;
+  role: Database["public"]["Enums"]["app_role"];
   created_at: string;
   last_sign_in_at: string | null;
   profile_last_sign_in_at: string | null;
@@ -67,66 +66,10 @@ export const UserManagement = () => {
       
       // First try using the RPC function
       let { data, error } = await supabase.rpc("get_all_users_with_profiles");
-
-      // If that fails, fall back to direct query
+      
       if (error) {
         console.error("Error with RPC method:", error);
-        console.log("Falling back to direct query...");
-        
-        // Fallback: Query profiles directly
-        const { data: profilesData, error: profilesError } = await supabase
-          .from('profiles')
-          .select('*')
-          .order('created_at', { ascending: false });
-          
-        if (profilesError) {
-          console.error("Error with fallback query:", profilesError);
-          setFetchError(`Failed to load users: ${profilesError.message}`);
-          toast({
-            title: "Error",
-            description: `Failed to load users: ${profilesError.message}`,
-            variant: "destructive",
-          });
-          throw profilesError;
-        }
-        
-        if (profilesData) {
-          console.log("Retrieved profiles via direct query:", profilesData);
-          
-          // Map the profiles data to match our User type
-          data = profilesData.map(profile => ({
-            id: profile.id,
-            email: profile.email,
-            full_name: profile.full_name,
-            role: profile.role as UserRole,
-            created_at: profile.created_at,
-            last_sign_in_at: null,
-            profile_last_sign_in_at: profile.last_sign_in_at,
-            is_blocked: false,
-            is_active: profile.is_active
-          }));
-        }
-      } else {
-        console.log("Successfully retrieved users via RPC:", data);
-        
-        // Add profile last_sign_in and is_active data
-        const { data: profilesData, error: profilesError } = await supabase
-          .from('profiles')
-          .select('id, last_sign_in_at, is_active');
-          
-        if (!profilesError && profilesData) {
-          // Create a lookup map for profiles data
-          const profilesMap = new Map(
-            profilesData.map(profile => [profile.id, profile])
-          );
-          
-          // Augment user data with profiles data
-          data = data.map(user => ({
-            ...user,
-            profile_last_sign_in_at: profilesMap.get(user.id)?.last_sign_in_at || null,
-            is_active: profilesMap.get(user.id)?.is_active || false
-          }));
-        }
+        throw error;
       }
       
       if (!data || data.length === 0) {
@@ -134,18 +77,18 @@ export const UserManagement = () => {
         setUsers([]);
         return;
       }
-
+      
       // Ensure data conforms to the User type
       const typedUsers = data.map(user => ({
         id: user.id,
         email: user.email,
         full_name: user.full_name,
-        role: user.role as UserRole,
+        role: user.role as Database["public"]["Enums"]["app_role"],
         created_at: user.created_at,
         last_sign_in_at: user.last_sign_in_at,
-        profile_last_sign_in_at: user.profile_last_sign_in_at || null,
+        profile_last_sign_in_at: user.profile_last_sign_in_at,
         is_blocked: user.is_blocked,
-        is_active: user.is_active !== undefined ? user.is_active : false
+        is_active: user.is_active
       }));
       
       setUsers(typedUsers);
