@@ -43,7 +43,7 @@ type User = {
   last_sign_in_at: string | null;
   profile_last_sign_in_at: string | null;
   is_blocked: boolean;
-  is_active: boolean;
+  is_active: boolean | null;
 };
 
 export const UserManagement = () => {
@@ -103,7 +103,7 @@ export const UserManagement = () => {
             last_sign_in_at: null,
             profile_last_sign_in_at: profile.last_sign_in_at,
             is_blocked: false,
-            is_active: profile.is_active || false
+            is_active: profile.is_active
           }));
         }
       } else {
@@ -145,7 +145,7 @@ export const UserManagement = () => {
         last_sign_in_at: user.last_sign_in_at,
         profile_last_sign_in_at: user.profile_last_sign_in_at || null,
         is_blocked: user.is_blocked,
-        is_active: user.is_active || false
+        is_active: user.is_active !== undefined ? user.is_active : false
       }));
       
       setUsers(typedUsers);
