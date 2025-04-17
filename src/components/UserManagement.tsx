@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -303,6 +304,7 @@ export const UserManagement = () => {
         throw error;
       }
       
+      // Update the local state with the new blocked status
       setUsers(users.map(user => 
         user.id === userId ? { ...user, is_blocked: isBlocked } : user
       ));
