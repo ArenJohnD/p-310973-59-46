@@ -56,11 +56,21 @@ export const UserManagement = () => {
   useEffect(() => {
     fetchUsers();
     
+    const channel = supabase.channel('user-presence')
+      .on('presence', { event: 'sync' }, () => {
+        console.log('Presence sync event received, refreshing users');
+        fetchUsers(false);
+      })
+      .subscribe();
+    
     const interval = setInterval(() => {
       fetchUsers(false);
     }, 3000);
     
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(interval);
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   const fetchUsers = async (showLoading = true) => {
@@ -536,7 +546,7 @@ export const UserManagement = () => {
         Note: Users with "Admin" role can access the admin dashboard and manage all content.
         Users with "User" role have normal access to the application.
         Blocked users cannot sign in to the application.
-        Active/Inactive status refreshes every 3 seconds to show users currently logged in.
+        Active status is maintained while users are signed in and using the application.
       </p>
     </div>
   );

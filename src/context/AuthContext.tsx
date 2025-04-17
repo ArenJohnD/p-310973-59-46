@@ -1,3 +1,4 @@
+
 import { 
   createContext, 
   useContext, 
@@ -73,21 +74,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return await checkAdminStatus(user);
   };
 
+  // This function now includes a longer inactivity_timeout
   const updateUserActivityStatus = async (userId: string | undefined, isActive: boolean) => {
     if (!userId) return;
     
     console.log(`Setting user ${userId} activity status to ${isActive ? 'active' : 'inactive'}`);
     
     try {
-      const { error } = await supabase.rpc("update_user_activity_status", {
+      // Adding inactivity_timeout parameter (5 minutes = 300 seconds)
+      const { error } = await supabase.rpc("update_user_activity_status_with_timeout", {
         user_id: userId,
-        is_active: isActive
+        is_active: isActive,
+        inactivity_timeout: 300 // 5 minutes timeout
       });
       
       if (error) {
         console.error("Error updating activity status:", error);
+        // Fallback to the original function if the new one isn't available
+        const { error: fallbackError } = await supabase.rpc("update_user_activity_status", {
+          user_id: userId,
+          is_active: isActive
+        });
+        
+        if (fallbackError) {
+          console.error("Error with fallback activity update:", fallbackError);
+        } else {
+          console.log("Successfully updated user activity status via fallback");
+        }
       } else {
-        console.log("Successfully updated user activity status");
+        console.log("Successfully updated user activity status with timeout");
       }
     } catch (error) {
       console.error("Exception in updateUserActivityStatus:", error);
@@ -99,7 +114,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     
     console.log("Setting up activity tracking for user:", user.id);
     
+    // Set initial active status
     updateUserActivityStatus(user.id, true);
+    
+    // Track activity based on user interactions
+    const handleUserActivity = () => {
+      if (document.visibilityState === 'visible') {
+        updateUserActivityStatus(user.id, true);
+      }
+    };
     
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'hidden') {
@@ -116,19 +139,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       updateUserActivityStatus(user.id, false);
     };
     
+    // Send regular pings while the page is visible
     const pingInterval = setInterval(() => {
       if (user && document.visibilityState === 'visible') {
         console.log("Sending activity ping");
         updateUserActivityStatus(user.id, true);
       }
-    }, 20000);
+    }, 60000); // Ping every minute instead of 20 seconds
     
+    // Monitor user interactions to maintain active status
+    document.addEventListener('mousemove', handleUserActivity);
+    document.addEventListener('keydown', handleUserActivity);
+    document.addEventListener('click', handleUserActivity);
     document.addEventListener('visibilitychange', handleVisibilityChange);
     window.addEventListener('beforeunload', handleBeforeUnload);
     
     return () => {
       console.log("Cleaning up activity tracking");
       updateUserActivityStatus(user?.id, false);
+      document.removeEventListener('mousemove', handleUserActivity);
+      document.removeEventListener('keydown', handleUserActivity);
+      document.removeEventListener('click', handleUserActivity);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('beforeunload', handleBeforeUnload);
       clearInterval(pingInterval);
