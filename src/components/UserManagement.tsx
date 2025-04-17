@@ -41,7 +41,7 @@ type User = {
   role: UserRole;
   created_at: string;
   last_sign_in_at: string | null;
-  is_blocked?: boolean;
+  is_blocked: boolean;
 };
 
 export const UserManagement = () => {
@@ -98,7 +98,8 @@ export const UserManagement = () => {
             full_name: profile.full_name,
             role: profile.role as UserRole,
             created_at: profile.created_at,
-            last_sign_in_at: null // We don't have this from profiles table
+            last_sign_in_at: null, // We don't have this from profiles table
+            is_blocked: false // We don't have this from profiles table
           }));
         }
       } else {
@@ -111,11 +112,15 @@ export const UserManagement = () => {
         return;
       }
 
-      // Convert role to proper type and set users
+      // Ensure data conforms to the User type
       const typedUsers = data.map(user => ({
-        ...user,
+        id: user.id,
+        email: user.email,
+        full_name: user.full_name,
         role: user.role as UserRole,
-        is_blocked: user.is_blocked || false
+        created_at: user.created_at,
+        last_sign_in_at: user.last_sign_in_at,
+        is_blocked: user.is_blocked
       }));
       
       setUsers(typedUsers);
@@ -210,13 +215,17 @@ export const UserManagement = () => {
       
       console.log(`Deleting user ${userId}`);
       
-      // Delete user using the auth.users table
+      // Delete user using our custom RPC function
       const { error } = await supabase.rpc("delete_user", {
         user_id: userId
       });
       
       if (error) {
         console.error("Error deleting user:", error);
+        
+        // Log more details about the error
+        console.error("Error details:", JSON.stringify(error));
+        
         toast({
           title: "Error",
           description: `Failed to delete user: ${error.message}`,
@@ -232,11 +241,11 @@ export const UserManagement = () => {
         title: "Success",
         description: "User deleted successfully",
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error in handleDeleteUser:", error);
       toast({
         title: "Error",
-        description: "Failed to delete user",
+        description: `Failed to delete user: ${error.message || "Unknown error"}`,
         variant: "destructive",
       });
     } finally {
@@ -289,8 +298,20 @@ export const UserManagement = () => {
 
   const formatDate = (dateString: string | null) => {
     if (!dateString) return "Never";
-    return new Date(dateString).toLocaleDateString() + " " + 
-           new Date(dateString).toLocaleTimeString();
+    
+    try {
+      // Check if the date is valid
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) {
+        console.error("Invalid date format:", dateString);
+        return "Invalid date";
+      }
+      
+      return date.toLocaleDateString() + " " + date.toLocaleTimeString();
+    } catch (error) {
+      console.error("Error formatting date:", error);
+      return "Date error";
+    }
   };
 
   if (loading) {
