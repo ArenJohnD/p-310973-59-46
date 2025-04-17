@@ -58,7 +58,7 @@ export const UserManagement = () => {
     
     const interval = setInterval(() => {
       fetchUsers(false);
-    }, 15000);
+    }, 3000);
     
     return () => clearInterval(interval);
   }, []);
@@ -338,6 +338,11 @@ export const UserManagement = () => {
     return formatDate(user.last_sign_in_at);
   };
 
+  const handleRefreshClick = (event: React.MouseEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    fetchUsers(true);
+  };
+
   if (loading) {
     return (
       <div className="flex justify-center items-center h-64">
@@ -351,7 +356,7 @@ export const UserManagement = () => {
       <div className="space-y-6">
         <div className="flex justify-between items-center">
           <h2 className="text-2xl font-bold">User Management</h2>
-          <Button onClick={fetchUsers} variant="outline" size="sm">
+          <Button onClick={handleRefreshClick} variant="outline" size="sm">
             Retry
           </Button>
         </div>
@@ -368,7 +373,7 @@ export const UserManagement = () => {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <h2 className="text-2xl font-bold">User Management</h2>
-        <Button onClick={fetchUsers} variant="outline" size="sm">
+        <Button onClick={handleRefreshClick} variant="outline" size="sm">
           Refresh
         </Button>
       </div>
@@ -531,7 +536,7 @@ export const UserManagement = () => {
         Note: Users with "Admin" role can access the admin dashboard and manage all content.
         Users with "User" role have normal access to the application.
         Blocked users cannot sign in to the application.
-        Active/Inactive status reflects users currently logged in.
+        Active/Inactive status refreshes every 3 seconds to show users currently logged in.
       </p>
     </div>
   );

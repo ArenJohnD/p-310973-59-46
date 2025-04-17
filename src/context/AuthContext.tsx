@@ -97,33 +97,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!user) return;
     
-    const handleBeforeUnload = () => {
-      updateUserActivityStatus(user.id, false);
-    };
-    
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'hidden') {
-        updateUserActivityStatus(user.id, false);
-      } else if (document.visibilityState === 'visible' && user) {
-        updateUserActivityStatus(user.id, true);
-      }
-    };
+    console.log("Setting up activity tracking for user:", user.id);
     
     updateUserActivityStatus(user.id, true);
     
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    document.addEventListener('visibilitychange', handleVisibilityChange);
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        console.log("Page hidden, marking user as inactive");
+        updateUserActivityStatus(user.id, false);
+      } else if (document.visibilityState === 'visible') {
+        console.log("Page visible, marking user as active");
+        updateUserActivityStatus(user.id, true);
+      }
+    };
+    
+    const handleBeforeUnload = () => {
+      console.log("Page unloading, marking user as inactive");
+      updateUserActivityStatus(user.id, false);
+    };
     
     const pingInterval = setInterval(() => {
       if (user && document.visibilityState === 'visible') {
+        console.log("Sending activity ping");
         updateUserActivityStatus(user.id, true);
       }
-    }, 60000);
+    }, 20000);
+    
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('beforeunload', handleBeforeUnload);
     
     return () => {
+      console.log("Cleaning up activity tracking");
       updateUserActivityStatus(user?.id, false);
-      window.removeEventListener('beforeunload', handleBeforeUnload);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('beforeunload', handleBeforeUnload);
       clearInterval(pingInterval);
     };
   }, [user]);
@@ -184,6 +191,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (currentSession) {
           setSession(currentSession);
           setUser(currentSession.user);
+          
+          updateUserActivityStatus(currentSession.user.id, true);
           
           setTimeout(() => {
             if (isActive) {
