@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -108,25 +107,6 @@ export const UserManagement = () => {
         }
       } else {
         console.log("Successfully retrieved users via RPC:", data);
-        
-        // Add profile last_sign_in and is_active data
-        const { data: profilesData, error: profilesError } = await supabase
-          .from('profiles')
-          .select('id, last_sign_in_at, is_active');
-          
-        if (!profilesError && profilesData) {
-          // Create a lookup map for profiles data
-          const profilesMap = new Map(
-            profilesData.map(profile => [profile.id, profile])
-          );
-          
-          // Augment user data with profiles data
-          data = data.map(user => ({
-            ...user,
-            profile_last_sign_in_at: profilesMap.get(user.id)?.last_sign_in_at || null,
-            is_active: profilesMap.get(user.id)?.is_active || false
-          }));
-        }
       }
       
       if (!data || data.length === 0) {
@@ -143,9 +123,9 @@ export const UserManagement = () => {
         role: user.role as UserRole,
         created_at: user.created_at,
         last_sign_in_at: user.last_sign_in_at,
-        profile_last_sign_in_at: user.profile_last_sign_in_at || null,
+        profile_last_sign_in_at: user.profile_last_sign_in_at,
         is_blocked: user.is_blocked,
-        is_active: user.is_active !== undefined ? user.is_active : false
+        is_active: user.is_active
       }));
       
       setUsers(typedUsers);
@@ -388,7 +368,7 @@ export const UserManagement = () => {
         </div>
         
         <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative" role="alert">
-          <strong className="font-bold">Error: </strong>
+          <strong className="font-bold">Error: </strong> 
           <span className="block sm:inline">{fetchError}</span>
         </div>
       </div>

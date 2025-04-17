@@ -274,6 +274,8 @@ export type Database = {
           created_at: string
           last_sign_in_at: string
           is_blocked: boolean
+          profile_last_sign_in_at: string
+          is_active: boolean
         }[]
       }
       has_role: {
