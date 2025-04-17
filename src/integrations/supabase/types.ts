@@ -254,6 +254,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      delete_user: {
+        Args: { user_id: string }
+        Returns: undefined
+      }
       get_all_users_with_profiles: {
         Args: Record<PropertyKey, never>
         Returns: {
@@ -263,6 +267,7 @@ export type Database = {
           role: string
           created_at: string
           last_sign_in_at: string
+          is_blocked: boolean
         }[]
       }
       has_role: {
@@ -276,6 +281,10 @@ export type Database = {
       set_user_as_admin: {
         Args: { _email: string }
         Returns: undefined
+      }
+      toggle_user_block_status: {
+        Args: { user_id: string; is_blocked: boolean }
+        Returns: boolean
       }
       update_user_role: {
         Args: {
