@@ -33,7 +33,7 @@ export function PolicyStatistics() {
     console.log("Current date range:", dateRange);
   }, [timeframe, dateRange]);
 
-  // Subscribe to real-time updates for policy_view_stats
+  // Subscribe to real-time updates for policy_views
   useEffect(() => {
     const channel = supabase
       .channel('policy_stats_changes')
@@ -41,12 +41,16 @@ export function PolicyStatistics() {
         { 
           event: 'INSERT', 
           schema: 'public', 
-          table: 'policy_view_stats'
+          table: 'policy_views'
         },
         (payload) => {
           console.log('New policy view detected:', payload);
           // Trigger a refresh of the query
           setRefreshTrigger(prev => prev + 1);
+          toast({
+            title: "Statistics Updated",
+            description: "A new policy view has been recorded",
+          });
         })
       .subscribe();
 
@@ -83,7 +87,38 @@ export function PolicyStatistics() {
     setTimeframe(newTimeframe);
   };
 
-  const { data: viewStats, isLoading, error, refetch } = useQuery({
+  // Get all categories first
+  const { data: allCategories, isLoading: isCategoriesLoading } = useQuery({
+    queryKey: ['allPolicyCategories'],
+    queryFn: async () => {
+      try {
+        const { data, error } = await supabase
+          .from('policy_categories')
+          .select('*')
+          .order('display_order', { ascending: true });
+
+        if (error) {
+          console.error("Error fetching categories:", error);
+          throw error;
+        }
+        
+        console.log("All categories:", data);
+        return data || [];
+      } catch (error) {
+        console.error('Error fetching all policy categories:', error);
+        toast({
+          title: "Error",
+          description: "Failed to load policy categories",
+          variant: "destructive",
+        });
+        throw error;
+      }
+    },
+    refetchOnWindowFocus: false
+  });
+
+  // Get view statistics
+  const { data: viewStats, isLoading: isStatsLoading, error, refetch } = useQuery({
     queryKey: ['policyViewStats', dateRange?.from, dateRange?.to, refreshTrigger],
     queryFn: async () => {
       try {
@@ -105,7 +140,7 @@ export function PolicyStatistics() {
         console.log("Querying with date range:", fromDate, "to", toDate);
 
         const { data, error } = await supabase
-          .from('policy_view_stats')
+          .from('policy_views')
           .select(`
             category_id,
             viewed_at,
@@ -120,39 +155,8 @@ export function PolicyStatistics() {
           throw error;
         }
 
-        console.log("Raw data from Supabase:", data);
-
-        // Process the data to aggregate views by category
-        if (!data || data.length === 0) {
-          console.log("No view stats found in the selected date range");
-          return [];
-        }
-
-        const categoryCounts = data.reduce((acc: any, view: any) => {
-          const categoryId = view.category_id;
-          if (!acc[categoryId]) {
-            acc[categoryId] = {
-              categoryId,
-              title: view.policy_categories?.title || 'Unknown Category',
-              viewCount: 0,
-              uniqueViewers: new Set(),
-              dates: new Set(),
-            };
-          }
-          acc[categoryId].viewCount++;
-          acc[categoryId].uniqueViewers.add(view.viewer_id);
-          acc[categoryId].dates.add(format(new Date(view.viewed_at), 'yyyy-MM-dd'));
-          return acc;
-        }, {});
-
-        const processedData = Object.values(categoryCounts).map((category: any) => ({
-          ...category,
-          uniqueViewers: category.uniqueViewers.size,
-          dates: Array.from(category.dates).sort(),
-        }));
-        
-        console.log("Processed stats data:", processedData);
-        return processedData;
+        console.log("Raw view data from Supabase:", data);
+        return data || [];
       } catch (error) {
         console.error('Error fetching policy view stats:', error);
         toast({
@@ -160,13 +164,54 @@ export function PolicyStatistics() {
           description: "Failed to load policy statistics",
           variant: "destructive",
         });
-        throw error; // Re-throw to let React Query handle it
+        throw error;
       }
     },
     enabled: !!dateRange?.from && !!dateRange?.to,
     refetchOnWindowFocus: false,
     retry: 1,
   });
+
+  // Process statistics and combine with all categories
+  const processedStats = React.useMemo(() => {
+    if (!allCategories) return [];
+    
+    // Create a map with all categories first (including those with 0 views)
+    const statsByCategory = allCategories.reduce((acc: any, category: any) => {
+      acc[category.id] = {
+        categoryId: category.id,
+        title: category.title,
+        viewCount: 0,
+        uniqueViewers: new Set(),
+        dates: new Set(),
+      };
+      return acc;
+    }, {});
+    
+    // Then add view data where available
+    if (viewStats && viewStats.length > 0) {
+      viewStats.forEach((view: any) => {
+        const categoryId = view.category_id;
+        if (statsByCategory[categoryId]) {
+          statsByCategory[categoryId].viewCount++;
+          statsByCategory[categoryId].uniqueViewers.add(view.viewer_id);
+          statsByCategory[categoryId].dates.add(format(new Date(view.viewed_at), 'yyyy-MM-dd'));
+        }
+      });
+    }
+    
+    // Convert to array and process for display
+    return Object.values(statsByCategory).map((category: any) => ({
+      ...category,
+      uniqueViewers: category.uniqueViewers.size,
+      dates: Array.from(category.dates).sort(),
+      lastViewed: category.dates.size > 0 
+        ? Array.from(category.dates).sort().pop() 
+        : null
+    }));
+  }, [allCategories, viewStats]);
+
+  const isLoading = isCategoriesLoading || isStatsLoading;
 
   if (error) {
     console.error("React Query error:", error);
@@ -253,9 +298,9 @@ export function PolicyStatistics() {
           <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-gray-800 mb-2"></div>
           <p>Loading statistics...</p>
         </div>
-      ) : viewStats && viewStats.length > 0 ? (
+      ) : processedStats.length > 0 ? (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {viewStats.map((stat: any) => (
+          {processedStats.map((stat: any) => (
             <Card key={stat.categoryId} className="overflow-hidden">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">
@@ -268,9 +313,11 @@ export function PolicyStatistics() {
                 <p className="text-xs text-muted-foreground">
                   {stat.uniqueViewers} unique viewers
                 </p>
-                <div className="mt-2 text-xs text-muted-foreground">
-                  Last viewed: {stat.dates[stat.dates.length - 1]}
-                </div>
+                {stat.lastViewed && (
+                  <div className="mt-2 text-xs text-muted-foreground">
+                    Last viewed: {stat.lastViewed}
+                  </div>
+                )}
               </CardContent>
             </Card>
           ))}

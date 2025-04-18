@@ -2,9 +2,8 @@
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { ArrowRight } from "lucide-react";
 import { Link } from "react-router-dom";
-import { useEffect, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/context/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
 
 interface PolicyCardProps {
   title: string;
@@ -13,27 +12,25 @@ interface PolicyCardProps {
 
 export const PolicyCard = ({ title, id }: PolicyCardProps) => {
   const { user } = useAuth();
-  const [viewTracked, setViewTracked] = useState(false);
 
   const trackCategoryView = async () => {
     try {
-      if (!user || viewTracked) return;
+      if (!user) return;
 
       console.log("Tracking view for policy category:", id);
       
       const { error } = await supabase
-        .from('policy_view_stats')
+        .from('policy_views')
         .insert({
           category_id: id,
+          policy_id: id, // Using the same ID for both as we don't have a specific document yet
           viewer_id: user.id,
-          viewed_at: new Date().toISOString(),
         });
 
       if (error) {
         console.error("Error tracking category view:", error);
       } else {
         console.log("Category view tracked successfully");
-        setViewTracked(true);
       }
     } catch (error) {
       console.error("Failed to track category view:", error);
