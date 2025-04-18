@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { PolicyCard } from "./PolicyCard";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/components/ui/use-toast";
+import { useAuth } from "@/context/AuthContext";
 
 interface PolicyCategory {
   id: string;
@@ -14,6 +15,7 @@ interface PolicyCategory {
 }
 
 export const PolicyGrid = () => {
+  const { user } = useAuth();
   const [categories, setCategories] = useState<PolicyCategory[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -51,6 +53,48 @@ export const PolicyGrid = () => {
     fetchCategories();
   }, []);
 
+  // Function to track category views
+  const trackCategoryView = async (categoryId: string) => {
+    try {
+      console.log("Tracking view for category:", categoryId);
+      
+      // Only track if user is logged in
+      if (!user) {
+        console.log("User not logged in, view not tracked");
+        return;
+      }
+      
+      const { error } = await supabase
+        .from('policy_view_stats')
+        .insert({
+          category_id: categoryId,
+          viewer_id: user.id,
+          viewed_at: new Date().toISOString(),
+        });
+
+      if (error) {
+        console.error("Error tracking category view:", error);
+      } else {
+        console.log("Category view tracked successfully");
+      }
+    } catch (error) {
+      console.error("Failed to track category view:", error);
+    }
+  };
+
+  // Wrap PolicyCard with click handler to track views
+  const PolicyCardWithTracking = ({ title, id }: { title: string, id: string }) => {
+    const handleClick = () => {
+      trackCategoryView(id);
+    };
+
+    return (
+      <div onClick={handleClick}>
+        <PolicyCard title={title} id={id} />
+      </div>
+    );
+  };
+
   return (
     <section className="mt-14">
       <h2 className="text-black text-[25px] font-semibold mb-5">
@@ -65,7 +109,7 @@ export const PolicyGrid = () => {
         ) : categories.length > 0 ? (
           <div className="grid grid-cols-3 gap-8 max-md:grid-cols-1">
             {categories.map((category) => (
-              <PolicyCard key={category.id} title={category.title} id={category.id} />
+              <PolicyCardWithTracking key={category.id} title={category.title} id={category.id} />
             ))}
           </div>
         ) : (

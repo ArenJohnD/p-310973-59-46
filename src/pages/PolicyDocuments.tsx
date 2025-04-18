@@ -23,7 +23,7 @@ interface PolicyDocument {
 const PolicyDocuments = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { isAdmin, refreshAdminStatus } = useAuth();
+  const { isAdmin, refreshAdminStatus, user } = useAuth();
   const [category, setCategory] = useState<PolicyCategory | null>(null);
   const [document, setDocument] = useState<PolicyDocument | null>(null);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
@@ -33,6 +33,35 @@ const PolicyDocuments = () => {
     refreshAdminStatus();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Track view when the page loads
+  useEffect(() => {
+    const trackPolicyView = async () => {
+      if (id && user?.id) {
+        try {
+          console.log("Tracking policy view for category:", id);
+          
+          const { error } = await supabase
+            .from('policy_view_stats')
+            .insert({
+              category_id: id,
+              viewer_id: user.id,
+              viewed_at: new Date().toISOString(),
+            });
+
+          if (error) {
+            console.error("Error tracking policy view:", error);
+          } else {
+            console.log("Policy view tracked successfully");
+          }
+        } catch (error) {
+          console.error("Failed to track policy view:", error);
+        }
+      }
+    };
+    
+    trackPolicyView();
+  }, [id, user?.id]);
 
   useEffect(() => {
     const fetchData = async () => {

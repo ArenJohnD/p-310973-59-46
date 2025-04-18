@@ -1,5 +1,6 @@
-
-import { useNavigate } from "react-router-dom";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { ArrowRight } from "lucide-react";
+import { Link } from "react-router-dom";
 
 interface PolicyCardProps {
   title: string;
@@ -7,16 +8,22 @@ interface PolicyCardProps {
 }
 
 export const PolicyCard = ({ title, id }: PolicyCardProps) => {
-  const navigate = useNavigate();
-  
   return (
-    <div className="w-full">
-      <button
-        className="policy-card-button bg-[rgba(49,159,67,1)] shadow-[0px_4px_4px_rgba(0,0,0,0.25)] w-full h-[180px] text-[22px] text-white font-semibold text-center px-5 py-6 rounded-[20px] transition-transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
-        onClick={() => navigate(`/policy-viewer/${id}`)}
-      >
-        <span className="line-clamp-3">{title}</span>
-      </button>
-    </div>
+    <Card className="bg-white border-black shadow-sm hover:shadow-md transition-shadow duration-300">
+      <CardHeader>
+        <CardTitle className="text-black text-xl font-semibold">{title}</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <CardDescription className="text-gray-600">
+          Explore the policies and guidelines under this category.
+        </CardDescription>
+      </CardContent>
+      <CardFooter className="justify-end">
+        <Link to={`/policy/${id}`} className="flex items-center text-[rgba(49,159,67,1)] hover:text-[rgba(39,139,57,1)] font-medium transition-colors duration-200">
+          View Documents
+          <ArrowRight className="ml-2 h-4 w-4" />
+        </Link>
+      </CardFooter>
+    </Card>
   );
 };
