@@ -20,9 +20,10 @@ import { DatePickerWithRange } from "./DatePickerWithRange";
 export function PolicyStatistics() {
   console.log("PolicyStatistics component rendering");
   
+  const today = new Date();
   const [dateRange, setDateRange] = useState<DateRange | undefined>({
-    from: new Date(),
-    to: new Date(),
+    from: today,
+    to: today,
   });
   const [timeframe, setTimeframe] = useState<string>("today");
 

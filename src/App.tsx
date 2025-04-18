@@ -1,3 +1,4 @@
+
 import {
   BrowserRouter,
   Routes,
@@ -10,6 +11,10 @@ import { Suspense, lazy, useEffect } from "react";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { Toaster } from "@/components/ui/toaster";
 import { Loader2 } from "lucide-react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+
+// Create a client
+const queryClient = new QueryClient();
 
 // Lazy load pages for better performance
 const Index = lazy(() => import("@/pages/Index"));
@@ -155,10 +160,12 @@ function AppContent() {
 function App() {
   return (
     <BrowserRouter>
-      <AuthProvider>
-        <AppContent />
-        <Toaster />
-      </AuthProvider>
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>
+          <AppContent />
+          <Toaster />
+        </AuthProvider>
+      </QueryClientProvider>
     </BrowserRouter>
   );
 }
