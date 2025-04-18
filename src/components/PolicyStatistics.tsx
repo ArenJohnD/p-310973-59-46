@@ -59,7 +59,7 @@ export function PolicyStatistics() {
     setTimeframe(newTimeframe);
   };
 
-  const { data: viewStats, isLoading, error } = useQuery({
+  const { data: viewStats, isLoading, error, refetch } = useQuery({
     queryKey: ['policyViewStats', dateRange?.from, dateRange?.to],
     queryFn: async () => {
       try {
@@ -74,6 +74,12 @@ export function PolicyStatistics() {
           return [];
         }
 
+        // Format dates for SQL query - include beginning of from date and end of to date
+        const fromDate = format(dateRange.from, 'yyyy-MM-dd');
+        const toDate = format(addDays(dateRange.to, 1), 'yyyy-MM-dd');
+
+        console.log("Querying with date range:", fromDate, "to", toDate);
+
         const { data, error } = await supabase
           .from('policy_view_stats')
           .select(`
@@ -82,8 +88,8 @@ export function PolicyStatistics() {
             viewer_id,
             policy_categories(title)
           `)
-          .gte('viewed_at', format(dateRange.from, 'yyyy-MM-dd'))
-          .lte('viewed_at', format(addDays(dateRange.to, 1), 'yyyy-MM-dd'));
+          .gte('viewed_at', fromDate)
+          .lt('viewed_at', toDate);
 
         if (error) {
           console.error("Supabase query error:", error);
@@ -93,6 +99,11 @@ export function PolicyStatistics() {
         console.log("Raw data from Supabase:", data);
 
         // Process the data to aggregate views by category
+        if (!data || data.length === 0) {
+          console.log("No view stats found in the selected date range");
+          return [];
+        }
+
         const categoryCounts = data.reduce((acc: any, view: any) => {
           const categoryId = view.category_id;
           if (!acc[categoryId]) {
@@ -129,6 +140,7 @@ export function PolicyStatistics() {
       }
     },
     enabled: !!dateRange?.from && !!dateRange?.to,
+    refetchOnWindowFocus: false,
     retry: 1,
   });
 
@@ -155,6 +167,14 @@ export function PolicyStatistics() {
           {timeframe === 'custom' && (
             <DatePickerWithRange date={dateRange} onSelect={setDateRange} />
           )}
+          
+          <Button 
+            onClick={() => refetch()}
+            variant="outline"
+            size="sm"
+          >
+            Refresh Data
+          </Button>
         </div>
         
         <div className="bg-red-50 border border-red-200 text-red-700 p-4 rounded-md">
@@ -163,9 +183,9 @@ export function PolicyStatistics() {
           <Button 
             variant="outline" 
             className="mt-2"
-            onClick={() => window.location.reload()}
+            onClick={() => refetch()}
           >
-            Reload Page
+            Retry
           </Button>
         </div>
       </div>
@@ -193,6 +213,15 @@ export function PolicyStatistics() {
         {timeframe === 'custom' && (
           <DatePickerWithRange date={dateRange} onSelect={setDateRange} />
         )}
+        
+        <Button 
+          onClick={() => refetch()}
+          variant="outline"
+          size="sm"
+          className="ml-auto"
+        >
+          Refresh Data
+        </Button>
       </div>
 
       {isLoading ? (
@@ -227,8 +256,15 @@ export function PolicyStatistics() {
           <Calendar className="h-10 w-10 text-gray-400 mx-auto mb-2" />
           <h3 className="text-lg font-medium text-gray-700">No Data Available</h3>
           <p className="text-gray-500 max-w-md mx-auto mt-1">
-            There are no policy views recorded for this time period. Try selecting a different date range.
+            There are no policy views recorded for this time period. Try selecting a different date range or refresh the data.
           </p>
+          <Button 
+            variant="outline" 
+            className="mt-4"
+            onClick={() => refetch()}
+          >
+            Refresh Data
+          </Button>
         </div>
       )}
     </div>

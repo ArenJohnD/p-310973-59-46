@@ -28,6 +28,7 @@ const PolicyDocuments = () => {
   const [document, setDocument] = useState<PolicyDocument | null>(null);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [viewTracked, setViewTracked] = useState(false);
 
   useEffect(() => {
     refreshAdminStatus();
@@ -37,7 +38,7 @@ const PolicyDocuments = () => {
   // Track view when the page loads
   useEffect(() => {
     const trackPolicyView = async () => {
-      if (id && user?.id) {
+      if (id && user?.id && !viewTracked) {
         try {
           console.log("Tracking policy view for category:", id);
           
@@ -53,15 +54,18 @@ const PolicyDocuments = () => {
             console.error("Error tracking policy view:", error);
           } else {
             console.log("Policy view tracked successfully");
+            setViewTracked(true);
           }
         } catch (error) {
           console.error("Failed to track policy view:", error);
         }
+      } else {
+        console.log("View not tracked: missing id, user, or already tracked", { id, userId: user?.id, viewTracked });
       }
     };
     
     trackPolicyView();
-  }, [id, user?.id]);
+  }, [id, user?.id, viewTracked]);
 
   useEffect(() => {
     const fetchData = async () => {
