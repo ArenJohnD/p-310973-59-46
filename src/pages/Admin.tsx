@@ -223,11 +223,31 @@ const Admin = () => {
         </section>
 
         <Tabs defaultValue="categories" className="mb-8">
-          <TabsList className="grid w-full max-w-md mx-auto grid-cols-4">
-            <TabsTrigger value="categories">Categories</TabsTrigger>
-            <TabsTrigger value="references">AI Reference Documents</TabsTrigger>
-            <TabsTrigger value="users">User Management</TabsTrigger>
-            <TabsTrigger value="statistics">Statistics</TabsTrigger>
+          <TabsList className="grid w-full grid-cols-4 max-w-full mx-auto space-x-2 p-1 bg-muted rounded-md">
+            <TabsTrigger 
+              value="categories" 
+              className="flex-1 whitespace-nowrap overflow-hidden text-ellipsis"
+            >
+              Categories
+            </TabsTrigger>
+            <TabsTrigger 
+              value="references" 
+              className="flex-1 whitespace-nowrap overflow-hidden text-ellipsis"
+            >
+              AI Reference
+            </TabsTrigger>
+            <TabsTrigger 
+              value="users" 
+              className="flex-1 whitespace-nowrap overflow-hidden text-ellipsis"
+            >
+              Users
+            </TabsTrigger>
+            <TabsTrigger 
+              value="statistics" 
+              className="flex-1 whitespace-nowrap overflow-hidden text-ellipsis"
+            >
+              Statistics
+            </TabsTrigger>
           </TabsList>
           <TabsContent value="categories" className="mt-6">
             <AdminCategoryTable 
