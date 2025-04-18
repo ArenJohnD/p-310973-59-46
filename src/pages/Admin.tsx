@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/components/ui/use-toast";
@@ -6,6 +5,7 @@ import { Header } from "@/components/Header";
 import { AdminCategoryTable } from "@/components/AdminCategoryTable";
 import { ReferenceDocumentManager } from "@/components/ReferenceDocumentManager";
 import { UserManagement } from "@/components/UserManagement";
+import { PolicyStatistics } from "@/components/PolicyStatistics";
 import { useAuth } from "@/context/AuthContext";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
@@ -24,7 +24,6 @@ const Admin = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Only fetch categories if user is admin
     if (isAdmin && !isLoading) {
       fetchCategories();
     } else if (!isLoading && !isAdmin) {
@@ -72,7 +71,6 @@ const Admin = () => {
         description: "Category updated successfully",
       });
       
-      // Update local state
       setCategories(categories.map(c => 
         c.id === category.id ? { ...c, ...category } : c
       ));
@@ -100,7 +98,6 @@ const Admin = () => {
         description: "Category deleted successfully",
       });
       
-      // Update local state
       setCategories(categories.filter(c => c.id !== id));
     } catch (error) {
       console.error("Error deleting category:", error);
@@ -114,7 +111,6 @@ const Admin = () => {
 
   const handleCategoryCreate = async (title: string) => {
     try {
-      // Get the highest display_order
       const maxOrder = categories.length > 0 
         ? Math.max(...categories.map(c => c.display_order))
         : 0;
@@ -134,7 +130,6 @@ const Admin = () => {
         description: "New category created successfully",
       });
       
-      // Update local state
       if (data && data.length > 0) {
         setCategories([...categories, data[0] as PolicyCategory]);
       }
@@ -150,17 +145,14 @@ const Admin = () => {
 
   const handleReorderCategories = async (reorderedCategories: PolicyCategory[]) => {
     try {
-      // Update local state immediately for responsive UI
       setCategories(reorderedCategories);
       
-      // Prepare batch updates with new display_order values
       const updates = reorderedCategories.map((category, index) => ({
         id: category.id,
         display_order: index + 1,
         updated_at: new Date().toISOString(),
       }));
       
-      // Use Promise.all to update all categories in parallel
       await Promise.all(
         updates.map(update => 
           supabase
@@ -181,7 +173,6 @@ const Admin = () => {
         description: "Failed to reorder categories",
         variant: "destructive",
       });
-      // Revert to the original order by refetching
       fetchCategories();
     }
   };
@@ -227,15 +218,16 @@ const Admin = () => {
             Admin Dashboard
           </h1>
           <p className="text-black text-xl mt-2">
-            Manage Policy Categories, AI Reference Documents & Users
+            Manage Policy Categories, AI Reference Documents, Users & View Statistics
           </p>
         </section>
 
         <Tabs defaultValue="categories" className="mb-8">
-          <TabsList className="grid w-full max-w-md mx-auto grid-cols-3">
+          <TabsList className="grid w-full max-w-md mx-auto grid-cols-4">
             <TabsTrigger value="categories">Categories</TabsTrigger>
             <TabsTrigger value="references">AI Reference Documents</TabsTrigger>
             <TabsTrigger value="users">User Management</TabsTrigger>
+            <TabsTrigger value="statistics">Statistics</TabsTrigger>
           </TabsList>
           <TabsContent value="categories" className="mt-6">
             <AdminCategoryTable 
@@ -251,6 +243,9 @@ const Admin = () => {
           </TabsContent>
           <TabsContent value="users" className="mt-6">
             <UserManagement />
+          </TabsContent>
+          <TabsContent value="statistics" className="mt-6">
+            <PolicyStatistics />
           </TabsContent>
         </Tabs>
       </main>
