@@ -189,6 +189,38 @@ export type Database = {
           },
         ]
       }
+      policy_views: {
+        Row: {
+          category_id: string
+          id: string
+          policy_id: string
+          viewed_at: string
+          viewer_id: string | null
+        }
+        Insert: {
+          category_id: string
+          id?: string
+          policy_id: string
+          viewed_at?: string
+          viewer_id?: string | null
+        }
+        Update: {
+          category_id?: string
+          id?: string
+          policy_id?: string
+          viewed_at?: string
+          viewer_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "policy_views_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "policy_categories"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           created_at: string
@@ -229,6 +261,7 @@ export type Database = {
           file_path: string
           file_size: number
           id: string
+          is_blocked: boolean | null
           mime_type: string
           updated_at: string
           uploaded_by: string
@@ -239,6 +272,7 @@ export type Database = {
           file_path: string
           file_size: number
           id?: string
+          is_blocked?: boolean | null
           mime_type: string
           updated_at?: string
           uploaded_by: string
@@ -249,6 +283,7 @@ export type Database = {
           file_path?: string
           file_size?: number
           id?: string
+          is_blocked?: boolean | null
           mime_type?: string
           updated_at?: string
           uploaded_by?: string
@@ -257,7 +292,32 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      policy_view_stats: {
+        Row: {
+          category_id: string | null
+          viewed_at: string | null
+          viewer_id: string | null
+        }
+        Insert: {
+          category_id?: string | null
+          viewed_at?: string | null
+          viewer_id?: string | null
+        }
+        Update: {
+          category_id?: string | null
+          viewed_at?: string | null
+          viewer_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "policy_views_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "policy_categories"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       delete_user: {
