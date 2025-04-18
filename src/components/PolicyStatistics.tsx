@@ -26,11 +26,35 @@ export function PolicyStatistics() {
     to: today,
   });
   const [timeframe, setTimeframe] = useState<string>("today");
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   useEffect(() => {
     console.log("Current timeframe:", timeframe);
     console.log("Current date range:", dateRange);
   }, [timeframe, dateRange]);
+
+  // Subscribe to real-time updates for policy_view_stats
+  useEffect(() => {
+    const channel = supabase
+      .channel('policy_stats_changes')
+      .on('postgres_changes', 
+        { 
+          event: 'INSERT', 
+          schema: 'public', 
+          table: 'policy_view_stats'
+        },
+        (payload) => {
+          console.log('New policy view detected:', payload);
+          // Trigger a refresh of the query
+          setRefreshTrigger(prev => prev + 1);
+        })
+      .subscribe();
+
+    return () => {
+      // Clean up subscription when component unmounts
+      supabase.removeChannel(channel);
+    };
+  }, []);
 
   const updateDateRange = (newTimeframe: string) => {
     console.log("Updating timeframe to:", newTimeframe);
@@ -60,7 +84,7 @@ export function PolicyStatistics() {
   };
 
   const { data: viewStats, isLoading, error, refetch } = useQuery({
-    queryKey: ['policyViewStats', dateRange?.from, dateRange?.to],
+    queryKey: ['policyViewStats', dateRange?.from, dateRange?.to, refreshTrigger],
     queryFn: async () => {
       try {
         console.log("Fetching policy stats for date range:", 
