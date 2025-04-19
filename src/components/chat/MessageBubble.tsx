@@ -5,6 +5,8 @@ import { Message, Citation } from '@/types/chat';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { ExternalLink } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from '@/components/ui/use-toast';
 
 interface MessageBubbleProps {
   message: Message;
@@ -14,6 +16,7 @@ interface MessageBubbleProps {
 
 export const MessageBubble = ({ message, citations = [], onCitationClick }: MessageBubbleProps) => {
   const [selectedCitation, setSelectedCitation] = useState<Citation | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
   
   const handleLinkClick = (href: string) => {
     if (href.startsWith('citation-')) {
@@ -29,6 +32,52 @@ export const MessageBubble = ({ message, citations = [], onCitationClick }: Mess
       return true; // Prevent default link behavior
     }
     return false; // Use default link behavior
+  };
+  
+  const handleViewDocument = async () => {
+    if (!selectedCitation || !selectedCitation.documentId) return;
+    
+    try {
+      setIsLoading(true);
+      
+      // Get the file path from reference_documents table
+      const { data: documentData, error: documentError } = await supabase
+        .from('reference_documents')
+        .select('file_path, file_name')
+        .eq('id', selectedCitation.documentId)
+        .single();
+        
+      if (documentError) throw documentError;
+      
+      if (documentData) {
+        // Get a signed URL for the document
+        const { data: fileData, error: fileError } = await supabase.storage
+          .from('policy_documents')
+          .createSignedUrl(documentData.file_path, 3600);
+          
+        if (fileError) throw fileError;
+        
+        if (fileData?.signedUrl) {
+          // Open the document in a new tab
+          window.open(fileData.signedUrl, '_blank');
+          // Close the dialog
+          setSelectedCitation(null);
+        } else {
+          throw new Error("Couldn't generate URL for the document");
+        }
+      } else {
+        throw new Error("Document not found");
+      }
+    } catch (error) {
+      console.error("Error opening document:", error);
+      toast({
+        title: "Error",
+        description: "Failed to open the document. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -93,20 +142,19 @@ export const MessageBubble = ({ message, citations = [], onCitationClick }: Mess
               <DialogTitle>{selectedCitation.reference}</DialogTitle>
             </DialogHeader>
             <div className="mt-2">
-              {selectedCitation.documentId && selectedCitation.position ? (
+              {selectedCitation.documentId ? (
                 <div className="flex flex-col gap-2">
                   <p>This citation can be found in:</p>
                   <p className="font-semibold">{selectedCitation.fileName || "Policy Document"}</p>
-                  <p>Page: {selectedCitation.position.startPage}</p>
+                  {selectedCitation.position && (
+                    <p>Page: {selectedCitation.position.startPage}</p>
+                  )}
                   
                   <Button 
-                    onClick={() => {
-                      if (selectedCitation.documentId && selectedCitation.position) {
-                        window.open(`/policy-viewer/${selectedCitation.documentId}?page=${selectedCitation.position.startPage}&highlight=true`, '_blank');
-                      }
-                    }}
+                    onClick={handleViewDocument}
+                    disabled={isLoading}
                   >
-                    View in Document <ExternalLink className="ml-2 h-4 w-4" />
+                    {isLoading ? "Loading..." : "View Document"} <ExternalLink className="ml-2 h-4 w-4" />
                   </Button>
                 </div>
               ) : (
