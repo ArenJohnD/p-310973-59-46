@@ -18,7 +18,7 @@ serve(async (req) => {
   }
 
   try {
-    const { query, context } = await req.json();
+    const { query, context, documentInfo } = await req.json();
     
     if (!query) {
       return new Response(
@@ -30,7 +30,7 @@ serve(async (req) => {
       );
     }
 
-    // Updated system prompt with enhanced accuracy instructions
+    // Updated system prompt with citation instructions
     let systemPrompt;
     
     if (context && context.trim().length > 0) {
@@ -42,18 +42,18 @@ serve(async (req) => {
       3. Keep your responses PRECISE and FACTUAL. Prioritize accuracy over brevity.
       4. Directly quote from the policy document whenever possible to ensure accuracy.
       5. You MUST ALWAYS cite the EXACT article number and section number for every policy you reference.
-      6. ALWAYS format policy references as follows and place them at the END of your response:
-         - For articles: **Article X: Title**
-         - For sections: **Section Y.Z: Title**
-      7. Do not fabricate information if it's not in the context.
-      8. If multiple relevant policies exist, mention ALL of them with their citations.
-      9. If a policy seems contradictory or unclear, acknowledge this and present the actual text from the document.
+      6. Format citations as [Article X: Title] or [Section Y.Z: Title] at the end of each relevant statement.
+      7. For direct quotes, use markdown format: "> quoted text" followed by the citation.
+      8. ALWAYS place citations in a consistent format: [Article/Section reference](source-id) where source-id will be replaced with a unique identifier.
+      9. Do not fabricate information if it's not in the context.
+      10. If multiple relevant policies exist, mention ALL of them with their proper citations.
+      11. If a policy seems contradictory or unclear, acknowledge this and present the actual text from the document.
       
       Base your response directly and EXCLUSIVELY on the following context from university policy documents:
 
       ${context}
       
-      First provide a factual explanation of the policy using direct quotes where helpful, then cite the specific article and section numbers at the end of your response.
+      First provide a factual explanation of the policy using direct quotes where helpful, then cite the specific article and section numbers using the format described above.
       If the context doesn't address the query directly, briefly state this and suggest where to find more information.`;
     } else {
       systemPrompt = `You are NEUPoliSeek, an AI assistant specialized in New Era University policies and procedures. 
@@ -107,9 +107,13 @@ serve(async (req) => {
     const generatedText = responseData.choices[0].message.content;
     console.log("Generated response successfully");
     
+    // Process citations from the response
+    const processedText = processTextWithCitations(generatedText, documentInfo);
+    
     // Return the answer with markdown formatting preserved
     const result = {
-      answer: generatedText
+      answer: processedText.text,
+      citations: processedText.citations
     };
     
     return new Response(
@@ -129,3 +133,51 @@ serve(async (req) => {
     );
   }
 });
+
+// Process text to extract structured citations
+function processTextWithCitations(text: string, documentInfo: any = {}) {
+  // Regular expression to match citations in the format [Article X: Title] or [Section Y.Z: Title]
+  const citationRegex = /\[(Article|Section)\s+([^:]+):\s*([^\]]+)\]/g;
+  
+  let citations = [];
+  let processedText = text;
+  let lastIndex = 0;
+  let match;
+  
+  // Replace citations with hyperlinks
+  while ((match = citationRegex.exec(text)) !== null) {
+    const fullMatch = match[0];
+    const type = match[1];
+    const number = match[2];
+    const title = match[3];
+    
+    // Create a unique ID for this citation
+    const citationId = `citation-${citations.length}`;
+    
+    // Find document info if available
+    let docInfo = null;
+    if (documentInfo && documentInfo[`${type.toLowerCase()} ${number}`]) {
+      docInfo = documentInfo[`${type.toLowerCase()} ${number}`];
+    }
+    
+    // Create citation object
+    const citation = {
+      id: citationId,
+      reference: `${type} ${number}: ${title}`,
+      documentId: docInfo?.documentId || undefined,
+      position: docInfo?.position || undefined,
+      fileName: docInfo?.fileName || undefined
+    };
+    
+    citations.push(citation);
+    
+    // Replace citation with linked version
+    const replacement = `[${fullMatch}](${citationId})`;
+    processedText = processedText.replace(fullMatch, replacement);
+  }
+  
+  return {
+    text: processedText,
+    citations
+  };
+}

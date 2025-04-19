@@ -28,7 +28,43 @@ export const extractTextFromPDF = async (pdfUrl: string): Promise<string> => {
   }
 };
 
-export const extractDocumentSections = (text: string): DocumentSection[] => {
+export const extractPageContentWithPositions = async (pdfUrl: string, pageNumber: number): Promise<{text: string, positions: any[]}> => {
+  try {
+    const loadingTask = pdfjsLib.getDocument(pdfUrl);
+    const pdf = await loadingTask.promise;
+    
+    if (pageNumber < 1 || pageNumber > pdf.numPages) {
+      throw new Error(`Page ${pageNumber} out of range (1-${pdf.numPages})`);
+    }
+    
+    const page = await pdf.getPage(pageNumber);
+    const textContent = await page.getTextContent();
+    
+    // Extract text with position information
+    const textItems = textContent.items
+      .filter((item: any) => 'str' in item)
+      .map((item: any) => ({
+        text: item.str,
+        x: item.transform[4], // x position
+        y: item.transform[5], // y position
+        width: item.width,
+        height: item.height,
+        fontName: item.fontName
+      }));
+    
+    const pageText = textItems.map(item => item.text).join(' ');
+    
+    return {
+      text: pageText,
+      positions: textItems
+    };
+  } catch (error) {
+    console.error(`Error extracting text from PDF page ${pageNumber}:`, error);
+    throw new Error(`PDF page extraction failed: ${error}`);
+  }
+};
+
+export const extractDocumentSections = (text: string, documentId?: string, fileName?: string): DocumentSection[] => {
   const sections: DocumentSection[] = [];
   
   const articleRegex = /(?:ARTICLE|Article)\s+([IVX\d]+)(?:\s*[-:]\s*|\s+)(.*?)(?=\n|$)/gi;
@@ -62,7 +98,13 @@ export const extractDocumentSections = (text: string): DocumentSection[] => {
         title: `Article ${currentArticle}: ${currentArticleTitle}`,
         content: articleContent,
         pageNumber,
-        articleNumber: currentArticle
+        articleNumber: currentArticle,
+        position: {
+          startPage: pageNumber,
+          startOffset: articleMatch.index
+        },
+        documentId,
+        fileName
       });
     }
     
@@ -90,7 +132,15 @@ export const extractDocumentSections = (text: string): DocumentSection[] => {
         content,
         pageNumber,
         articleNumber: currentArticle,
-        sectionId
+        sectionId,
+        position: {
+          startPage: pageNumber,
+          startOffset: startIndex,
+          endPage: pageNumber,
+          endOffset: endIndex
+        },
+        documentId,
+        fileName
       });
     }
     
@@ -173,4 +223,54 @@ export const extractDocumentSections = (text: string): DocumentSection[] => {
   
   console.log(`Extracted ${sections.length} sections from document`);
   return sections;
+};
+
+export const findTextPositionInPage = async (pdfUrl: string, pageNumber: number, searchText: string): Promise<{found: boolean, position?: any}> => {
+  try {
+    const { text, positions } = await extractPageContentWithPositions(pdfUrl, pageNumber);
+    
+    // Simple text search
+    const index = text.indexOf(searchText);
+    if (index === -1) {
+      return { found: false };
+    }
+    
+    // Find the position of this text
+    let currentIndex = 0;
+    let startItem = null;
+    let endItem = null;
+    
+    for (let i = 0; i < positions.length; i++) {
+      const item = positions[i];
+      if (currentIndex <= index && currentIndex + item.text.length > index) {
+        startItem = item;
+      }
+      
+      if (currentIndex <= index + searchText.length && 
+          currentIndex + item.text.length >= index + searchText.length) {
+        endItem = item;
+        break;
+      }
+      
+      currentIndex += item.text.length + 1; // +1 for the space
+    }
+    
+    if (startItem && endItem) {
+      return {
+        found: true,
+        position: {
+          startX: startItem.x,
+          startY: startItem.y,
+          endX: endItem.x + endItem.width,
+          endY: endItem.y,
+          page: pageNumber
+        }
+      };
+    }
+    
+    return { found: false };
+  } catch (error) {
+    console.error("Error finding text position:", error);
+    return { found: false };
+  }
 };

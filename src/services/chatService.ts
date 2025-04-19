@@ -263,6 +263,7 @@ export const findRelevantInformation = async (query: string, referenceDocuments:
 
   try {
     const allSections: DocumentSection[] = [];
+    const documentInfo = {};
     
     for (const doc of referenceDocuments) {
       try {
@@ -282,8 +283,28 @@ export const findRelevantInformation = async (query: string, referenceDocuments:
         const text = await extractTextFromPDF(fileData.signedUrl);
         console.log(`Extracted text length: ${text.length} characters from ${doc.file_name}`);
         
-        // Extract sections from the text
-        const sections = extractDocumentSections(text);
+        // Extract sections with position info
+        const sections = extractDocumentSections(text, doc.id, doc.file_name);
+        
+        // Add sections to document info for citation references
+        sections.forEach(section => {
+          if (section.articleNumber) {
+            documentInfo[`article ${section.articleNumber}`] = {
+              documentId: doc.id,
+              position: section.position,
+              fileName: doc.file_name
+            };
+          }
+          
+          if (section.sectionId) {
+            documentInfo[`section ${section.sectionId}`] = {
+              documentId: doc.id,
+              position: section.position,
+              fileName: doc.file_name
+            };
+          }
+        });
+        
         allSections.push(...sections);
         console.log(`Extracted ${sections.length} sections from ${doc.file_name}`);
       } catch (err) {
@@ -311,7 +332,7 @@ export const findRelevantInformation = async (query: string, referenceDocuments:
       
       try {
         const { data, error } = await supabase.functions.invoke('mistral-chat', {
-          body: { query, context }
+          body: { query, context, documentInfo }
         });
 
         if (error) throw new Error(error.message);
@@ -332,7 +353,7 @@ export const findRelevantInformation = async (query: string, referenceDocuments:
         
       try {
         const { data, error } = await supabase.functions.invoke('mistral-chat', {
-          body: { query, context: generalContext }
+          body: { query, context: generalContext, documentInfo }
         });
 
         if (error) throw new Error(error.message);

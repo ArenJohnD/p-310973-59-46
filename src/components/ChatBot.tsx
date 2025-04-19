@@ -1,4 +1,3 @@
-
 import { useState, useRef, useEffect } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -9,7 +8,7 @@ import { toast } from "@/components/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { GlobalWorkerOptions } from 'pdfjs-dist';
 import * as pdfjsLib from 'pdfjs-dist';
-import { Message, ReferenceDocument, ChatSession } from "@/types/chat";
+import { Message, ReferenceDocument, ChatSession, Citation, DocumentSection } from "@/types/chat";
 import { 
   fetchChatSessions, 
   loadChatMessages, 
@@ -61,8 +60,8 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
   const [hasNewMessages, setHasNewMessages] = useState(false);
   const [isUserScrolled, setIsUserScrolled] = useState(false);
   const [showSkeletonMessages, setShowSkeletonMessages] = useState(false);
-  
-  // Change from useState to useRef for the visibility change timeout
+  const [citations, setCitations] = useState<Record<string, Citation[]>>({});
+
   const visibilityChangeTimeout = useRef<number | null>(null);
 
   const scrollAreaRef = useRef<HTMLDivElement>(null);
@@ -314,55 +313,157 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
     }
   };
 
-  const handleCreateNewSession = async (showLoading = true) => {
-    if (!user) return;
+  const findRelevantInformationWithCitations = async (query: string, referenceDocuments: ReferenceDocument[]): Promise<{ text: string, citations: Citation[] }> => {
+    console.log("Finding relevant information for query:", query);
+    console.log("Reference documents available:", referenceDocuments.length);
     
-    try {
-      if (showLoading) {
-        setIsLoading(true);
-      }
-      setCreatingNewSession(true);
-      
-      const newSession = await createNewSession(user.id);
-      
-      if (newSession) {
-        setChatSessions(prev => [newSession, ...prev.map(s => ({ ...s, is_active: false }))]);
-        setCurrentSessionId(newSession.id);
+    if (referenceDocuments.length === 0) {
+      try {
+        console.log("No reference documents found, using Mistral API directly");
+        const { data, error } = await supabase.functions.invoke('mistral-chat', {
+          body: { query, context: "" }
+        });
+
+        if (error) throw new Error(error.message);
         
-        setPendingSession(newSession.id);
-        
-        setMessages([welcomeMessage]);
-        scrollToBottom();
-      }
-    } catch (error) {
-      console.error("Error creating new session:", error);
-      toast({
-        title: "Error",
-        description: "Failed to create new chat session.",
-        variant: "destructive",
-      });
-      
-      setMessages([welcomeMessage]);
-    } finally {
-      if (showLoading) {
-        setIsLoading(false);
-      }
-      setCreatingNewSession(false);
-      if (isMobile) {
-        setSidebarOpen(false);
+        return { 
+          text: data.answer,
+          citations: data.citations || []
+        };
+      } catch (err) {
+        console.error("Error calling Mistral API:", err);
+        return { 
+          text: "I'm sorry, I encountered an error while processing your question. Please try again later.",
+          citations: []
+        };
       }
     }
-  };
 
-  const handleSessionLoaded = async (sessionId: string) => {
-    await loadChatMessagesFromServer(sessionId, true);
-    setIsUserScrolled(false);
-    scrollToBottom();
-  };
-  
-  const handleLastSessionDeleted = () => {
-    setCurrentSessionId(null);
-    setMessages([welcomeMessage]);
+    try {
+      const allSections: DocumentSection[] = [];
+      const documentInfo = {};
+      
+      for (const doc of referenceDocuments) {
+        try {
+          console.log(`Processing document: ${doc.file_name}`);
+          
+          // Get a signed URL for the document
+          const { data: fileData } = await supabase.storage
+            .from('policy_documents')
+            .createSignedUrl(doc.file_path, 3600);
+            
+          if (!fileData?.signedUrl) {
+            console.error(`Could not get signed URL for ${doc.file_path}`);
+            continue;
+          }
+          
+          // Extract text from the PDF
+          const text = await extractTextFromPDF(fileData.signedUrl);
+          console.log(`Extracted text length: ${text.length} characters from ${doc.file_name}`);
+          
+          // Extract sections from the text with position information
+          const sections = extractDocumentSections(text, doc.id, doc.file_name);
+          
+          // Add sections to document info for citation references
+          sections.forEach(section => {
+            if (section.articleNumber) {
+              documentInfo[`article ${section.articleNumber}`] = {
+                documentId: doc.id,
+                position: section.position,
+                fileName: doc.file_name
+              };
+            }
+            
+            if (section.sectionId) {
+              documentInfo[`section ${section.sectionId}`] = {
+                documentId: doc.id,
+                position: section.position,
+                fileName: doc.file_name
+              };
+            }
+          });
+          
+          allSections.push(...sections);
+          console.log(`Extracted ${sections.length} sections from ${doc.file_name}`);
+        } catch (err) {
+          console.error(`Error processing document ${doc.file_name}:`, err);
+        }
+      }
+      
+      console.log(`Total sections available: ${allSections.length}`);
+      
+      if (allSections.length === 0) {
+        return {
+          text: "I don't have any information from policy documents yet. Please upload some documents so I can provide more accurate responses.",
+          citations: []
+        };
+      }
+      
+      const bestMatches = findBestMatch(query, allSections);
+      
+      if (bestMatches.length > 0) {
+        console.log(`Found ${bestMatches.length} relevant sections`);
+        
+        const context = bestMatches
+          .map(match => `${match.title}\n${match.content}`)
+          .join('\n\n');
+        
+        console.log("Context length: ", context.length);
+        console.log("Sending query to Mistral with context");
+        
+        try {
+          const { data, error } = await supabase.functions.invoke('mistral-chat', {
+            body: { query, context, documentInfo }
+          });
+
+          if (error) throw new Error(error.message);
+          
+          return { 
+            text: data.answer,
+            citations: data.citations || [] 
+          };
+        } catch (err) {
+          console.error("Error calling Mistral API with context:", err);
+          
+          return { 
+            text: `Based on the policy documents, here's what I found:\n\n${bestMatches[0].content}`,
+            citations: []
+          };
+        }
+      } else {
+        console.log("No specific matches found. Using general context");
+        
+        const generalContext = allSections
+          .slice(0, 5)
+          .map(section => `${section.title}\n${section.content}`)
+          .join('\n\n');
+          
+        try {
+          const { data, error } = await supabase.functions.invoke('mistral-chat', {
+            body: { query, context: generalContext, documentInfo }
+          });
+
+          if (error) throw new Error(error.message);
+          
+          return { 
+            text: data.answer,
+            citations: data.citations || []
+          };
+        } catch (err) {
+          console.error("Error calling Mistral API with general context:", err);
+          return {
+            text: "I couldn't find specific information about this in the policy documents. Please check the university handbook or ask an administrator.",
+            citations: []
+          };
+        }
+      }
+    } catch (error) {
+      console.error("Error searching reference documents:", error);
+      return {
+        text: "I encountered an error while searching the policy documents. Please try again later.",
+        citations: []
+      };
+    }
   };
 
   const handleSendMessage = async (inputText: string) => {
@@ -421,13 +522,21 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
     try {
       await saveMessage(sessionId, userMessage.text, "user");
       
-      const botResponse = await findRelevantInformation(inputText, referenceDocuments);
+      const response = await findRelevantInformationWithCitations(inputText, referenceDocuments);
+      
+      // Store citations for this message
+      if (response.citations && response.citations.length > 0) {
+        setCitations(prev => ({
+          ...prev,
+          [sessionId]: response.citations
+        }));
+      }
       
       const currentMessages = await loadChatMessages(sessionId);
       const userMessages = currentMessages.filter(m => m.sender === "user");
       
       if (userMessages.length <= 1) {
-        const title = await generateChatTitle(inputText, botResponse);
+        const title = await generateChatTitle(inputText, response.text);
         await updateSessionTitle(sessionId, title);
         setChatSessions(prev => 
           prev.map(session => 
@@ -442,7 +551,7 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
       
       const botMessage: Message = {
         id: (Date.now() + 1).toString(),
-        text: botResponse,
+        text: response.text,
         sender: "bot",
         timestamp: new Date()
       };
@@ -450,7 +559,7 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
       setShowTypingMessage(false);
       setMessages(prev => [...prev, botMessage]);
       
-      await saveMessage(sessionId, botResponse, "bot");
+      await saveMessage(sessionId, response.text, "bot");
     } catch (error) {
       console.error("Error generating response:", error);
       toast({
@@ -471,6 +580,12 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
       setMessages(prev => [...prev, errorMessage]);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleCitationClick = (citation: Citation) => {
+    if (citation.documentId && citation.position) {
+      window.open(`/policy-viewer/${citation.documentId}?page=${citation.position.startPage}&highlight=true`, '_blank');
     }
   };
 
@@ -568,7 +683,12 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
                 )}
                 
                 {!loadingHistory && messages.map((message) => (
-                  <MessageBubble key={message.id} message={message} />
+                  <MessageBubble 
+                    key={message.id} 
+                    message={message} 
+                    citations={currentSessionId ? citations[currentSessionId] : []}
+                    onCitationClick={handleCitationClick}
+                  />
                 ))}
                 
                 {showSkeletonMessages && (

@@ -29,4 +29,24 @@ export interface DocumentSection {
   pageNumber: number;
   articleNumber?: string;
   sectionId?: string;
+  position?: {
+    startPage: number;
+    startOffset?: number;
+    endPage?: number;
+    endOffset?: number;
+  };
+  documentId?: string;
+  fileName?: string;
+}
+
+export interface Citation {
+  reference: string;
+  documentId?: string;
+  position?: {
+    startPage: number;
+    startOffset?: number;
+    endPage?: number;
+    endOffset?: number;
+  };
+  fileName?: string;
 }
