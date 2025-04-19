@@ -1,3 +1,4 @@
+
 import { useState, useRef, useEffect } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -20,6 +21,8 @@ import {
   saveMessage,
   updateSessionTitle
 } from "@/services/chatService";
+import { extractTextFromPDF, extractDocumentSections } from "@/utils/pdfUtils";
+import { findBestMatch } from "@/utils/searchUtils";
 import { ChatSidebar } from "./chat/ChatSidebar";
 import { MobileChatSidebar } from "./chat/MobileChatSidebar";
 import { MessageBubble } from "./chat/MessageBubble";
