@@ -589,6 +589,47 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
     }
   };
 
+  const handleSessionLoaded = async (sessionId: string) => {
+    await loadChatMessagesFromServer(sessionId, true);
+  };
+
+  const handleCreateNewSession = async () => {
+    if (!user) return;
+    
+    try {
+      setCreatingNewSession(true);
+      
+      const newSession = await createNewSession(user.id);
+      
+      if (newSession) {
+        setCurrentSessionId(newSession.id);
+        setChatSessions(prev => [newSession, ...prev.map(s => ({ ...s, is_active: false }))]);
+        setMessages([welcomeMessage]);
+        setPendingSession(newSession.id);
+      } else {
+        toast({
+          title: "Error",
+          description: "Failed to create chat session. Please log in and try again.",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error("Error creating new session:", error);
+      toast({
+        title: "Error",
+        description: "Failed to create new chat session.",
+        variant: "destructive",
+      });
+    } finally {
+      setCreatingNewSession(false);
+    }
+  };
+
+  const handleLastSessionDeleted = () => {
+    setCurrentSessionId(null);
+    setMessages([welcomeMessage]);
+  };
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {

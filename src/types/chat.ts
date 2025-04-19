@@ -40,6 +40,7 @@ export interface DocumentSection {
 }
 
 export interface Citation {
+  id: string;
   reference: string;
   documentId?: string;
   position?: {

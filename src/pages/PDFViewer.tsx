@@ -1,273 +1,260 @@
+import { useState, useEffect, useRef } from 'react';
+import { useParams, useSearchParams } from 'react-router-dom';
+import { Document, Page, pdfjs } from 'react-pdf';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Skeleton } from '@/components/ui/skeleton';
+import { ChevronLeft, ChevronRight, Search, ZoomIn, ZoomOut } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
+import { findTextPositionInPage } from '@/utils/pdfUtils';
+import 'react-pdf/dist/esm/Page/AnnotationLayer.css';
+import 'react-pdf/dist/esm/Page/TextLayer.css';
 
-import { useEffect, useState, useRef } from "react";
-import { useParams, useNavigate, useSearchParams } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
-import { Header } from "@/components/Header";
-import { Button } from "@/components/ui/button";
-import { toast } from "@/components/ui/use-toast";
-import { ArrowLeft, Loader2, FileText, MessageSquare, Search } from "lucide-react";
-import { useAuth } from "@/context/AuthContext";
-import { ChatBot } from "@/components/ChatBot";
-import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
-import { findTextPositionInPage } from "@/utils/pdfUtils";
+// Set the worker source for PDF.js
+pdfjs.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.js`;
 
-interface PolicyCategory {
-  title: string;
-}
-
-interface PolicyDocument {
-  id: string;
-  file_name: string;
-  file_path: string;
+interface HighlightInfo {
+  page: number;
+  position?: {
+    startX: number;
+    startY: number;
+    endX: number;
+    endY: number;
+  };
 }
 
 const PDFViewer = () => {
-  const { id } = useParams<{ id: string }>();
-  const navigate = useNavigate();
+  const { documentId } = useParams<{ documentId: string }>();
   const [searchParams] = useSearchParams();
-  const { isAdmin, refreshAdminStatus } = useAuth();
-  const [category, setCategory] = useState<PolicyCategory | null>(null);
-  const [document, setDocument] = useState<PolicyDocument | null>(null);
-  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [isChatOpen, setIsChatOpen] = useState(false);
-  const [highlightPosition, setHighlightPosition] = useState<any>(null);
-  
-  const iframeRef = useRef<HTMLIFrameElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  
-  const highlightPage = searchParams.get('page');
+  const initialPage = parseInt(searchParams.get('page') || '1', 10);
   const shouldHighlight = searchParams.get('highlight') === 'true';
-  const searchText = searchParams.get('text');
-
-  useEffect(() => {
-    refreshAdminStatus();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  useEffect(() => {
-    if (!id) return;
-    fetchData();
-  }, [id]);
+  
+  const [pdfUrl, setpdfUrl] = useState<string | null>(null);
+  const [numPages, setNumPages] = useState<number | null>(null);
+  const [pageNumber, setPageNumber] = useState<number>(initialPage);
+  const [scale, setScale] = useState<number>(1.2);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [documentTitle, setDocumentTitle] = useState<string>('');
+  const [searchText, setSearchText] = useState<string>('');
+  const [highlightInfo, setHighlightInfo] = useState<HighlightInfo | null>(null);
+  
+  const canvasRef = useRef<HTMLDivElement>(null);
   
   useEffect(() => {
-    if (pdfUrl && shouldHighlight && highlightPage && searchText) {
-      highlightTextInPdf(parseInt(highlightPage, 10), searchText);
-    }
-  }, [pdfUrl, shouldHighlight, highlightPage, searchText]);
-
-  const fetchData = async () => {
-    try {
-      setLoading(true);
+    const fetchDocument = async () => {
+      if (!documentId) return;
       
-      // Fetch category information
-      const { data: categoryData, error: categoryError } = await supabase
-        .from('policy_categories')
-        .select('title')
-        .eq('id', id)
-        .single();
-      
-      if (categoryError) throw categoryError;
-      setCategory(categoryData);
-      
-      // Fetch document information
-      const { data: documentData, error: documentError } = await supabase
-        .from('policy_documents')
-        .select('id, file_name, file_path')
-        .eq('category_id', id)
-        .order('created_at', { ascending: false })
-        .limit(1);
-      
-      if (documentError) throw documentError;
-      
-      if (documentData && documentData.length > 0) {
-        setDocument(documentData[0]);
+      try {
+        setLoading(true);
         
-        // Get download URL for the PDF
-        const { data: fileData, error: fileError } = await supabase.storage
+        // Fetch document metadata
+        const { data: documentData, error: documentError } = await supabase
           .from('policy_documents')
-          .createSignedUrl(documentData[0].file_path, 3600);
+          .select('*')
+          .eq('id', documentId)
+          .single();
+          
+        if (documentError) throw documentError;
         
-        if (fileError) throw fileError;
-        
-        setPdfUrl(fileData?.signedUrl || null);
-      } else {
-        setDocument(null);
-        setPdfUrl(null);
+        if (documentData) {
+          setDocumentTitle(documentData.file_name);
+          
+          // Get a signed URL for the document
+          const { data: fileData, error: fileError } = await supabase.storage
+            .from('policy_documents')
+            .createSignedUrl(documentData.file_path, 3600);
+            
+          if (fileError) throw fileError;
+          
+          if (fileData?.signedUrl) {
+            setpdfUrl(fileData.signedUrl);
+            
+            if (shouldHighlight && initialPage) {
+              setHighlightInfo({
+                page: initialPage,
+                position: undefined
+              });
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching document:', error);
+      } finally {
+        setLoading(false);
       }
-      
-    } catch (error) {
-      console.error("Error fetching data:", error);
-      toast({
-        title: "Error",
-        description: "Failed to load policy data. Please try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setLoading(false);
-    }
+    };
+    
+    fetchDocument();
+  }, [documentId, initialPage, shouldHighlight]);
+  
+  const onDocumentLoadSuccess = ({ numPages }: { numPages: number }) => {
+    setNumPages(numPages);
+    setLoading(false);
   };
   
-  const highlightTextInPdf = async (pageNum: number, text: string) => {
-    if (!pdfUrl) return;
+  const changePage = (offset: number) => {
+    setPageNumber(prevPageNumber => {
+      const newPageNumber = prevPageNumber + offset;
+      return newPageNumber >= 1 && newPageNumber <= (numPages || 1) 
+        ? newPageNumber 
+        : prevPageNumber;
+    });
+  };
+  
+  const handleSearch = async () => {
+    if (!searchText.trim() || !pdfUrl) return;
     
     try {
-      const result = await findTextPositionInPage(pdfUrl, pageNum, text);
-      if (result.found && result.position) {
-        setHighlightPosition(result.position);
-        
-        // Handle iframe load event to apply highlight
-        const iframe = iframeRef.current;
-        if (iframe) {
-          iframe.onload = () => {
-            setTimeout(() => {
-              const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
-              if (iframeDoc) {
-                // Create highlight overlay
-                const highlightOverlay = document.createElement('div');
-                highlightOverlay.style.position = 'absolute';
-                highlightOverlay.style.left = `${result.position.startX}px`;
-                highlightOverlay.style.top = `${result.position.startY}px`;
-                highlightOverlay.style.width = `${result.position.endX - result.position.startX}px`;
-                highlightOverlay.style.height = '20px';
-                highlightOverlay.style.backgroundColor = 'rgba(255, 255, 0, 0.5)';
-                highlightOverlay.style.zIndex = '1000';
-                
-                // Add to iframe document
-                iframeDoc.body.appendChild(highlightOverlay);
-              }
-            }, 1500); // Give PDF time to render
-          };
+      for (let i = 1; i <= (numPages || 1); i++) {
+        const result = await findTextPositionInPage(pdfUrl, i, searchText);
+        if (result.found && result.position) {
+          setPageNumber(i);
+          setHighlightInfo({
+            page: i,
+            position: result.position
+          });
+          return;
         }
-      } else {
-        console.log("Text position not found");
       }
+      
+      alert('Text not found in document');
     } catch (error) {
-      console.error("Error highlighting text:", error);
+      console.error('Error searching document:', error);
     }
   };
-
-  return (
-    <div className="min-h-screen flex flex-col bg-[rgba(233,233,233,1)]">
-      <Header />
-      <main className="bg-white flex-1 mt-[29px] px-20 py-[52px] rounded-[40px_40px_0px_0px] max-md:px-5">
-        <Button 
-          variant="outline" 
-          onClick={() => navigate('/')}
-          className="mb-6"
-        >
-          <ArrowLeft className="mr-2 h-4 w-4" /> Back to Categories
-        </Button>
+  
+  const createPdfElementWithHighlight = (document: any, highlightInfo: HighlightInfo) => {
+    if (!document || !highlightInfo) return null;
+    
+    const canvas = document.querySelector(`canvas[data-page-number="${highlightInfo.page}"]`);
+    if (!canvas) return null;
+    
+    const { position } = highlightInfo;
+    if (!position) return null;
+    
+    const overlay = document.createElement('div');
+    overlay.style.position = 'absolute';
+    overlay.style.left = `${position.startX}px`;
+    overlay.style.top = `${position.startY - 5}px`;
+    overlay.style.width = `${position.endX - position.startX}px`;
+    overlay.style.height = '20px';
+    overlay.style.backgroundColor = 'rgba(255, 255, 0, 0.3)';
+    overlay.style.pointerEvents = 'none';
+    
+    const pageContainer = canvas.parentElement;
+    if (pageContainer) {
+      pageContainer.style.position = 'relative';
+      pageContainer.appendChild(overlay);
+    }
+    
+    return overlay;
+  };
+  
+  useEffect(() => {
+    if (highlightInfo && canvasRef.current) {
+      const timeout = setTimeout(() => {
+        const overlay = createPdfElementWithHighlight(canvasRef.current, highlightInfo);
         
+        return () => {
+          if (overlay) overlay.remove();
+        };
+      }, 1000);
+      
+      return () => clearTimeout(timeout);
+    }
+  }, [highlightInfo, pageNumber, canvasRef.current]);
+  
+  return (
+    <div className="container mx-auto py-8 px-4">
+      <h1 className="text-2xl font-bold mb-6">{documentTitle || 'Policy Document'}</h1>
+      
+      <div className="flex flex-col md:flex-row justify-between mb-4 gap-4">
+        <div className="flex items-center gap-2">
+          <Button
+            onClick={() => changePage(-1)}
+            disabled={pageNumber <= 1}
+            variant="outline"
+            size="icon"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          
+          <span>
+            Page {pageNumber} of {numPages || '?'}
+          </span>
+          
+          <Button
+            onClick={() => changePage(1)}
+            disabled={pageNumber >= (numPages || 0)}
+            variant="outline"
+            size="icon"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+        </div>
+        
+        <div className="flex items-center gap-2">
+          <Button
+            onClick={() => setScale(prev => Math.max(0.5, prev - 0.1))}
+            variant="outline"
+            size="icon"
+          >
+            <ZoomOut className="h-4 w-4" />
+          </Button>
+          
+          <span>{Math.round(scale * 100)}%</span>
+          
+          <Button
+            onClick={() => setScale(prev => Math.min(2.5, prev + 0.1))}
+            variant="outline"
+            size="icon"
+          >
+            <ZoomIn className="h-4 w-4" />
+          </Button>
+        </div>
+        
+        <div className="flex items-center gap-2">
+          <Input
+            type="text"
+            placeholder="Search document..."
+            value={searchText}
+            onChange={(e) => setSearchText(e.target.value)}
+            className="w-48"
+          />
+          <Button onClick={handleSearch} variant="outline" size="icon">
+            <Search className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+      
+      <div 
+        ref={canvasRef}
+        className="flex justify-center border rounded-lg p-4 bg-white shadow-sm"
+      >
         {loading ? (
-          <div className="flex justify-center items-center py-12">
-            <Loader2 className="h-8 w-8 animate-spin text-gray-500" />
+          <div className="w-full max-w-[800px] flex flex-col items-center">
+            <Skeleton className="h-[1100px] w-full" />
           </div>
+        ) : pdfUrl ? (
+          <Document
+            file={pdfUrl}
+            onLoadSuccess={onDocumentLoadSuccess}
+            loading={<Skeleton className="h-[1100px] w-full max-w-[800px]" />}
+          >
+            <Page 
+              pageNumber={pageNumber} 
+              scale={scale}
+              renderTextLayer={true}
+              renderAnnotationLayer={true}
+              loading={<Skeleton className="h-[1100px] w-full max-w-[800px]" />}
+            />
+          </Document>
         ) : (
-          <>
-            <section className="text-center mb-8">
-              <h1 className="text-black text-3xl font-bold mb-2">
-                {category?.title} Document
-              </h1>
-              {isAdmin && (
-                <div className="mt-4">
-                  <p className="text-sm text-green-600 bg-green-50 p-2 rounded inline-block">
-                    Admin Mode: To manage files, go to Admin Dashboard
-                  </p>
-                </div>
-              )}
-            </section>
-            
-            <div className="mb-4 flex justify-center gap-4">
-              {isAdmin && (
-                <Button 
-                  onClick={() => navigate('/admin')}
-                  className="bg-[rgba(49,159,67,1)] hover:bg-[rgba(39,139,57,1)]"
-                >
-                  Go to Admin Dashboard
-                </Button>
-              )}
-              
-              {pdfUrl && (
-                <Dialog>
-                  <DialogTrigger asChild>
-                    <Button className="bg-blue-600 hover:bg-blue-700">
-                      <MessageSquare className="mr-2 h-4 w-4" /> Ask About This Policy
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent className="sm:max-w-[600px]">
-                    <div className="py-4">
-                      <h2 className="text-xl font-semibold text-center mb-4">
-                        Ask about {category?.title}
-                      </h2>
-                      <ChatBot />
-                    </div>
-                  </DialogContent>
-                </Dialog>
-              )}
-            </div>
-            
-            {pdfUrl ? (
-              <div className="border rounded-lg bg-gray-50 overflow-hidden">
-                <div className="p-4 bg-gray-100 border-b flex justify-between items-center">
-                  <div className="flex items-center">
-                    <FileText className="h-5 w-5 text-gray-700 mr-2" />
-                    <h3 className="font-medium">{document?.file_name}</h3>
-                  </div>
-                  <div className="flex gap-2">
-                    {highlightPage && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="bg-yellow-100 border-yellow-300 text-yellow-800"
-                      >
-                        <Search className="h-4 w-4 mr-1" /> Text Highlighted on Page {highlightPage}
-                      </Button>
-                    )}
-                    <Button
-                      onClick={() => window.open(pdfUrl, '_blank')}
-                      variant="outline"
-                      size="sm"
-                    >
-                      Open in New Tab
-                    </Button>
-                  </div>
-                </div>
-                <div className="relative">
-                  <iframe
-                    ref={iframeRef}
-                    src={`${pdfUrl}${highlightPage ? '#page=' + highlightPage : ''}`}
-                    className="w-full min-h-[70vh]"
-                    title={`${category?.title} Document`}
-                  />
-                  {highlightPosition && (
-                    <canvas 
-                      ref={canvasRef} 
-                      className="absolute top-0 left-0 pointer-events-none"
-                      style={{
-                        zIndex: 10,
-                        width: '100%',
-                        height: '100%'
-                      }}
-                    />
-                  )}
-                </div>
-              </div>
-            ) : (
-              <div className="flex justify-center items-center border rounded-lg bg-gray-50 min-h-[70vh] p-8">
-                <div className="text-center">
-                  <p className="text-xl font-medium text-gray-700 mb-4">No Document Available</p>
-                  <p className="text-gray-500 max-w-md mx-auto">
-                    {isAdmin 
-                      ? "Go to the Admin Dashboard to upload a PDF document for this category."
-                      : "There is no document available for this category yet."}
-                  </p>
-                </div>
-              </div>
-            )}
-          </>
+          <div className="flex flex-col items-center justify-center h-[600px]">
+            <p className="text-gray-500">Document not found or unable to load</p>
+          </div>
         )}
-      </main>
+      </div>
     </div>
   );
 };
