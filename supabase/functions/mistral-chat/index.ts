@@ -2,8 +2,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 
-const MISTRAL_API_KEY = Deno.env.get("MISTRAL_API_KEY");
-const MISTRAL_API_URL = "https://api.mistral.ai/v1/chat/completions";
+const DEEPSEEK_API_KEY = Deno.env.get("DEEPSEEK_API_KEY");
+const DEEPSEEK_API_URL = "https://api.deepseek.com/v1/chat/completions";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -65,17 +65,17 @@ serve(async (req) => {
       4. Never guess or provide uncertain information about policies.`;
     }
 
-    console.log("Calling Mistral API with query:", query);
+    console.log("Calling DeepSeek API with query:", query);
     console.log("Context length:", context ? context.length : 0);
     
-    const response = await fetch(MISTRAL_API_URL, {
+    const response = await fetch(DEEPSEEK_API_URL, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": `Bearer ${MISTRAL_API_KEY}`
+        "Authorization": `Bearer ${DEEPSEEK_API_KEY}`
       },
       body: JSON.stringify({
-        model: "mistral-large-latest",
+        model: "deepseek-chat", // Use the appropriate DeepSeek model here
         messages: [
           {
             role: "system",
@@ -94,7 +94,7 @@ serve(async (req) => {
     const responseData = await response.json();
     
     if (!response.ok) {
-      console.error("Mistral API error:", responseData);
+      console.error("DeepSeek API error:", responseData);
       return new Response(
         JSON.stringify({ error: "Failed to generate response", details: responseData }),
         {
@@ -123,7 +123,7 @@ serve(async (req) => {
       }
     );
   } catch (error) {
-    console.error("Error in mistral-chat function:", error);
+    console.error("Error in deepseek-chat function:", error);
     return new Response(
       JSON.stringify({ error: error.message }),
       {
