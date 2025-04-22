@@ -21,6 +21,10 @@ export interface ReferenceDocument {
   file_path: string;
   text_content?: string;
   processed?: boolean;
+  created_at?: string;
+  file_size?: number;
+  mime_type?: string;
+  uploaded_by?: string;
 }
 
 export interface DocumentSection {
