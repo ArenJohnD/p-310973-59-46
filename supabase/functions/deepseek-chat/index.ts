@@ -72,59 +72,88 @@ serve(async (req) => {
     console.log("Context length:", context ? context.length : 0);
     console.log("DocumentInfo provided:", documentInfo ? "Yes" : "No");
     
-    // Updated system prompt with citation instructions - chunk context if needed
+    // System prompt with clear instructions
     let systemPrompt;
     let contextToUse = context;
     
-    // If context is too large, truncate it to avoid token limits
-    if (context && context.length > 50000) {
-      console.warn("Context is very large, truncating to 50K chars");
-      // Split by paragraphs and take enough to fit within limits
+    // Manage context size more effectively
+    if (context && context.length > 25000) {
+      console.warn("Context is very large, intelligently truncating");
+      // Split by paragraphs and prioritize content with query keywords
       const paragraphs = context.split(/\n\s*\n/);
-      let truncatedContext = "";
+      const queryWords = query.toLowerCase().split(/\s+/).filter(w => w.length > 3);
       
-      for (const paragraph of paragraphs) {
-        if (truncatedContext.length + paragraph.length < 50000) {
-          truncatedContext += paragraph + "\n\n";
+      // Score paragraphs by relevance to query
+      const scoredParagraphs = paragraphs.map(p => {
+        let score = 0;
+        const pLower = p.toLowerCase();
+        
+        queryWords.forEach(word => {
+          if (pLower.includes(word)) {
+            score += 1;
+            // Bonus for exact matches or proximity
+            if (pLower.includes(query.toLowerCase())) {
+              score += 5;
+            }
+          }
+        });
+        
+        // Bonus for structured content (likely more important)
+        if (p.match(/Article|Section|Policy/i)) {
+          score *= 1.5;
+        }
+        
+        return { paragraph: p, score };
+      });
+      
+      // Sort by score and take top results
+      scoredParagraphs.sort((a, b) => b.score - a.score);
+      
+      let truncatedContext = "";
+      for (const item of scoredParagraphs) {
+        if (truncatedContext.length + item.paragraph.length < 25000) {
+          truncatedContext += item.paragraph + "\n\n";
         } else {
           break;
         }
       }
       
       contextToUse = truncatedContext;
-      console.log("Truncated context length:", contextToUse.length);
+      console.log("Intelligently truncated context length:", contextToUse.length);
     }
     
     if (contextToUse && contextToUse.trim().length > 0) {
-      systemPrompt = `You are NEUPoliSeek, an AI assistant specialized in New Era University policies and procedures. 
+      systemPrompt = `You are NEUPoliSeek, an AI assistant specialized in New Era University policies and procedures.
       
-      VERY IMPORTANT INSTRUCTIONS:
-      1. ONLY answer questions related to New Era University policies and procedures.
-      2. If a question is not about university policies, politely decline to answer.
-      3. Keep your responses PRECISE and FACTUAL. Prioritize accuracy over brevity.
-      4. Directly quote from the policy document whenever possible to ensure accuracy.
-      5. You MUST ALWAYS cite the EXACT article number and section number for every policy you reference.
-      6. Format citations as [Article X: Title] or [Section Y.Z: Title] at the end of each relevant statement.
-      7. For direct quotes, use markdown format: "> quoted text" followed by the citation.
-      8. ALWAYS place citations in a consistent format: [Article/Section reference](source-id) where source-id will be replaced with a unique identifier.
-      9. Do not fabricate information if it's not in the context.
-      10. If multiple relevant policies exist, mention ALL of them with their proper citations.
-      11. If a policy seems contradictory or unclear, acknowledge this and present the actual text from the document.
+      CRITICAL INSTRUCTIONS:
+      1. You MUST answer ONLY questions about New Era University policies and procedures.
+      2. If a question is not about university policies, politely explain you can only help with policy questions.
+      3. Your responses must be PRECISE, FACTUAL, and based ONLY on the provided context.
+      4. ALWAYS quote directly from the policy documents when possible, using exact wording.
+      5. You MUST cite the EXACT article number and section number for every policy you reference.
+      6. Format citations as [Article X: Title] or [Section Y.Z: Title] immediately after each statement.
+      7. Use markdown for direct quotes: "> quoted text" with the citation right after.
+      8. NEVER invent or assume information not explicitly stated in the context.
+      9. If multiple relevant policies exist, mention ALL of them with proper citations.
+      10. If the policy is unclear or seems contradictory, acknowledge this and present the actual text.
+      11. If you don't find a specific answer in the context, say so clearly rather than guessing.
+      12. Format your response in clear sections with headings when appropriate.
       
-      Base your response directly and EXCLUSIVELY on the following context from university policy documents:
-
+      Base your response EXCLUSIVELY on these university policy documents:
+      
       ${contextToUse}
       
-      First provide a factual explanation of the policy using direct quotes where helpful, then cite the specific article and section numbers using the format described above.
-      If the context doesn't address the query directly, briefly state this and suggest where to find more information.`;
+      First provide a concise answer focused directly on the query. Then support with evidence using direct quotes where helpful. Always cite specific article and section numbers.
+      If the context doesn't fully address the query, acknowledge the limitations and suggest where the user might find more information.`;
     } else {
-      systemPrompt = `You are NEUPoliSeek, an AI assistant specialized in New Era University policies and procedures. 
+      systemPrompt = `You are NEUPoliSeek, an AI assistant specialized in New Era University policies and procedures.
       
-      VERY IMPORTANT INSTRUCTIONS:
-      1. ONLY answer questions related to New Era University policies and procedures.
-      2. If a question is not about university policies, politely decline to answer.
-      3. I need the school policy documents to be uploaded first in order to provide you with an accurate response. Once I have the relevant information, I'll be able to assist you with your question. Please upload the necessary documents so I can help you further.
-      4. Never guess or provide uncertain information about policies.`;
+      I don't have specific policy information in my context right now. To answer your question accurately:
+
+      1. I need relevant university policy documents to be uploaded first.
+      2. Once documents are available, I can search them and provide you with accurate information.
+      3. Please upload documents related to your question so I can assist you better.
+      4. I'll never guess about policy information without proper documentation.`;
     }
     
     // Log context details for debugging
@@ -146,8 +175,9 @@ serve(async (req) => {
           content: query
         }
       ],
-      temperature: 0.1,  // Lower temperature for more factual responses
-      max_tokens: 800
+      temperature: 0.1,  // Very low temperature for more factual responses
+      max_tokens: 1000,  // Allow longer responses for comprehensive answers
+      top_p: 0.95        // More deterministic responses
     };
     
     console.log("Request payload structure:", JSON.stringify({
@@ -157,7 +187,8 @@ serve(async (req) => {
         { role: "user", content: "QUERY (length: " + query.length + ")" }
       ],
       temperature: payload.temperature,
-      max_tokens: payload.max_tokens
+      max_tokens: payload.max_tokens,
+      top_p: payload.top_p
     }));
     
     // Make the API call with detailed error handling and timeout
@@ -165,9 +196,9 @@ serve(async (req) => {
     
     let response;
     try {
-      // Set a timeout for the fetch operation (30 seconds)
+      // Set a timeout for the fetch operation (20 seconds)
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 30000); 
+      const timeoutId = setTimeout(() => controller.abort(), 20000); 
       
       response = await fetch(DEEPSEEK_API_URL, {
         method: "POST",
@@ -208,7 +239,7 @@ serve(async (req) => {
           const queryWords = query.toLowerCase().split(/\s+/);
           
           for (const paragraph of contextParagraphs) {
-            if (paragraph.trim().length < 20) continue; // Skip very short paragraphs
+            if (paragraph.trim().length < 50) continue; // Skip very short paragraphs
             
             const paragraphLower = paragraph.toLowerCase();
             let score = 0;
@@ -255,7 +286,7 @@ serve(async (req) => {
       
       // Handle specific fetch errors
       if (fetchError.name === "AbortError") {
-        console.error("Request timed out after 30 seconds");
+        console.error("Request timed out after 20 seconds");
         return new Response(
           JSON.stringify({ 
             error: "Request to DeepSeek API timed out",
@@ -376,10 +407,10 @@ serve(async (req) => {
   }
 });
 
-// Process text to extract structured citations
+// Process text to extract structured citations with improved regex matching
 function processTextWithCitations(text: string, documentInfo: any = {}) {
-  // Regular expression to match citations in the format [Article X: Title] or [Section Y.Z: Title]
-  const citationRegex = /\[(Article|Section)\s+([^:]+):\s*([^\]]+)\]/g;
+  // Enhanced regex to match more citation formats
+  const citationRegex = /\[(Article|Section|Policy)\s+([^:]+?)(?:\s*-\s*|\s*:\s*|\s+)([^\]]+)\]/g;
   
   let citations = [];
   let processedText = text;
@@ -389,8 +420,8 @@ function processTextWithCitations(text: string, documentInfo: any = {}) {
   while ((match = citationRegex.exec(text)) !== null) {
     const fullMatch = match[0];
     const type = match[1];
-    const number = match[2];
-    const title = match[3];
+    const number = match[2].trim();
+    const title = match[3].trim();
     
     // Create a unique ID for this citation
     const citationId = `citation-${citations.length}`;

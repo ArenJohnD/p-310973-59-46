@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { ChatSession, DocumentSection, Message, ReferenceDocument } from "@/types/chat";
 import { extractDocumentSections, extractTextFromPDF } from "@/utils/pdfUtils";
@@ -13,7 +12,6 @@ export const fetchChatSessions = async (userId: string): Promise<ChatSession[]> 
     
   if (error) throw error;
   
-  // Deduplicate sessions by ID before returning them
   const uniqueSessions = Array.from(
     new Map(data?.map(session => [session.id, session])).values()
   );
@@ -43,9 +41,7 @@ export const loadChatMessages = async (sessionId: string): Promise<Message[]> =>
 };
 
 export const createNewSession = async (userId: string, forceNew: boolean = true): Promise<ChatSession | null> => {
-  // If forceNew is true, we won't reuse any existing sessions
   if (!forceNew) {
-    // Check if user already has an empty session (no messages or only welcome message)
     const { data: existingEmptySessions, error: checkError } = await supabase
       .from('chat_sessions')
       .select('id, chat_messages:chat_messages(count)')
@@ -55,13 +51,11 @@ export const createNewSession = async (userId: string, forceNew: boolean = true)
       
     if (checkError) throw checkError;
 
-    // If there's an existing active session with no messages or only welcome message, use that
     if (existingEmptySessions && existingEmptySessions.length > 0) {
       const session = existingEmptySessions[0];
       const messageCount = session.chat_messages[0]?.count || 0;
       
-      if (messageCount <= 1) { // Only bot welcome message or none
-        // Get the full session data
+      if (messageCount <= 1) {
         const { data: sessionData } = await supabase
           .from('chat_sessions')
           .select('*')
@@ -74,7 +68,6 @@ export const createNewSession = async (userId: string, forceNew: boolean = true)
       }
     }
     
-    // Also check if user has any other empty sessions (not active)
     const { data: otherEmptySessions, error: otherCheckError } = await supabase
       .from('chat_sessions')
       .select('id, chat_messages:chat_messages(count)')
@@ -87,11 +80,9 @@ export const createNewSession = async (userId: string, forceNew: boolean = true)
       const session = otherEmptySessions[0];
       const messageCount = session.chat_messages[0]?.count || 0;
       
-      if (messageCount <= 1) { // Only bot welcome message or none
-        // Reuse this session and set it as active
+      if (messageCount <= 1) {
         await setSessionActive(userId, session.id);
         
-        // Get the full session data
         const { data: sessionData } = await supabase
           .from('chat_sessions')
           .select('*')
@@ -105,13 +96,11 @@ export const createNewSession = async (userId: string, forceNew: boolean = true)
     }
   }
   
-  // First, deactivate all existing sessions
   await supabase
     .from('chat_sessions')
     .update({ is_active: false })
     .eq('user_id', userId);
   
-  // Create a new session
   const { data: sessionData, error: sessionError } = await supabase
     .from('chat_sessions')
     .insert([{
@@ -124,7 +113,6 @@ export const createNewSession = async (userId: string, forceNew: boolean = true)
   if (sessionError) throw sessionError;
   
   if (sessionData && sessionData.length > 0) {
-    // Add welcome message
     await supabase
       .from('chat_messages')
       .insert([{
@@ -152,13 +140,11 @@ export const setSessionActive = async (userId: string, sessionId: string): Promi
 };
 
 export const deleteSession = async (sessionId: string): Promise<void> => {
-  // Delete the chat messages first
   await supabase
     .from('chat_messages')
     .delete()
     .eq('session_id', sessionId);
   
-  // Then delete the session
   const { error } = await supabase
     .from('chat_sessions')
     .delete()
@@ -179,29 +165,23 @@ export const updateSessionTitle = async (sessionId: string, title: string): Prom
 
 export const generateChatTitle = async (userMessage: string, botResponse: string = ""): Promise<string> => {
   try {
-    // Extract 3-5 words that describe the main topic
     const cleanedMessage = userMessage.replace(/[^\w\s]/gi, ' ').toLowerCase();
     const words = cleanedMessage.split(/\s+/).filter(word => word.length > 2);
     
-    // Remove common filler words
     const fillerWords = ['the', 'and', 'that', 'for', 'what', 'how', 'when', 'where', 'why', 'who', 'which', 'about'];
     const filteredWords = words.filter(word => !fillerWords.includes(word));
     
-    // Take 3-5 most relevant words
     const keyWords = filteredWords.slice(0, 5);
     
     if (keyWords.length > 0) {
-      // Capitalize the first word
       const firstWord = keyWords[0].charAt(0).toUpperCase() + keyWords[0].slice(1);
       let title = firstWord;
       
-      // Add up to 4 more words if available
       if (keyWords.length > 1) {
         const additionalWords = keyWords.slice(1, Math.min(5, keyWords.length));
         title += ' ' + additionalWords.join(' ');
       }
       
-      // Make sure the title is not too long
       if (title.length > 30) {
         title = title.substring(0, 27) + '...';
       }
@@ -243,8 +223,8 @@ export const saveMessage = async (sessionId: string, text: string, sender: "user
 };
 
 export const findRelevantInformation = async (query: string, referenceDocuments: ReferenceDocument[]): Promise<string> => {
-  console.log("Finding relevant information for query:", query);
-  console.log("Reference documents available:", referenceDocuments.length);
+  console.log(`Finding relevant information for query: "${query}"`);
+  console.log(`Reference documents available: ${referenceDocuments.length}`);
   
   if (referenceDocuments.length === 0) {
     try {
@@ -269,15 +249,15 @@ export const findRelevantInformation = async (query: string, referenceDocuments:
     const allSections: DocumentSection[] = [];
     const documentInfo = {};
     
-    // Process at most 5 documents to avoid timeout issues
-    const docsToProcess = referenceDocuments.slice(0, 5);
-    console.log(`Will process ${docsToProcess.length} documents (limited to avoid timeouts)`);
+    const maxDocsToProcess = Math.min(referenceDocuments.length, 8);
+    console.log(`Will process ${maxDocsToProcess} documents (limited to avoid timeouts)`);
+    
+    const docsToProcess = referenceDocuments.slice(0, maxDocsToProcess);
     
     for (const doc of docsToProcess) {
       try {
         console.log(`Processing document: ${doc.file_name}`);
         
-        // Get a signed URL for the document
         const { data: fileData } = await supabase.storage
           .from('policy_documents')
           .createSignedUrl(doc.file_path, 3600);
@@ -287,7 +267,6 @@ export const findRelevantInformation = async (query: string, referenceDocuments:
           continue;
         }
         
-        // Extract text from the PDF
         const text = await extractTextFromPDF(fileData.signedUrl);
         console.log(`Extracted text length: ${text.length} characters from ${doc.file_name}`);
         
@@ -296,10 +275,8 @@ export const findRelevantInformation = async (query: string, referenceDocuments:
           continue;
         }
         
-        // Extract sections with position info
         const sections = extractDocumentSections(text, doc.id, doc.file_name);
         
-        // Add sections to document info for citation references
         sections.forEach(section => {
           if (section.articleNumber) {
             documentInfo[`article ${section.articleNumber}`] = {
@@ -325,7 +302,7 @@ export const findRelevantInformation = async (query: string, referenceDocuments:
       }
     }
     
-    console.log(`Total sections available: ${allSections.length}`);
+    console.log(`Total sections available for search: ${allSections.length}`);
     
     if (allSections.length === 0) {
       return "I don't have any information from policy documents yet. Please upload some documents so I can provide more accurate responses.";
@@ -334,12 +311,15 @@ export const findRelevantInformation = async (query: string, referenceDocuments:
     const bestMatches = findBestMatch(query, allSections);
     
     if (bestMatches.length > 0) {
-      console.log(`Found ${bestMatches.length} relevant sections`);
+      console.log(`Found ${bestMatches.length} relevant sections for the query`);
       
-      // Limit context size to avoid API errors
       let context = "";
+      
       for (const match of bestMatches) {
-        const sectionText = `${match.title}\n${match.content}`;
+        const docInfo = match.fileName ? `[Source: ${match.fileName}] ` : '';
+        const positionInfo = match.position ? `[Page: ${match.position.startPage}] ` : '';
+        const sectionText = `${docInfo}${positionInfo}${match.title}\n${match.content}`;
+        
         if (context.length + sectionText.length + 2 < 40000) {
           context += sectionText + "\n\n";
         } else {
@@ -348,10 +328,10 @@ export const findRelevantInformation = async (query: string, referenceDocuments:
         }
       }
       
-      console.log("Context length: ", context.length);
-      console.log("Sending query to DeepSeek with context");
+      console.log(`Final context length: ${context.length} characters`);
       
       try {
+        console.log("Sending query to DeepSeek with targeted context");
         const { data, error } = await supabase.functions.invoke('deepseek-chat', {
           body: { query, context, documentInfo }
         });
@@ -375,13 +355,22 @@ export const findRelevantInformation = async (query: string, referenceDocuments:
     } else {
       console.log("No specific matches found. Using general context");
       
-      // Use fewer sections for general context to avoid timeouts
-      const generalContext = allSections
-        .slice(0, 3)
-        .map(section => `${section.title}\n${section.content}`)
+      const documentIdsSeen = new Set<string>();
+      const generalSections = allSections.filter(section => {
+        if (!section.documentId || documentIdsSeen.has(section.documentId)) return false;
+        documentIdsSeen.add(section.documentId);
+        return true;
+      }).slice(0, 5);
+      
+      const generalContext = generalSections
+        .map(section => {
+          const docInfo = section.fileName ? `[Source: ${section.fileName}] ` : '';
+          return `${docInfo}${section.title}\n${section.content}`;
+        })
         .join('\n\n');
         
       try {
+        console.log("Sending query to DeepSeek with general context from multiple documents");
         const { data, error } = await supabase.functions.invoke('deepseek-chat', {
           body: { query, context: generalContext, documentInfo }
         });
