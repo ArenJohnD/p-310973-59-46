@@ -70,6 +70,7 @@ serve(async (req) => {
 
     console.log("Query:", query);
     console.log("Context length:", context ? context.length : 0);
+    console.log("DocumentInfo provided:", documentInfo ? "Yes" : "No");
     
     // Updated system prompt with citation instructions
     let systemPrompt;
@@ -106,6 +107,12 @@ serve(async (req) => {
       4. Never guess or provide uncertain information about policies.`;
     }
     
+    // Log context details
+    if (context) {
+      console.log("Context sample (first 100 chars):", context.substring(0, 100));
+      console.log("Context sections:", context.split(/\n\s*\n/).length);
+    }
+    
     // Prepare the request payload
     const payload = {
       model: "deepseek-chat",
@@ -132,6 +139,11 @@ serve(async (req) => {
       temperature: payload.temperature,
       max_tokens: payload.max_tokens
     }));
+    
+    // Check if context is too large - DeepSeek has token limits
+    if (systemPrompt.length > 100000) {
+      console.warn("Warning: Context is very large (>100k chars), may exceed token limits");
+    }
     
     // Make the API call with detailed error handling and timeout
     console.log("Sending request to DeepSeek API...");
@@ -166,7 +178,16 @@ serve(async (req) => {
         try {
           errorData = JSON.parse(errorText);
         } catch (e) {
-          errorData = { text: errorText };
+          errorData = { raw: errorText };
+        }
+        
+        // Check for specific error conditions
+        if (errorData.error?.type === "invalid_request_error") {
+          console.error("Invalid request error:", errorData.error.message);
+        } else if (response.status === 429) {
+          console.error("Rate limit exceeded");
+        } else if (response.status >= 500) {
+          console.error("DeepSeek server error");
         }
         
         return new Response(
@@ -183,6 +204,23 @@ serve(async (req) => {
       }
     } catch (fetchError) {
       console.error("Fetch error when calling DeepSeek API:", fetchError);
+      
+      // Handle specific fetch errors
+      if (fetchError.name === "AbortError") {
+        console.error("Request timed out after 20 seconds");
+        return new Response(
+          JSON.stringify({ 
+            error: "Request to DeepSeek API timed out",
+            details: "The request took too long to complete",
+            message: "The DeepSeek API is taking too long to respond. Please try again later."
+          }),
+          {
+            status: 504, // Gateway Timeout
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          }
+        );
+      }
+      
       return new Response(
         JSON.stringify({ 
           error: "Error connecting to DeepSeek API",
@@ -235,9 +273,11 @@ serve(async (req) => {
       
       const generatedText = responseData.choices[0].message.content;
       console.log("Generated response successfully, length:", generatedText.length);
+      console.log("Response sample:", generatedText.substring(0, 100) + "...");
       
       // Process citations from the response
       const processedText = processTextWithCitations(generatedText, documentInfo || {});
+      console.log("Extracted citations count:", processedText.citations.length);
       
       // Return the answer with markdown formatting preserved
       const result = {
@@ -253,7 +293,14 @@ serve(async (req) => {
       );
     } catch (parseError) {
       console.error("Error parsing DeepSeek API response:", parseError);
-      console.error("Raw response text:", await response.text().catch(() => "Unable to get raw text"));
+      let rawResponse = "";
+      try {
+        rawResponse = await response.text().catch(() => "Unable to get raw text");
+        console.error("Raw response text (first 200 chars):", rawResponse.substring(0, 200));
+      } catch (e) {
+        console.error("Could not get raw response text");
+      }
+      
       return new Response(
         JSON.stringify({ 
           error: "Error parsing DeepSeek API response",
