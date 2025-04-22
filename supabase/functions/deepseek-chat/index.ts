@@ -68,8 +68,9 @@ serve(async (req) => {
     console.log("Calling DeepSeek API with query:", query);
     console.log("Context length:", context ? context.length : 0);
     
+    // Check if API key exists
     if (!DEEPSEEK_API_KEY) {
-      console.error("DEEPSEEK_API_KEY is not set");
+      console.error("DEEPSEEK_API_KEY environment variable is not set");
       return new Response(
         JSON.stringify({ error: "API key not configured" }),
         {
@@ -79,6 +80,7 @@ serve(async (req) => {
       );
     }
     
+    // Prepare the request payload
     const payload = {
       model: "deepseek-chat",
       messages: [
@@ -95,27 +97,95 @@ serve(async (req) => {
       max_tokens: 800
     };
     
-    console.log("Request payload:", JSON.stringify(payload));
+    console.log("Request payload structure:", JSON.stringify({
+      model: payload.model,
+      messages: [
+        { role: "system", content: "SYSTEM PROMPT (length: " + systemPrompt.length + ")" },
+        { role: "user", content: "QUERY (length: " + query.length + ")" }
+      ],
+      temperature: payload.temperature,
+      max_tokens: payload.max_tokens
+    }));
     
-    const response = await fetch(DEEPSEEK_API_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${DEEPSEEK_API_KEY}`
-      },
-      body: JSON.stringify(payload)
-    });
+    // Make the API call
+    try {
+      console.log("Sending request to DeepSeek API...");
+      const response = await fetch(DEEPSEEK_API_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${DEEPSEEK_API_KEY}`
+        },
+        body: JSON.stringify(payload)
+      });
 
-    if (!response.ok) {
-      const errorData = await response.text();
-      console.error("DeepSeek API error status:", response.status);
-      console.error("DeepSeek API error response:", errorData);
+      // Check for API error responses
+      if (!response.ok) {
+        const errorText = await response.text();
+        let errorData;
+        
+        try {
+          errorData = JSON.parse(errorText);
+        } catch (e) {
+          errorData = errorText;
+        }
+        
+        console.error(`DeepSeek API error (${response.status}):`, errorData);
+        
+        return new Response(
+          JSON.stringify({ 
+            error: `Failed to generate response from DeepSeek API (Status ${response.status})`, 
+            details: errorData
+          }),
+          {
+            status: 500,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          }
+        );
+      }
+
+      // Process successful response
+      const responseData = await response.json();
+      console.log("DeepSeek API successful response received");
+      
+      if (!responseData.choices || responseData.choices.length === 0) {
+        console.error("Invalid response format from DeepSeek API:", responseData);
+        return new Response(
+          JSON.stringify({ 
+            error: "Invalid response format from DeepSeek API",
+            details: responseData
+          }),
+          {
+            status: 500,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          }
+        );
+      }
+
+      const generatedText = responseData.choices[0].message.content;
+      console.log("Generated response successfully, length:", generatedText.length);
+      
+      // Process citations from the response
+      const processedText = processTextWithCitations(generatedText, documentInfo);
+      
+      // Return the answer with markdown formatting preserved
+      const result = {
+        answer: processedText.text,
+        citations: processedText.citations
+      };
       
       return new Response(
+        JSON.stringify(result),
+        {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    } catch (fetchError) {
+      console.error("Fetch error when calling DeepSeek API:", fetchError);
+      return new Response(
         JSON.stringify({ 
-          error: "Failed to generate response from DeepSeek API", 
-          status: response.status,
-          details: errorData
+          error: "Error connecting to DeepSeek API",
+          details: fetchError.message
         }),
         {
           status: 500,
@@ -123,41 +193,8 @@ serve(async (req) => {
         }
       );
     }
-
-    const responseData = await response.json();
-    console.log("DeepSeek API response:", JSON.stringify(responseData));
-    
-    if (!responseData.choices || responseData.choices.length === 0) {
-      console.error("Invalid response format from DeepSeek API");
-      return new Response(
-        JSON.stringify({ error: "Invalid response format from DeepSeek API" }),
-        {
-          status: 500,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
-    }
-
-    const generatedText = responseData.choices[0].message.content;
-    console.log("Generated response successfully");
-    
-    // Process citations from the response
-    const processedText = processTextWithCitations(generatedText, documentInfo);
-    
-    // Return the answer with markdown formatting preserved
-    const result = {
-      answer: processedText.text,
-      citations: processedText.citations
-    };
-    
-    return new Response(
-      JSON.stringify(result),
-      {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
-    );
   } catch (error) {
-    console.error("Error in deepseek-chat function:", error);
+    console.error("General error in deepseek-chat function:", error);
     return new Response(
       JSON.stringify({ error: error.message }),
       {

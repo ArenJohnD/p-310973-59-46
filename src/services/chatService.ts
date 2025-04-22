@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { ChatSession, DocumentSection, Message, ReferenceDocument } from "@/types/chat";
 import { extractDocumentSections, extractTextFromPDF } from "@/utils/pdfUtils";
@@ -253,7 +252,10 @@ export const findRelevantInformation = async (query: string, referenceDocuments:
         body: { query, context: "" }
       });
 
-      if (error) throw new Error(error.message);
+      if (error) {
+        console.error("Error invoking DeepSeek function:", error);
+        throw new Error(error.message);
+      }
       
       return data.answer;
     } catch (err) {
@@ -336,7 +338,10 @@ export const findRelevantInformation = async (query: string, referenceDocuments:
           body: { query, context, documentInfo }
         });
 
-        if (error) throw new Error(error.message);
+        if (error) {
+          console.error("Error invoking DeepSeek function with context:", error);
+          throw new Error(error.message);
+        }
         
         return data.answer;
       } catch (err) {
@@ -357,7 +362,10 @@ export const findRelevantInformation = async (query: string, referenceDocuments:
           body: { query, context: generalContext, documentInfo }
         });
 
-        if (error) throw new Error(error.message);
+        if (error) {
+          console.error("Error invoking DeepSeek function with general context:", error);
+          throw new Error(error.message);
+        }
         
         return data.answer;
       } catch (err) {
