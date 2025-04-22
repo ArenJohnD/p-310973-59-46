@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 import { ChatSession, DocumentSection, Message, ReferenceDocument } from "@/types/chat";
 import { extractDocumentSections, extractTextFromPDF } from "@/utils/pdfUtils";
@@ -247,8 +248,8 @@ export const findRelevantInformation = async (query: string, referenceDocuments:
   
   if (referenceDocuments.length === 0) {
     try {
-      console.log("No reference documents found, using Mistral API directly");
-      const { data, error } = await supabase.functions.invoke('mistral-chat', {
+      console.log("No reference documents found, using DeepSeek API directly");
+      const { data, error } = await supabase.functions.invoke('deepseek-chat', {
         body: { query, context: "" }
       });
 
@@ -256,7 +257,7 @@ export const findRelevantInformation = async (query: string, referenceDocuments:
       
       return data.answer;
     } catch (err) {
-      console.error("Error calling Mistral API:", err);
+      console.error("Error calling DeepSeek API:", err);
       return "I'm sorry, I encountered an error while processing your question. Please try again later.";
     }
   }
@@ -328,10 +329,10 @@ export const findRelevantInformation = async (query: string, referenceDocuments:
         .join('\n\n');
       
       console.log("Context length: ", context.length);
-      console.log("Sending query to Mistral with context");
+      console.log("Sending query to DeepSeek with context");
       
       try {
-        const { data, error } = await supabase.functions.invoke('mistral-chat', {
+        const { data, error } = await supabase.functions.invoke('deepseek-chat', {
           body: { query, context, documentInfo }
         });
 
@@ -339,7 +340,7 @@ export const findRelevantInformation = async (query: string, referenceDocuments:
         
         return data.answer;
       } catch (err) {
-        console.error("Error calling Mistral API with context:", err);
+        console.error("Error calling DeepSeek API with context:", err);
         
         return `Based on the policy documents, here's what I found:\n\n${bestMatches[0].content}`;
       }
@@ -352,7 +353,7 @@ export const findRelevantInformation = async (query: string, referenceDocuments:
         .join('\n\n');
         
       try {
-        const { data, error } = await supabase.functions.invoke('mistral-chat', {
+        const { data, error } = await supabase.functions.invoke('deepseek-chat', {
           body: { query, context: generalContext, documentInfo }
         });
 
@@ -360,7 +361,7 @@ export const findRelevantInformation = async (query: string, referenceDocuments:
         
         return data.answer;
       } catch (err) {
-        console.error("Error calling Mistral API with general context:", err);
+        console.error("Error calling DeepSeek API with general context:", err);
         return "I couldn't find specific information about this in the policy documents. Please check the university handbook or ask an administrator.";
       }
     }
