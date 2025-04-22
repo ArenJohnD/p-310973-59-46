@@ -1,1 +1,5 @@
+
 project_id = "jwxrtvuyerntqiqyqbsz"
+
+[functions.deepseek-chat]
+verify_jwt = false
