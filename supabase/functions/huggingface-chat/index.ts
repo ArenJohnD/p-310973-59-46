@@ -31,6 +31,9 @@ serve(async (req) => {
       )
     }
 
+    // Log token for debugging (first few characters only)
+    console.log(`Using HuggingFace token starting with: ${HUGGING_FACE_TOKEN.substring(0, 4)}...`)
+
     const { query, context, documentInfo } = await req.json()
 
     if (!query) {
