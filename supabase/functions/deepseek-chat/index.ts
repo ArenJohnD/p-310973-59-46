@@ -25,8 +25,8 @@ serve(async (req) => {
       console.error("DEEPSEEK_API_KEY not configured");
       return new Response(
         JSON.stringify({ 
-          error: "API key not configured",
-          message: "The DeepSeek API key is missing. Please check your Supabase secrets configuration."
+          answer: "The DeepSeek API key is not configured. Please contact your administrator to set up the API key in Supabase secrets.",
+          citations: []
         }),
         {
           status: 500,
@@ -46,7 +46,10 @@ serve(async (req) => {
     } catch (e) {
       console.error("Failed to parse request JSON:", e.message);
       return new Response(
-        JSON.stringify({ error: "Invalid request format", details: e.message }),
+        JSON.stringify({ 
+          answer: "There was a problem processing your request. Please try again.",
+          citations: [] 
+        }),
         {
           status: 400,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -60,7 +63,10 @@ serve(async (req) => {
     if (!query) {
       console.error("Missing query parameter");
       return new Response(
-        JSON.stringify({ error: "Missing query parameter" }),
+        JSON.stringify({ 
+          answer: "Please provide a question to answer.",
+          citations: []
+        }),
         {
           status: 400,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -270,6 +276,21 @@ serve(async (req) => {
           errorData = { raw: errorText };
         }
         
+        // Handle specific error cases
+        if (response.status === 402 || (errorData.error && errorData.error.code === "invalid_request_error" && 
+            errorData.error.message && errorData.error.message.includes("Insufficient Balance"))) {
+          console.error("DeepSeek API account has insufficient balance");
+          return new Response(
+            JSON.stringify({ 
+              answer: "The AI service is currently unavailable due to account balance issues. Please contact your administrator to recharge the DeepSeek API account.",
+              citations: []
+            }),
+            {
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            }
+          );
+        }
+        
         // Return a better error message instead of fallback content
         return new Response(
           JSON.stringify({ 
@@ -459,4 +480,3 @@ function processTextWithCitations(text: string, documentInfo: any = {}) {
     citations
   };
 }
-
