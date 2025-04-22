@@ -1,3 +1,4 @@
+
 import { useState, useRef, useEffect } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -321,8 +322,8 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
     
     if (referenceDocuments.length === 0) {
       try {
-        console.log("No reference documents found, using DeepSeek API directly");
-        const { data, error } = await supabase.functions.invoke('deepseek-chat', {
+        console.log("No reference documents found, using HuggingFace API directly");
+        const { data, error } = await supabase.functions.invoke('huggingface-chat', {
           body: { query, context: "" }
         });
 
@@ -333,7 +334,7 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
           citations: data.citations || []
         };
       } catch (err) {
-        console.error("Error calling DeepSeek API:", err);
+        console.error("Error calling HuggingFace API:", err);
         return { 
           text: "I'm sorry, I encountered an error while processing your question. Please try again later.",
           citations: []
@@ -411,10 +412,10 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
           .join('\n\n');
         
         console.log("Context length: ", context.length);
-        console.log("Sending query to DeepSeek with context");
+        console.log("Sending query to HuggingFace with context");
         
         try {
-          const { data, error } = await supabase.functions.invoke('deepseek-chat', {
+          const { data, error } = await supabase.functions.invoke('huggingface-chat', {
             body: { query, context, documentInfo }
           });
 
@@ -425,7 +426,7 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
             citations: data.citations || [] 
           };
         } catch (err) {
-          console.error("Error calling DeepSeek API with context:", err);
+          console.error("Error calling HuggingFace API with context:", err);
           
           return { 
             text: `Based on the policy documents, here's what I found:\n\n${bestMatches[0].content}`,
@@ -441,7 +442,7 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
           .join('\n\n');
           
         try {
-          const { data, error } = await supabase.functions.invoke('deepseek-chat', {
+          const { data, error } = await supabase.functions.invoke('huggingface-chat', {
             body: { query, context: generalContext, documentInfo }
           });
 
@@ -452,7 +453,7 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
             citations: data.citations || []
           };
         } catch (err) {
-          console.error("Error calling DeepSeek API with general context:", err);
+          console.error("Error calling HuggingFace API with general context:", err);
           return {
             text: "I couldn't find specific information about this in the policy documents. Please check the university handbook or ask an administrator.",
             citations: []

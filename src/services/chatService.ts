@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 import { ChatSession, DocumentSection, Message, ReferenceDocument } from "@/types/chat";
 import { extractDocumentSections, extractTextFromPDF } from "@/utils/pdfUtils";
@@ -228,19 +229,19 @@ export const findRelevantInformation = async (query: string, referenceDocuments:
   
   if (referenceDocuments.length === 0) {
     try {
-      console.log("No reference documents found, using DeepSeek API directly");
-      const { data, error } = await supabase.functions.invoke('deepseek-chat', {
+      console.log("No reference documents found, using HuggingFace API directly");
+      const { data, error } = await supabase.functions.invoke('huggingface-chat', {
         body: { query, context: "" }
       });
 
       if (error) {
-        console.error("Error invoking DeepSeek function:", error);
+        console.error("Error invoking HuggingFace function:", error);
         throw new Error(error.message);
       }
       
       return data.answer;
     } catch (err) {
-      console.error("Error calling DeepSeek API:", err);
+      console.error("Error calling HuggingFace API:", err);
       return "I'm sorry, I encountered an error while processing your question. Please try again later.";
     }
   }
@@ -350,7 +351,7 @@ export const findRelevantInformation = async (query: string, referenceDocuments:
       console.log(`Final context length: ${context.length} characters`);
       
       try {
-        console.log("Sending query to DeepSeek with targeted context");
+        console.log("Sending query to HuggingFace with targeted context");
         
         let attempts = 0;
         const maxAttempts = 2;
@@ -360,7 +361,7 @@ export const findRelevantInformation = async (query: string, referenceDocuments:
           try {
             attempts++;
             
-            const { data, error } = await supabase.functions.invoke('deepseek-chat', {
+            const { data, error } = await supabase.functions.invoke('huggingface-chat', {
               body: { 
                 query, 
                 context, 
@@ -370,7 +371,7 @@ export const findRelevantInformation = async (query: string, referenceDocuments:
             });
   
             if (error) {
-              console.error(`Error invoking DeepSeek function (attempt ${attempts}):`, error);
+              console.error(`Error invoking HuggingFace function (attempt ${attempts}):`, error);
               lastError = error;
               
               if (attempts < maxAttempts) {
@@ -382,7 +383,7 @@ export const findRelevantInformation = async (query: string, referenceDocuments:
             }
             
             if (!data || !data.answer) {
-              console.error(`Missing answer in DeepSeek response (attempt ${attempts})`);
+              console.error(`Missing answer in HuggingFace response (attempt ${attempts})`);
               lastError = new Error("Invalid response from AI service");
               
               if (attempts < maxAttempts) {
@@ -408,7 +409,7 @@ export const findRelevantInformation = async (query: string, referenceDocuments:
         
         throw lastError || new Error("Failed to get response after multiple attempts");
       } catch (err) {
-        console.error("Error calling DeepSeek API with context:", err);
+        console.error("Error calling HuggingFace API with context:", err);
         
         const bestMatch = bestMatches[0];
         return `Based on the policy documents, here's what I found:\n\n${bestMatch.title}\n\n${bestMatch.content}\n\n(Note: This is the most relevant section I could find in the document "${bestMatch.fileName || 'University Policy'}")`;
@@ -437,8 +438,8 @@ export const findRelevantInformation = async (query: string, referenceDocuments:
           }
           
           try {
-            console.log("Sending query to DeepSeek with broader context");
-            const { data, error } = await supabase.functions.invoke('deepseek-chat', {
+            console.log("Sending query to HuggingFace with broader context");
+            const { data, error } = await supabase.functions.invoke('huggingface-chat', {
               body: { query, context, documentInfo }
             });
   
@@ -448,7 +449,7 @@ export const findRelevantInformation = async (query: string, referenceDocuments:
             
             return data.answer;
           } catch (err) {
-            console.error("Error calling DeepSeek API with broader context:", err);
+            console.error("Error calling HuggingFace API with broader context:", err);
             return `I found some information that might be related to your question:\n\n${broaderMatches[0].content}\n\nHowever, I don't have specific information that directly answers your query. Please try rephrasing your question or check with the university administration.`;
           }
         }
@@ -469,19 +470,19 @@ export const findRelevantInformation = async (query: string, referenceDocuments:
         .join('\n\n');
         
       try {
-        console.log("Sending query to DeepSeek with general context from multiple documents");
-        const { data, error } = await supabase.functions.invoke('deepseek-chat', {
+        console.log("Sending query to HuggingFace with general context from multiple documents");
+        const { data, error } = await supabase.functions.invoke('huggingface-chat', {
           body: { query, context: generalContext, documentInfo }
         });
 
         if (error) {
-          console.error("Error invoking DeepSeek function with general context:", error);
+          console.error("Error invoking HuggingFace function with general context:", error);
           throw new Error(error.message);
         }
         
         return data.answer;
       } catch (err) {
-        console.error("Error calling DeepSeek API with general context:", err);
+        console.error("Error calling HuggingFace API with general context:", err);
         return "I couldn't find specific information about this in the policy documents. Please check the university handbook or ask an administrator.";
       }
     }
