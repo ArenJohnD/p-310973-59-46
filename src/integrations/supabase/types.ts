@@ -262,7 +262,9 @@ export type Database = {
           file_size: number
           id: string
           is_blocked: boolean | null
+          last_processed_at: string | null
           mime_type: string
+          processed: boolean | null
           updated_at: string
           uploaded_by: string
         }
@@ -273,7 +275,9 @@ export type Database = {
           file_size: number
           id?: string
           is_blocked?: boolean | null
+          last_processed_at?: string | null
           mime_type: string
+          processed?: boolean | null
           updated_at?: string
           uploaded_by: string
         }
@@ -284,7 +288,9 @@ export type Database = {
           file_size?: number
           id?: string
           is_blocked?: boolean | null
+          last_processed_at?: string | null
           mime_type?: string
+          processed?: boolean | null
           updated_at?: string
           uploaded_by?: string
         }
