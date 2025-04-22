@@ -72,10 +72,30 @@ serve(async (req) => {
     console.log("Context length:", context ? context.length : 0);
     console.log("DocumentInfo provided:", documentInfo ? "Yes" : "No");
     
-    // Updated system prompt with citation instructions
+    // Updated system prompt with citation instructions - chunk context if needed
     let systemPrompt;
+    let contextToUse = context;
     
-    if (context && context.trim().length > 0) {
+    // If context is too large, truncate it to avoid token limits
+    if (context && context.length > 50000) {
+      console.warn("Context is very large, truncating to 50K chars");
+      // Split by paragraphs and take enough to fit within limits
+      const paragraphs = context.split(/\n\s*\n/);
+      let truncatedContext = "";
+      
+      for (const paragraph of paragraphs) {
+        if (truncatedContext.length + paragraph.length < 50000) {
+          truncatedContext += paragraph + "\n\n";
+        } else {
+          break;
+        }
+      }
+      
+      contextToUse = truncatedContext;
+      console.log("Truncated context length:", contextToUse.length);
+    }
+    
+    if (contextToUse && contextToUse.trim().length > 0) {
       systemPrompt = `You are NEUPoliSeek, an AI assistant specialized in New Era University policies and procedures. 
       
       VERY IMPORTANT INSTRUCTIONS:
@@ -93,7 +113,7 @@ serve(async (req) => {
       
       Base your response directly and EXCLUSIVELY on the following context from university policy documents:
 
-      ${context}
+      ${contextToUse}
       
       First provide a factual explanation of the policy using direct quotes where helpful, then cite the specific article and section numbers using the format described above.
       If the context doesn't address the query directly, briefly state this and suggest where to find more information.`;
@@ -107,13 +127,13 @@ serve(async (req) => {
       4. Never guess or provide uncertain information about policies.`;
     }
     
-    // Log context details
-    if (context) {
-      console.log("Context sample (first 100 chars):", context.substring(0, 100));
-      console.log("Context sections:", context.split(/\n\s*\n/).length);
+    // Log context details for debugging
+    if (contextToUse) {
+      console.log("Context sample (first 100 chars):", contextToUse.substring(0, 100));
+      console.log("Context sections:", contextToUse.split(/\n\s*\n/).length);
     }
     
-    // Prepare the request payload
+    // Prepare the request payload with reduced temperature for more factual responses
     const payload = {
       model: "deepseek-chat",
       messages: [
@@ -126,7 +146,7 @@ serve(async (req) => {
           content: query
         }
       ],
-      temperature: 0.1,
+      temperature: 0.1,  // Lower temperature for more factual responses
       max_tokens: 800
     };
     
@@ -140,19 +160,14 @@ serve(async (req) => {
       max_tokens: payload.max_tokens
     }));
     
-    // Check if context is too large - DeepSeek has token limits
-    if (systemPrompt.length > 100000) {
-      console.warn("Warning: Context is very large (>100k chars), may exceed token limits");
-    }
-    
     // Make the API call with detailed error handling and timeout
     console.log("Sending request to DeepSeek API...");
     
     let response;
     try {
-      // Set a timeout for the fetch operation
+      // Set a timeout for the fetch operation (30 seconds)
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 20000); // 20 second timeout
+      const timeoutId = setTimeout(() => controller.abort(), 30000); 
       
       response = await fetch(DEEPSEEK_API_URL, {
         method: "POST",
@@ -181,20 +196,53 @@ serve(async (req) => {
           errorData = { raw: errorText };
         }
         
-        // Check for specific error conditions
-        if (errorData.error?.type === "invalid_request_error") {
-          console.error("Invalid request error:", errorData.error.message);
-        } else if (response.status === 429) {
-          console.error("Rate limit exceeded");
-        } else if (response.status >= 500) {
-          console.error("DeepSeek server error");
+        // Provide a fallback response when DeepSeek API fails
+        if (contextToUse && contextToUse.length > 0) {
+          console.log("Providing fallback response from context");
+          
+          // Find most relevant section to provide as fallback
+          const contextParagraphs = contextToUse.split(/\n\s*\n/);
+          let bestMatch = "";
+          let bestScore = 0;
+          
+          const queryWords = query.toLowerCase().split(/\s+/);
+          
+          for (const paragraph of contextParagraphs) {
+            if (paragraph.trim().length < 20) continue; // Skip very short paragraphs
+            
+            const paragraphLower = paragraph.toLowerCase();
+            let score = 0;
+            
+            for (const word of queryWords) {
+              if (word.length > 3 && paragraphLower.includes(word)) {
+                score += 1;
+              }
+            }
+            
+            if (score > bestScore) {
+              bestScore = score;
+              bestMatch = paragraph;
+            }
+          }
+          
+          if (bestScore > 0) {
+            return new Response(
+              JSON.stringify({ 
+                answer: `I found this information that might be relevant to your question:\n\n${bestMatch}\n\n(Note: The DeepSeek API was unavailable, so I'm showing the most relevant section from the documents. For more specific answers, please try again later.)`,
+                citations: []
+              }),
+              {
+                headers: { ...corsHeaders, "Content-Type": "application/json" },
+              }
+            );
+          }
         }
         
         return new Response(
           JSON.stringify({ 
             error: `DeepSeek API returned status ${response.status}`, 
             details: errorData,
-            message: "There was an issue with the DeepSeek API. Please check your API key and try again."
+            message: "There was an issue with the DeepSeek API. Please try again later."
           }),
           {
             status: 502, // Using 502 Bad Gateway for API failures
@@ -207,7 +255,7 @@ serve(async (req) => {
       
       // Handle specific fetch errors
       if (fetchError.name === "AbortError") {
-        console.error("Request timed out after 20 seconds");
+        console.error("Request timed out after 30 seconds");
         return new Response(
           JSON.stringify({ 
             error: "Request to DeepSeek API timed out",

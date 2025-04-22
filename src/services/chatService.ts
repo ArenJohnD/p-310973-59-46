@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 import { ChatSession, DocumentSection, Message, ReferenceDocument } from "@/types/chat";
 import { extractDocumentSections, extractTextFromPDF } from "@/utils/pdfUtils";
@@ -268,7 +269,11 @@ export const findRelevantInformation = async (query: string, referenceDocuments:
     const allSections: DocumentSection[] = [];
     const documentInfo = {};
     
-    for (const doc of referenceDocuments) {
+    // Process at most 5 documents to avoid timeout issues
+    const docsToProcess = referenceDocuments.slice(0, 5);
+    console.log(`Will process ${docsToProcess.length} documents (limited to avoid timeouts)`);
+    
+    for (const doc of docsToProcess) {
       try {
         console.log(`Processing document: ${doc.file_name}`);
         
@@ -285,6 +290,11 @@ export const findRelevantInformation = async (query: string, referenceDocuments:
         // Extract text from the PDF
         const text = await extractTextFromPDF(fileData.signedUrl);
         console.log(`Extracted text length: ${text.length} characters from ${doc.file_name}`);
+        
+        if (text.length === 0) {
+          console.error(`No text extracted from ${doc.file_name}`);
+          continue;
+        }
         
         // Extract sections with position info
         const sections = extractDocumentSections(text, doc.id, doc.file_name);
@@ -326,9 +336,17 @@ export const findRelevantInformation = async (query: string, referenceDocuments:
     if (bestMatches.length > 0) {
       console.log(`Found ${bestMatches.length} relevant sections`);
       
-      const context = bestMatches
-        .map(match => `${match.title}\n${match.content}`)
-        .join('\n\n');
+      // Limit context size to avoid API errors
+      let context = "";
+      for (const match of bestMatches) {
+        const sectionText = `${match.title}\n${match.content}`;
+        if (context.length + sectionText.length + 2 < 40000) {
+          context += sectionText + "\n\n";
+        } else {
+          console.log("Context size limit reached, truncating...");
+          break;
+        }
+      }
       
       console.log("Context length: ", context.length);
       console.log("Sending query to DeepSeek with context");
@@ -340,7 +358,12 @@ export const findRelevantInformation = async (query: string, referenceDocuments:
 
         if (error) {
           console.error("Error invoking DeepSeek function with context:", error);
-          throw new Error(error.message);
+          throw new Error(error.message || "Failed to get response from AI");
+        }
+        
+        if (!data || !data.answer) {
+          console.error("Missing answer in DeepSeek response");
+          throw new Error("Invalid response from AI service");
         }
         
         return data.answer;
@@ -352,8 +375,9 @@ export const findRelevantInformation = async (query: string, referenceDocuments:
     } else {
       console.log("No specific matches found. Using general context");
       
+      // Use fewer sections for general context to avoid timeouts
       const generalContext = allSections
-        .slice(0, 5)
+        .slice(0, 3)
         .map(section => `${section.title}\n${section.content}`)
         .join('\n\n');
         
