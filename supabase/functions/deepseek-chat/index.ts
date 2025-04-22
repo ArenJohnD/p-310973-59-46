@@ -270,123 +270,13 @@ serve(async (req) => {
           errorData = { raw: errorText };
         }
         
-        // Provide a fallback response when DeepSeek API fails
-        if (contextToUse && contextToUse.length > 0) {
-          console.log("Providing fallback response from context");
-          
-          // Find most relevant section to provide as fallback
-          const contextParagraphs = contextToUse.split(/\n\s*\n/);
-          let bestMatch = "";
-          let bestMatchHeader = "";
-          let bestScore = 0;
-          
-          const queryWords = query.toLowerCase().split(/\s+/);
-          
-          // Try to find sections with headers/titles first
-          for (let i = 0; i < contextParagraphs.length; i++) {
-            const paragraph = contextParagraphs[i];
-            if (paragraph.trim().length < 50) continue; // Skip very short paragraphs
-            
-            // Look for title patterns
-            const titleMatch = paragraph.match(/^(Article|Section)\s+[\w\d\.]+:?\s+([^\n]+)/i);
-            if (titleMatch) {
-              const title = titleMatch[0];
-              const content = paragraph.substring(title.length).trim();
-              
-              if (content.length < 30) continue; // Skip if the actual content is too short
-              
-              const combinedText = (title + " " + content).toLowerCase();
-              let score = 0;
-              
-              // Check for exact query matches
-              if (combinedText.includes(query.toLowerCase())) {
-                score += 50;
-              }
-              
-              // Check for keyword matches
-              for (const word of queryWords) {
-                if (word.length > 3 && combinedText.includes(word)) {
-                  score += 3;
-                  
-                  // Extra points if the word appears in the title
-                  if (title.toLowerCase().includes(word)) {
-                    score += 5;
-                  }
-                }
-              }
-              
-              if (score > bestScore) {
-                bestScore = score;
-                bestMatch = paragraph;
-                bestMatchHeader = title;
-              }
-            }
-          }
-          
-          // If no good section with a header was found, try any paragraph
-          if (bestScore < 10) {
-            for (const paragraph of contextParagraphs) {
-              if (paragraph.trim().length < 100) continue; // Skip very short paragraphs
-              
-              const paragraphLower = paragraph.toLowerCase();
-              let score = 0;
-              
-              // Check for exact query matches
-              if (paragraphLower.includes(query.toLowerCase())) {
-                score += 30;
-              }
-              
-              // Check for keyword matches
-              for (const word of queryWords) {
-                if (word.length > 3 && paragraphLower.includes(word)) {
-                  score += 2;
-                }
-              }
-              
-              // Prioritize paragraphs with policy language
-              if (/shall|must|required|prohibited|not allowed|mandatory/i.test(paragraph)) {
-                score += 15;
-              }
-              
-              if (score > bestScore) {
-                bestScore = score;
-                bestMatch = paragraph;
-                bestMatchHeader = "";
-              }
-            }
-          }
-          
-          if (bestScore > 0) {
-            // Format the response nicely
-            let responseText = "I found this information that might be relevant to your question:\n\n";
-            
-            if (bestMatchHeader) {
-              responseText += `**${bestMatchHeader}**\n\n`;
-            }
-            
-            responseText += `${bestMatch}\n\n`;
-            responseText += "(Note: The DeepSeek API was unavailable, so I'm showing the most relevant section from the documents. For more specific answers, please try again later.)";
-            
-            return new Response(
-              JSON.stringify({ 
-                answer: responseText,
-                citations: []
-              }),
-              {
-                headers: { ...corsHeaders, "Content-Type": "application/json" },
-              }
-            );
-          }
-        }
-        
+        // Return a better error message instead of fallback content
         return new Response(
           JSON.stringify({ 
-            error: `DeepSeek API returned status ${response.status}`, 
-            details: errorData,
-            message: "There was an issue with the DeepSeek API. Please try again later."
+            answer: "I'm sorry, I'm currently experiencing technical difficulties connecting to my knowledge base. Please try your question again in a few moments.",
+            citations: []
           }),
           {
-            status: 502, // Using 502 Bad Gateway for API failures
             headers: { ...corsHeaders, "Content-Type": "application/json" },
           }
         );
@@ -397,27 +287,15 @@ serve(async (req) => {
       // Handle specific fetch errors
       if (fetchError.name === "AbortError") {
         console.error("Request timed out after 30 seconds");
-        return new Response(
-          JSON.stringify({ 
-            error: "Request to DeepSeek API timed out",
-            details: "The request took too long to complete",
-            message: "The DeepSeek API is taking too long to respond. Please try again later."
-          }),
-          {
-            status: 504, // Gateway Timeout
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          }
-        );
       }
       
+      // Return a better error message
       return new Response(
         JSON.stringify({ 
-          error: "Error connecting to DeepSeek API",
-          details: fetchError.message,
-          message: "There was an error connecting to the DeepSeek API. Please try again later."
+          answer: "I'm sorry, I'm currently experiencing technical difficulties. Please try your question again in a few moments.",
+          citations: []
         }),
         {
-          status: 503, // Service Unavailable
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         }
       );
@@ -434,12 +312,10 @@ serve(async (req) => {
         console.error("Invalid response format from DeepSeek API:", JSON.stringify(responseData).substring(0, 200) + "...");
         return new Response(
           JSON.stringify({ 
-            error: "Invalid response format from DeepSeek API",
-            details: "No choices in response",
-            message: "The DeepSeek API returned an unexpected response format. Please try again later."
+            answer: "I'm sorry, I received an unexpected response format. Please try your question again.",
+            citations: []
           }),
           {
-            status: 502,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
           }
         );
@@ -449,12 +325,10 @@ serve(async (req) => {
         console.error("Missing content in DeepSeek API response:", JSON.stringify(responseData.choices[0]));
         return new Response(
           JSON.stringify({ 
-            error: "Invalid content in DeepSeek API response",
-            details: responseData.choices[0],
-            message: "The DeepSeek API returned a response with missing content. Please try again later."
+            answer: "I apologize, but I couldn't generate a proper response. Please try asking your question again.",
+            citations: []
           }),
           {
-            status: 502,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
           }
         );
@@ -492,12 +366,10 @@ serve(async (req) => {
       
       return new Response(
         JSON.stringify({ 
-          error: "Error parsing DeepSeek API response",
-          details: parseError.message,
-          message: "There was an error processing the response from the DeepSeek API. Please try again later."
+          answer: "I encountered an error while processing my response. Please try your question again.",
+          citations: []
         }),
         {
-          status: 500,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         }
       );
@@ -506,11 +378,10 @@ serve(async (req) => {
     console.error("General error in deepseek-chat function:", error);
     return new Response(
       JSON.stringify({ 
-        error: error.message,
-        message: "An unexpected error occurred. Please try again later."
+        answer: "An unexpected error occurred. Please try your question again later.",
+        citations: []
       }),
       {
-        status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       }
     );
@@ -588,3 +459,4 @@ function processTextWithCitations(text: string, documentInfo: any = {}) {
     citations
   };
 }
+
