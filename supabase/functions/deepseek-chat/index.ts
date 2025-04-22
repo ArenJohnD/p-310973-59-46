@@ -54,7 +54,7 @@ serve(async (req) => {
       );
     }
     
-    const { query, context, documentInfo } = reqBody;
+    const { query, context, documentInfo, sourceFiles } = reqBody;
     
     // Validate input
     if (!query) {
@@ -71,6 +71,7 @@ serve(async (req) => {
     console.log("Query:", query);
     console.log("Context length:", context ? context.length : 0);
     console.log("DocumentInfo provided:", documentInfo ? "Yes" : "No");
+    console.log("Source files:", sourceFiles ? sourceFiles.join(', ') : "None specified");
     
     // System prompt with clear instructions
     let systemPrompt;
@@ -79,6 +80,7 @@ serve(async (req) => {
     // Manage context size more effectively
     if (context && context.length > 25000) {
       console.warn("Context is very large, intelligently truncating");
+      
       // Split by paragraphs and prioritize content with query keywords
       const paragraphs = context.split(/\n\s*\n/);
       const queryWords = query.toLowerCase().split(/\s+/).filter(w => w.length > 3);
@@ -88,19 +90,32 @@ serve(async (req) => {
         let score = 0;
         const pLower = p.toLowerCase();
         
+        // Check for exact query matches (highest priority)
+        if (pLower.includes(query.toLowerCase())) {
+          score += 15;
+        }
+        
+        // Check for individual keyword matches
         queryWords.forEach(word => {
           if (pLower.includes(word)) {
             score += 1;
+            
             // Bonus for exact matches or proximity
-            if (pLower.includes(query.toLowerCase())) {
-              score += 5;
+            const wordRegex = new RegExp(`\\b${word}\\b`, 'i');
+            if (wordRegex.test(pLower)) {
+              score += 3; // Exact word match bonus
             }
           }
         });
         
-        // Bonus for structured content (likely more important)
-        if (p.match(/Article|Section|Policy/i)) {
+        // Check for article/section references (likely important content)
+        if (/Article|Section|Policy|Rule/i.test(p)) {
           score *= 1.5;
+        }
+        
+        // Check for rules or requirements (likely answers to policy questions)
+        if (/shall|must|required|prohibited|not allowed|mandatory/i.test(p)) {
+          score *= 1.3;
         }
         
         return { paragraph: p, score };
@@ -109,12 +124,33 @@ serve(async (req) => {
       // Sort by score and take top results
       scoredParagraphs.sort((a, b) => b.score - a.score);
       
+      // Include all high-scoring paragraphs
+      const highScoringParagraphs = scoredParagraphs.filter(item => item.score > 5);
+      console.log(`Found ${highScoringParagraphs.length} high-scoring paragraphs`);
+      
       let truncatedContext = "";
-      for (const item of scoredParagraphs) {
-        if (truncatedContext.length + item.paragraph.length < 25000) {
+      
+      // First include all high-scoring paragraphs
+      for (const item of highScoringParagraphs) {
+        if (truncatedContext.length + item.paragraph.length < 20000) {
           truncatedContext += item.paragraph + "\n\n";
         } else {
           break;
+        }
+      }
+      
+      // If we still have room, add some medium-scoring paragraphs for context
+      if (truncatedContext.length < 20000) {
+        const mediumScoringParagraphs = scoredParagraphs
+          .filter(item => item.score <= 5 && item.score >= 1)
+          .slice(0, 20);
+          
+        for (const item of mediumScoringParagraphs) {
+          if (truncatedContext.length + item.paragraph.length < 25000) {
+            truncatedContext += item.paragraph + "\n\n";
+          } else {
+            break;
+          }
         }
       }
       
@@ -123,37 +159,42 @@ serve(async (req) => {
     }
     
     if (contextToUse && contextToUse.trim().length > 0) {
-      systemPrompt = `You are NEUPoliSeek, an AI assistant specialized in New Era University policies and procedures.
+      systemPrompt = `You are Poli, an AI assistant specializing in New Era University policies, procedures, and student regulations.
       
       CRITICAL INSTRUCTIONS:
-      1. You MUST answer ONLY questions about New Era University policies and procedures.
-      2. If a question is not about university policies, politely explain you can only help with policy questions.
-      3. Your responses must be PRECISE, FACTUAL, and based ONLY on the provided context.
-      4. ALWAYS quote directly from the policy documents when possible, using exact wording.
-      5. You MUST cite the EXACT article number and section number for every policy you reference.
-      6. Format citations as [Article X: Title] or [Section Y.Z: Title] immediately after each statement.
-      7. Use markdown for direct quotes: "> quoted text" with the citation right after.
+      1. You MUST answer questions about New Era University policies and procedures precisely and accurately.
+      2. You are a HELPFUL guide intended to assist students, faculty, and staff in understanding university policies.
+      3. Base your responses EXCLUSIVELY on the provided context from university policy documents.
+      4. Your responses must be PRECISE, FACTUAL, and DIRECTLY answer the user's question.
+      5. ALWAYS cite specific article numbers, section numbers, and document names for every policy you reference.
+      6. Format citations as [Article X: Title], [Section Y.Z: Title], or [Document: Title] immediately after each statement.
+      7. Use markdown formatting: "**Important point**" for emphasis and "> quoted text" for direct quotes.
       8. NEVER invent or assume information not explicitly stated in the context.
       9. If multiple relevant policies exist, mention ALL of them with proper citations.
       10. If the policy is unclear or seems contradictory, acknowledge this and present the actual text.
-      11. If you don't find a specific answer in the context, say so clearly rather than guessing.
+      11. If you don't find a specific answer in the context, clearly state so rather than guessing.
       12. Format your response in clear sections with headings when appropriate.
+      13. Use bullet points or numbered lists for multi-step procedures or lists of requirements.
+      14. Be concise but complete - provide all relevant information to fully answer the question.
       
       Base your response EXCLUSIVELY on these university policy documents:
       
       ${contextToUse}
       
-      First provide a concise answer focused directly on the query. Then support with evidence using direct quotes where helpful. Always cite specific article and section numbers.
-      If the context doesn't fully address the query, acknowledge the limitations and suggest where the user might find more information.`;
-    } else {
-      systemPrompt = `You are NEUPoliSeek, an AI assistant specialized in New Era University policies and procedures.
+      First provide a concise answer that directly addresses the query. Then support with evidence using direct quotes where helpful. Always cite specific article and section numbers from the source documents.
       
-      I don't have specific policy information in my context right now. To answer your question accurately:
+      If the context doesn't fully address the query, acknowledge the limitations and suggest where the user might find more information within the university.`;
+    } else {
+      systemPrompt = `You are Poli, an AI assistant specialized in New Era University policies and procedures.
+      
+      I don't have specific policy information in my context right now to answer your question accurately. To best assist you:
 
       1. I need relevant university policy documents to be uploaded first.
       2. Once documents are available, I can search them and provide you with accurate information.
       3. Please upload documents related to your question so I can assist you better.
-      4. I'll never guess about policy information without proper documentation.`;
+      4. I'll never guess about policy information without proper documentation.
+      
+      If you're looking for general information about university policies, I recommend checking the official New Era University website, student handbook, or contacting the appropriate university department directly.`;
     }
     
     // Log context details for debugging
@@ -176,8 +217,10 @@ serve(async (req) => {
         }
       ],
       temperature: 0.1,  // Very low temperature for more factual responses
-      max_tokens: 1000,  // Allow longer responses for comprehensive answers
-      top_p: 0.95        // More deterministic responses
+      max_tokens: 2000,  // Allow longer responses for comprehensive answers
+      top_p: 0.95,       // More deterministic responses
+      frequency_penalty: 0.5,  // Reduce repetition
+      presence_penalty: 0.5    // Encourage covering different points
     };
     
     console.log("Request payload structure:", JSON.stringify({
@@ -196,9 +239,9 @@ serve(async (req) => {
     
     let response;
     try {
-      // Set a timeout for the fetch operation (20 seconds)
+      // Set a timeout for the fetch operation (30 seconds)
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 20000); 
+      const timeoutId = setTimeout(() => controller.abort(), 30000); 
       
       response = await fetch(DEEPSEEK_API_URL, {
         method: "POST",
@@ -234,32 +277,99 @@ serve(async (req) => {
           // Find most relevant section to provide as fallback
           const contextParagraphs = contextToUse.split(/\n\s*\n/);
           let bestMatch = "";
+          let bestMatchHeader = "";
           let bestScore = 0;
           
           const queryWords = query.toLowerCase().split(/\s+/);
           
-          for (const paragraph of contextParagraphs) {
+          // Try to find sections with headers/titles first
+          for (let i = 0; i < contextParagraphs.length; i++) {
+            const paragraph = contextParagraphs[i];
             if (paragraph.trim().length < 50) continue; // Skip very short paragraphs
             
-            const paragraphLower = paragraph.toLowerCase();
-            let score = 0;
-            
-            for (const word of queryWords) {
-              if (word.length > 3 && paragraphLower.includes(word)) {
-                score += 1;
+            // Look for title patterns
+            const titleMatch = paragraph.match(/^(Article|Section)\s+[\w\d\.]+:?\s+([^\n]+)/i);
+            if (titleMatch) {
+              const title = titleMatch[0];
+              const content = paragraph.substring(title.length).trim();
+              
+              if (content.length < 30) continue; // Skip if the actual content is too short
+              
+              const combinedText = (title + " " + content).toLowerCase();
+              let score = 0;
+              
+              // Check for exact query matches
+              if (combinedText.includes(query.toLowerCase())) {
+                score += 50;
+              }
+              
+              // Check for keyword matches
+              for (const word of queryWords) {
+                if (word.length > 3 && combinedText.includes(word)) {
+                  score += 3;
+                  
+                  // Extra points if the word appears in the title
+                  if (title.toLowerCase().includes(word)) {
+                    score += 5;
+                  }
+                }
+              }
+              
+              if (score > bestScore) {
+                bestScore = score;
+                bestMatch = paragraph;
+                bestMatchHeader = title;
               }
             }
-            
-            if (score > bestScore) {
-              bestScore = score;
-              bestMatch = paragraph;
+          }
+          
+          // If no good section with a header was found, try any paragraph
+          if (bestScore < 10) {
+            for (const paragraph of contextParagraphs) {
+              if (paragraph.trim().length < 100) continue; // Skip very short paragraphs
+              
+              const paragraphLower = paragraph.toLowerCase();
+              let score = 0;
+              
+              // Check for exact query matches
+              if (paragraphLower.includes(query.toLowerCase())) {
+                score += 30;
+              }
+              
+              // Check for keyword matches
+              for (const word of queryWords) {
+                if (word.length > 3 && paragraphLower.includes(word)) {
+                  score += 2;
+                }
+              }
+              
+              // Prioritize paragraphs with policy language
+              if (/shall|must|required|prohibited|not allowed|mandatory/i.test(paragraph)) {
+                score += 15;
+              }
+              
+              if (score > bestScore) {
+                bestScore = score;
+                bestMatch = paragraph;
+                bestMatchHeader = "";
+              }
             }
           }
           
           if (bestScore > 0) {
+            // Format the response nicely
+            let responseText = "I found this information that might be relevant to your question:\n\n";
+            
+            if (bestMatchHeader) {
+              responseText += `**${bestMatchHeader}**\n\n`;
+            }
+            
+            responseText += `${bestMatch}\n\n`;
+            responseText += "(Note: The DeepSeek API was unavailable, so I'm showing the most relevant section from the documents. For more specific answers, please try again later.)";
+            
             return new Response(
               JSON.stringify({ 
-                answer: `I found this information that might be relevant to your question:\n\n${bestMatch}\n\n(Note: The DeepSeek API was unavailable, so I'm showing the most relevant section from the documents. For more specific answers, please try again later.)`,
+                answer: responseText,
                 citations: []
               }),
               {
@@ -286,7 +396,7 @@ serve(async (req) => {
       
       // Handle specific fetch errors
       if (fetchError.name === "AbortError") {
-        console.error("Request timed out after 20 seconds");
+        console.error("Request timed out after 30 seconds");
         return new Response(
           JSON.stringify({ 
             error: "Request to DeepSeek API timed out",
@@ -410,42 +520,67 @@ serve(async (req) => {
 // Process text to extract structured citations with improved regex matching
 function processTextWithCitations(text: string, documentInfo: any = {}) {
   // Enhanced regex to match more citation formats
-  const citationRegex = /\[(Article|Section|Policy)\s+([^:]+?)(?:\s*-\s*|\s*:\s*|\s+)([^\]]+)\]/g;
+  const citationRegexes = [
+    /\[(Article|Section|Policy)\s+([^:]+?)(?:\s*-\s*|\s*:\s*|\s+)([^\]]+)\]/g,
+    /\[([^:]+?):\s+([^\]]+)\]/g,  // Match [Document: Title] format
+    /\(([^:]+?):\s+([^)]+)\)/g    // Match (Document: Title) format as well
+  ];
   
   let citations = [];
   let processedText = text;
-  let match;
   
-  // Replace citations with hyperlinks
-  while ((match = citationRegex.exec(text)) !== null) {
-    const fullMatch = match[0];
-    const type = match[1];
-    const number = match[2].trim();
-    const title = match[3].trim();
-    
-    // Create a unique ID for this citation
-    const citationId = `citation-${citations.length}`;
-    
-    // Find document info if available
-    let docInfo = null;
-    if (documentInfo && documentInfo[`${type.toLowerCase()} ${number}`]) {
-      docInfo = documentInfo[`${type.toLowerCase()} ${number}`];
+  // Process each regex pattern
+  for (const regex of citationRegexes) {
+    let match;
+    while ((match = regex.exec(text)) !== null) {
+      const fullMatch = match[0];
+      let type, number, title;
+      
+      // Process based on the regex pattern that matched
+      if (match.length === 4) {
+        // First pattern: [Article|Section|Policy X: Title]
+        type = match[1];
+        number = match[2].trim();
+        title = match[3].trim();
+      } else if (match.length === 3) {
+        // Second/third pattern: [Document: Title] or (Document: Title)
+        type = "Document";
+        number = "";
+        title = match[2].trim();
+      } else {
+        continue; // Skip if format doesn't match expectations
+      }
+      
+      // Create a unique ID for this citation
+      const citationId = `citation-${citations.length}`;
+      
+      // Find document info if available
+      let docInfo = null;
+      if (documentInfo) {
+        if (type !== "Document" && number && documentInfo[`${type.toLowerCase()} ${number}`]) {
+          docInfo = documentInfo[`${type.toLowerCase()} ${number}`];
+        } else if (type === "Document" && match[1] && documentInfo[match[1].toLowerCase()]) {
+          docInfo = documentInfo[match[1].toLowerCase()];
+        }
+      }
+      
+      // Create citation object
+      const citation = {
+        id: citationId,
+        reference: type === "Document" ? 
+          `${match[1]}: ${title}` : 
+          `${type} ${number}: ${title}`,
+        documentId: docInfo?.documentId || undefined,
+        position: docInfo?.position || undefined,
+        fileName: docInfo?.fileName || undefined
+      };
+      
+      citations.push(citation);
+      
+      // Replace citation with linked version
+      const replacement = `[${fullMatch}](${citationId})`;
+      processedText = processedText.replace(fullMatch, replacement);
     }
-    
-    // Create citation object
-    const citation = {
-      id: citationId,
-      reference: `${type} ${number}: ${title}`,
-      documentId: docInfo?.documentId || undefined,
-      position: docInfo?.position || undefined,
-      fileName: docInfo?.fileName || undefined
-    };
-    
-    citations.push(citation);
-    
-    // Replace citation with linked version
-    const replacement = `[${fullMatch}](${citationId})`;
-    processedText = processedText.replace(fullMatch, replacement);
   }
   
   return {

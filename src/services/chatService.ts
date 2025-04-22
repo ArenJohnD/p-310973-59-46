@@ -252,7 +252,14 @@ export const findRelevantInformation = async (query: string, referenceDocuments:
     const maxDocsToProcess = Math.min(referenceDocuments.length, 8);
     console.log(`Will process ${maxDocsToProcess} documents (limited to avoid timeouts)`);
     
-    const docsToProcess = referenceDocuments.slice(0, maxDocsToProcess);
+    const sortedDocs = [...referenceDocuments].sort((a, b) => {
+      if (a.created_at && b.created_at) {
+        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+      }
+      return 0;
+    });
+    
+    const docsToProcess = sortedDocs.slice(0, maxDocsToProcess);
     
     for (const doc of docsToProcess) {
       try {
@@ -315,10 +322,22 @@ export const findRelevantInformation = async (query: string, referenceDocuments:
       
       let context = "";
       
+      const uniqueDocNames = new Set<string>();
+      bestMatches.forEach(match => {
+        if (match.fileName) uniqueDocNames.add(match.fileName);
+      });
+      
+      if (uniqueDocNames.size > 0) {
+        context += "Sources referenced: " + Array.from(uniqueDocNames).join(", ") + "\n\n";
+      }
+      
       for (const match of bestMatches) {
         const docInfo = match.fileName ? `[Source: ${match.fileName}] ` : '';
         const positionInfo = match.position ? `[Page: ${match.position.startPage}] ` : '';
-        const sectionText = `${docInfo}${positionInfo}${match.title}\n${match.content}`;
+        const articleInfo = match.articleNumber ? `[Article: ${match.articleNumber}] ` : '';
+        const sectionInfo = match.sectionId ? `[Section: ${match.sectionId}] ` : '';
+        
+        const sectionText = `${docInfo}${positionInfo}${articleInfo}${sectionInfo}${match.title}\n${match.content}`;
         
         if (context.length + sectionText.length + 2 < 40000) {
           context += sectionText + "\n\n";
@@ -332,28 +351,108 @@ export const findRelevantInformation = async (query: string, referenceDocuments:
       
       try {
         console.log("Sending query to DeepSeek with targeted context");
-        const { data, error } = await supabase.functions.invoke('deepseek-chat', {
-          body: { query, context, documentInfo }
-        });
-
-        if (error) {
-          console.error("Error invoking DeepSeek function with context:", error);
-          throw new Error(error.message || "Failed to get response from AI");
+        
+        let attempts = 0;
+        const maxAttempts = 2;
+        let lastError = null;
+        
+        while (attempts < maxAttempts) {
+          try {
+            attempts++;
+            
+            const { data, error } = await supabase.functions.invoke('deepseek-chat', {
+              body: { 
+                query, 
+                context, 
+                documentInfo,
+                sourceFiles: Array.from(uniqueDocNames)
+              }
+            });
+  
+            if (error) {
+              console.error(`Error invoking DeepSeek function (attempt ${attempts}):`, error);
+              lastError = error;
+              
+              if (attempts < maxAttempts) {
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                continue;
+              }
+              
+              throw new Error(error.message || "Failed to get response from AI");
+            }
+            
+            if (!data || !data.answer) {
+              console.error(`Missing answer in DeepSeek response (attempt ${attempts})`);
+              lastError = new Error("Invalid response from AI service");
+              
+              if (attempts < maxAttempts) {
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                continue;
+              }
+              
+              throw new Error("Invalid response from AI service");
+            }
+            
+            return data.answer;
+          } catch (err) {
+            console.error(`Error in attempt ${attempts}:`, err);
+            lastError = err;
+            
+            if (attempts >= maxAttempts) {
+              throw err;
+            }
+            
+            await new Promise(resolve => setTimeout(resolve, 1000));
+          }
         }
         
-        if (!data || !data.answer) {
-          console.error("Missing answer in DeepSeek response");
-          throw new Error("Invalid response from AI service");
-        }
-        
-        return data.answer;
+        throw lastError || new Error("Failed to get response after multiple attempts");
       } catch (err) {
         console.error("Error calling DeepSeek API with context:", err);
         
-        return `Based on the policy documents, here's what I found:\n\n${bestMatches[0].content}`;
+        const bestMatch = bestMatches[0];
+        return `Based on the policy documents, here's what I found:\n\n${bestMatch.title}\n\n${bestMatch.content}\n\n(Note: This is the most relevant section I could find in the document "${bestMatch.fileName || 'University Policy'}")`;
       }
     } else {
       console.log("No specific matches found. Using general context");
+      
+      const simplifiedQuery = simplifyQueryForBroaderSearch(query);
+      if (simplifiedQuery !== query) {
+        console.log(`Trying broader search with simplified query: "${simplifiedQuery}"`);
+        const broaderMatches = findBestMatch(simplifiedQuery, allSections);
+        
+        if (broaderMatches.length > 0) {
+          console.log(`Found ${broaderMatches.length} matches with broader search`);
+          
+          let context = "";
+          for (const match of broaderMatches.slice(0, 5)) {
+            const docInfo = match.fileName ? `[Source: ${match.fileName}] ` : '';
+            const sectionText = `${docInfo}${match.title}\n${match.content}`;
+            
+            if (context.length + sectionText.length + 2 < 40000) {
+              context += sectionText + "\n\n";
+            } else {
+              break;
+            }
+          }
+          
+          try {
+            console.log("Sending query to DeepSeek with broader context");
+            const { data, error } = await supabase.functions.invoke('deepseek-chat', {
+              body: { query, context, documentInfo }
+            });
+  
+            if (error) {
+              throw new Error(error.message);
+            }
+            
+            return data.answer;
+          } catch (err) {
+            console.error("Error calling DeepSeek API with broader context:", err);
+            return `I found some information that might be related to your question:\n\n${broaderMatches[0].content}\n\nHowever, I don't have specific information that directly answers your query. Please try rephrasing your question or check with the university administration.`;
+          }
+        }
+      }
       
       const documentIdsSeen = new Set<string>();
       const generalSections = allSections.filter(section => {
@@ -391,3 +490,20 @@ export const findRelevantInformation = async (query: string, referenceDocuments:
     return "I encountered an error while searching the policy documents. Please try again later.";
   }
 };
+
+function simplifyQueryForBroaderSearch(query: string): string {
+  const simplified = query.replace(/^(what|who|when|where|why|how|is|are|can|should|would|will|do|does)\s+/i, '')
+    .replace(/please|tell me|inform me|I need to know|I want to know|I'd like to know/ig, '')
+    .replace(/\?|\.|\!|\'|\"|,|;/g, '')
+    .trim();
+  
+  const words = simplified.split(/\s+/);
+  
+  const keyWords = words.filter(word => word.length > 2);
+  
+  if (keyWords.length > 0) {
+    return keyWords.join(' ');
+  }
+  
+  return query;
+}
