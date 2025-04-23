@@ -1,10 +1,10 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import "https://deno.land/x/xhr@0.1.0/mod.ts"
-import { HfInference } from 'https://esm.sh/@huggingface/inference@2.3.2'
 
-const HUGGING_FACE_TOKEN = Deno.env.get('HUGGING_FACE_ACCESS_TOKEN')
-const MODEL_ID = "mistralai/Mixtral-8x7B-Instruct-v0.1"
+const MISTRAL_API_KEY = Deno.env.get('MISTRAL_API_KEY')
+const MISTRAL_MODEL = "mistral-large-latest"
+const MISTRAL_ENDPOINT = "https://api.mistral.ai/v1/chat/completions"
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -17,11 +17,11 @@ serve(async (req) => {
   }
 
   try {
-    if (!HUGGING_FACE_TOKEN) {
-      console.error("HUGGING_FACE_ACCESS_TOKEN not configured")
+    if (!MISTRAL_API_KEY) {
+      console.error("MISTRAL_API_KEY not configured")
       return new Response(
         JSON.stringify({ 
-          answer: "The HuggingFace access token is not configured. Please contact your administrator.",
+          answer: "The Mistral API key is not configured. Please contact your administrator.",
           citations: []
         }),
         {
@@ -31,8 +31,7 @@ serve(async (req) => {
       )
     }
 
-    // Log token for debugging (first few characters only)
-    console.log(`Using HuggingFace token starting with: ${HUGGING_FACE_TOKEN.substring(0, 4)}...`)
+    console.log(`Using Mistral API key starting with: ${MISTRAL_API_KEY.substring(0, 4)}...`)
 
     const { query, context, documentInfo } = await req.json()
 
@@ -52,37 +51,57 @@ serve(async (req) => {
     console.log("Query:", query)
     console.log("Context length:", context ? context.length : 0)
 
-    const hf = new HfInference(HUGGING_FACE_TOKEN)
-
+    // Build system prompt
     let systemPrompt
     if (context) {
       systemPrompt = `You are Poli, an AI assistant specializing in New Era University policies and procedures. Base your responses on the following context:
 
 ${context}
 
-First provide a concise answer that directly addresses the query. Then support with evidence using direct quotes where helpful. Always cite specific article and section numbers from the source documents.`
+First provide a concise answer that directly addresses the query. Then support with evidence using direct quotes where helpful. Always cite specific article and section numbers from the source documents.
+`
     } else {
       systemPrompt = `You are Poli, an AI assistant specialized in New Era University policies and procedures. I don't have specific policy information to reference right now.`
     }
 
     try {
-      const response = await hf.textGeneration({
-        model: MODEL_ID,
-        inputs: `<s>[INST] ${systemPrompt}
+      // Build messages for Mistral API
+      const messages = [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: query }
+      ]
 
-Question: ${query} [/INST]`,
-        parameters: {
-          max_new_tokens: 1024,
-          temperature: 0.1,
-          top_p: 0.95,
-          repetition_penalty: 1.15
-        }
+      const body = JSON.stringify({
+        model: MISTRAL_MODEL,
+        messages,
+        temperature: 0.1,
+        top_p: 0.95,
+        max_tokens: 1024,
+        safe_prompt: true
       })
 
-      console.log("Generated response successfully")
+      const mistralResponse = await fetch(MISTRAL_ENDPOINT, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${MISTRAL_API_KEY}`,
+          "Content-Type": "application/json"
+        },
+        body
+      })
+
+      if (!mistralResponse.ok) {
+        const errorText = await mistralResponse.text()
+        throw new Error(`Mistral API Error: ${mistralResponse.status} ${errorText}`)
+      }
+
+      const data = await mistralResponse.json()
+
+      // Fetch the answer from the API response
+      const text = data.choices?.[0]?.message?.content?.trim() || ""
+      console.log("Mistral answer fetched successfully, length:", text.length)
 
       // Process citations from the response
-      const processedText = processTextWithCitations(response, documentInfo || {})
+      const processedText = processTextWithCitations(text, documentInfo || {})
       
       return new Response(
         JSON.stringify({
@@ -94,7 +113,7 @@ Question: ${query} [/INST]`,
         }
       )
     } catch (error) {
-      console.error("Error calling HuggingFace API:", error)
+      console.error("Error calling Mistral API:", error)
       return new Response(
         JSON.stringify({ 
           answer: "I encountered an error while processing your question. Please try again later.",
