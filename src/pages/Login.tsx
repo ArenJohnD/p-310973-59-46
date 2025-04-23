@@ -15,48 +15,35 @@ const Login = () => {
   const [initTimeout, setInitTimeout] = useState<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
-    // Force exit initializing state after 2 seconds at maximum
     const timeout = setTimeout(() => {
       setInitializing(false);
       console.log("Login init timeout reached, exiting loading state");
     }, 2000);
-    
     setInitTimeout(timeout);
-    
     return () => {
       if (timeout) clearTimeout(timeout);
     };
   }, []);
 
   useEffect(() => {
-    // Handle URL hash parameters on page load (OAuth callback)
     const handleHashParameters = async () => {
       console.log("Checking login state, hash present:", !!window.location.hash);
-      
       if (window.location.hash) {
         setLoading(true);
         try {
           const { data, error } = await supabase.auth.getSession();
           if (error) throw error;
-          
           if (data.session) {
             console.log("Received session from OAuth callback");
-
-            // Verify that the email domain is valid
             const email = data.session.user.email;
             if (email && !email.toLowerCase().endsWith('@neu.edu.ph')) {
               console.error("Invalid email domain:", email);
-              
-              // Sign out the user since they don't have the correct domain
               await supabase.auth.signOut();
-              
               setError("Only emails with @neu.edu.ph domain are allowed to sign in.");
               setLoading(false);
               window.location.hash = '';
               return;
             }
-            
-            // If we have a session with valid domain, clear the hash and navigate to home page
             window.location.hash = '';
             navigate('/', { replace: true });
           }
@@ -69,30 +56,22 @@ const Login = () => {
           });
           setLoading(false);
         }
-        
         if (initTimeout) clearTimeout(initTimeout);
         setInitializing(false);
         return;
       }
-      
-      // Check if user is already logged in
       const checkSession = async () => {
         try {
           const { data } = await supabase.auth.getSession();
           if (data.session) {
-            // Verify that the email domain is valid
             const email = data.session.user.email;
             if (email && !email.toLowerCase().endsWith('@neu.edu.ph')) {
               console.error("Invalid email domain:", email);
-              
-              // Sign out the user since they don't have the correct domain
               await supabase.auth.signOut();
-              
               setError("Only emails with @neu.edu.ph domain are allowed to sign in.");
               setLoading(false);
               return;
             }
-            
             console.log("User already has a session, redirecting to home");
             navigate('/', { replace: true });
             return;
@@ -104,14 +83,9 @@ const Login = () => {
           setInitializing(false);
         }
       };
-      
       await checkSession();
     };
-    
-    // Execute immediately
     handleHashParameters();
-    
-    // Clean up function
     return () => {
       if (initTimeout) clearTimeout(initTimeout);
     };
@@ -120,21 +94,18 @@ const Login = () => {
   const handleGoogleSignIn = async () => {
     setLoading(true);
     setError(null);
-    
     try {
-      // Use parameter to specify login_hint for Google to restrict domain
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
           queryParams: {
-            hd: 'neu.edu.ph', // This restricts the Google accounts shown to this domain
+            hd: 'neu.edu.ph',
             login_hint: '@neu.edu.ph',
             access_type: 'offline',
             prompt: 'select_account',
           },
         },
       });
-      
       if (error) throw error;
     } catch (error) {
       console.error("Error signing in with Google:", error);
@@ -145,6 +116,11 @@ const Login = () => {
       });
       setLoading(false);
     }
+  };
+
+  const handleGuestAccess = () => {
+    // Clear any prior session (just in case), then go to guest chat
+    navigate('/guest-chat');
   };
 
   if (initializing) {
@@ -196,7 +172,18 @@ const Login = () => {
             )}
             <span>Sign in with Google (@neu.edu.ph only)</span>
           </Button>
-          
+          <div className="flex items-center gap-2">
+            <div className="flex-1 h-[1px] bg-gray-300" />
+            <span className="text-xs text-gray-400">or</span>
+            <div className="flex-1 h-[1px] bg-gray-300" />
+          </div>
+          <Button
+            onClick={handleGuestAccess}
+            variant="outline"
+            className="w-full py-6 border-gray-300 bg-white hover:bg-gray-50 text-[rgba(49,159,67,1)] font-semibold"
+          >
+            Continue as Guest
+          </Button>
           <p className="text-sm text-center text-gray-500">
             Only New Era University accounts (@neu.edu.ph) are allowed to sign in.
           </p>

@@ -1,4 +1,3 @@
-
 import {
   BrowserRouter,
   Routes,
@@ -13,18 +12,16 @@ import { Toaster } from "@/components/ui/toaster";
 import { Loader2 } from "lucide-react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
-// Create a client
 const queryClient = new QueryClient();
 
-// Lazy load pages for better performance
 const Index = lazy(() => import("@/pages/Index"));
 const Login = lazy(() => import("@/pages/Login"));
+const GuestChat = lazy(() => import("@/pages/GuestChat"));
 const Admin = lazy(() => import("@/pages/Admin"));
 const PolicyDocuments = lazy(() => import("@/pages/PolicyDocuments"));
 const PDFViewer = lazy(() => import("@/pages/PDFViewer"));
 const NotFound = lazy(() => import("@/pages/NotFound"));
 
-// Loading component
 const LoadingPage = () => (
   <div className="min-h-screen flex items-center justify-center bg-[rgba(233,233,233,1)]">
     <div className="flex flex-col items-center gap-2">
@@ -34,14 +31,12 @@ const LoadingPage = () => (
   </div>
 );
 
-// Protected route component
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { user, isLoading } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   
   useEffect(() => {
-    // If not loading and no user, redirect to login
     if (!isLoading && !user) {
       console.log("No user detected, redirecting to login");
       navigate('/login', { replace: true, state: { from: location.pathname } });
@@ -55,7 +50,6 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   return user ? <>{children}</> : null;
 };
 
-// Admin route component with immediate redirect
 const AdminRoute = ({ children }: { children: React.ReactNode }) => {
   const { user, isAdmin, isLoading, refreshAdminStatus } = useAuth();
   const navigate = useNavigate();
@@ -63,10 +57,8 @@ const AdminRoute = ({ children }: { children: React.ReactNode }) => {
   
   useEffect(() => {
     const checkAdminAccess = async () => {
-      // Refresh admin status to ensure it's accurate
       await refreshAdminStatus();
       
-      // If not loading and not admin, redirect immediately
       if (!isLoading) {
         if (!user) {
           console.log("No user detected in AdminRoute, redirecting to login");
@@ -91,28 +83,23 @@ const AdminRoute = ({ children }: { children: React.ReactNode }) => {
     return <LoadingPage />;
   }
   
-  // Only render children if user exists and is admin
   return (user && isAdmin) ? <>{children}</> : null;
 };
 
-// Import toast for admin route
 import { toast } from "@/components/ui/use-toast";
 
-// Main App component without routes
 function AppContent() {
   const { isLoading, user } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   
-  // Immediately redirect to login page if at root
   useEffect(() => {
     if (location.pathname === '/') {
       if (isLoading) {
-        // Set a timeout to force navigate to login if still on loading after delay
         const timeout = setTimeout(() => {
           console.log("Root path timeout triggered, navigating to login");
           navigate('/login', { replace: true });
-        }, 1000); // Reduced timeout for faster redirection
+        }, 1000);
         
         return () => clearTimeout(timeout);
       } else if (!user) {
@@ -120,7 +107,6 @@ function AppContent() {
         navigate('/login', { replace: true });
       }
     } else if (location.pathname === '/login' && user && !isLoading) {
-      // If already logged in and on login page, redirect to home
       console.log("User already logged in, redirecting from login to home");
       navigate('/', { replace: true });
     }
@@ -130,6 +116,7 @@ function AppContent() {
     <Suspense fallback={<LoadingPage />}>
       <Routes>
         <Route path="/login" element={<Login />} />
+        <Route path="/guest-chat" element={<GuestChat />} />
         <Route path="/" element={
           <ProtectedRoute>
             <Index />
@@ -156,7 +143,6 @@ function AppContent() {
   );
 }
 
-// Main App component with providers
 function App() {
   return (
     <BrowserRouter>
