@@ -1,3 +1,4 @@
+
 import { 
   createContext, 
   useContext, 
@@ -216,8 +217,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setTimeout(() => {
           if (isActive) {
             setIsLoading(false);
-            
-            if (!currentSession && location.pathname !== '/login' && location.pathname !== '/') {
+            // Allow /login, /, and /guest-chat as public pages (do not redirect to /login)
+            if (
+              !currentSession &&
+              location.pathname !== '/login' &&
+              location.pathname !== '/' &&
+              location.pathname !== '/guest-chat'
+            ) {
               navigate('/login', { replace: true });
             }
           }
@@ -226,7 +232,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         console.error("Error checking session:", error);
         if (isActive) {
           setIsLoading(false);
-          navigate('/login', { replace: true });
+          // Allow /guest-chat as public page
+          if (
+            location.pathname !== '/login' &&
+            location.pathname !== '/' &&
+            location.pathname !== '/guest-chat'
+          ) {
+            navigate('/login', { replace: true });
+          }
         }
       }
     };
