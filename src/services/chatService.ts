@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { ChatSession, DocumentSection, Message, ReferenceDocument } from "@/types/chat";
 import { extractDocumentSections, extractTextFromPDF } from "@/utils/pdfUtils";
@@ -201,7 +200,7 @@ export const fetchReferenceDocuments = async (): Promise<ReferenceDocument[]> =>
   try {
     const { data, error } = await supabase
       .from('reference_documents')
-      .select('id, file_name, file_path')
+      .select('id, file_name, file_path, created_at')
       .order('created_at', { ascending: false });
     
     if (error) throw error;
@@ -250,9 +249,6 @@ export const findRelevantInformation = async (query: string, referenceDocuments:
     const allSections: DocumentSection[] = [];
     const documentInfo = {};
     
-    const maxDocsToProcess = Math.min(referenceDocuments.length, 8);
-    console.log(`Will process ${maxDocsToProcess} documents (limited to avoid timeouts)`);
-    
     const sortedDocs = [...referenceDocuments].sort((a, b) => {
       if (a.created_at && b.created_at) {
         return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
@@ -260,11 +256,66 @@ export const findRelevantInformation = async (query: string, referenceDocuments:
       return 0;
     });
     
-    const docsToProcess = sortedDocs.slice(0, maxDocsToProcess);
+    const mostRecentDoc = sortedDocs[0];
+    console.log(`Most recent document: "${mostRecentDoc?.file_name}" (${mostRecentDoc?.created_at})`);
+    
+    const additionalDocsToProcess = Math.min(sortedDocs.length - 1, 7);
+    console.log(`Will process the most recent document plus ${additionalDocsToProcess} additional documents`);
+    
+    if (mostRecentDoc) {
+      try {
+        console.log(`Processing LATEST document: ${mostRecentDoc.file_name} (${mostRecentDoc.created_at})`);
+        
+        const { data: fileData } = await supabase.storage
+          .from('policy_documents')
+          .createSignedUrl(mostRecentDoc.file_path, 3600);
+          
+        if (!fileData?.signedUrl) {
+          console.error(`Could not get signed URL for ${mostRecentDoc.file_path}`);
+        } else {
+          const text = await extractTextFromPDF(fileData.signedUrl);
+          console.log(`Extracted text length from LATEST document: ${text.length} characters`);
+          
+          if (text.length > 0) {
+            const sections = extractDocumentSections(text, mostRecentDoc.id, mostRecentDoc.file_name);
+            
+            const mostRecentSections = sections.map(section => ({
+              ...section,
+              isFromMostRecent: true
+            }));
+            
+            mostRecentSections.forEach(section => {
+              if (section.articleNumber) {
+                documentInfo[`article ${section.articleNumber}`] = {
+                  documentId: mostRecentDoc.id,
+                  position: section.position,
+                  fileName: mostRecentDoc.file_name
+                };
+              }
+              
+              if (section.sectionId) {
+                documentInfo[`section ${section.sectionId}`] = {
+                  documentId: mostRecentDoc.id,
+                  position: section.position,
+                  fileName: mostRecentDoc.file_name
+                };
+              }
+            });
+            
+            allSections.push(...mostRecentSections);
+            console.log(`Extracted ${mostRecentSections.length} sections from LATEST document`);
+          }
+        }
+      } catch (err) {
+        console.error(`Error processing latest document ${mostRecentDoc.file_name}:`, err);
+      }
+    }
+    
+    const docsToProcess = sortedDocs.slice(1, 1 + additionalDocsToProcess);
     
     for (const doc of docsToProcess) {
       try {
-        console.log(`Processing document: ${doc.file_name}`);
+        console.log(`Processing additional document: ${doc.file_name} (${doc.created_at})`);
         
         const { data: fileData } = await supabase.storage
           .from('policy_documents')
@@ -316,7 +367,11 @@ export const findRelevantInformation = async (query: string, referenceDocuments:
       return "I don't have any information from policy documents yet. Please upload some documents so I can provide more accurate responses.";
     }
     
-    const bestMatches = findBestMatch(query, allSections);
+    const bestMatches = findBestMatch(query, allSections).sort((a, b) => {
+      if (a.isFromMostRecent && !b.isFromMostRecent) return -1;
+      if (!a.isFromMostRecent && b.isFromMostRecent) return 1;
+      return b.score - a.score;
+    });
     
     if (bestMatches.length > 0) {
       console.log(`Found ${bestMatches.length} relevant sections for the query`);
@@ -330,10 +385,18 @@ export const findRelevantInformation = async (query: string, referenceDocuments:
       
       if (uniqueDocNames.size > 0) {
         context += "Sources referenced: " + Array.from(uniqueDocNames).join(", ") + "\n\n";
+        
+        if (mostRecentDoc) {
+          context += `Most recent document: ${mostRecentDoc.file_name}\n\n`;
+        }
       }
       
+      bestMatches.slice(0, 5).forEach((match, index) => {
+        console.log(`Match ${index + 1}: from document "${match.fileName}"${match.isFromMostRecent ? " (LATEST)" : ""} - score: ${match.score}`);
+      });
+      
       for (const match of bestMatches) {
-        const docInfo = match.fileName ? `[Source: ${match.fileName}] ` : '';
+        const docInfo = match.fileName ? `[Source: ${match.fileName}${match.isFromMostRecent ? " (LATEST)" : ""}] ` : '';
         const positionInfo = match.position ? `[Page: ${match.position.startPage}] ` : '';
         const articleInfo = match.articleNumber ? `[Article: ${match.articleNumber}] ` : '';
         const sectionInfo = match.sectionId ? `[Section: ${match.sectionId}] ` : '';

@@ -33,7 +33,7 @@ serve(async (req) => {
 
     console.log(`Using Mistral API key starting with: ${MISTRAL_API_KEY.substring(0, 4)}...`)
 
-    const { query, context, documentInfo } = await req.json()
+    const { query, context, documentInfo, sourceFiles } = await req.json()
 
     if (!query) {
       return new Response(
@@ -50,6 +50,7 @@ serve(async (req) => {
 
     console.log("Query:", query)
     console.log("Context length:", context ? context.length : 0)
+    console.log("Source files:", sourceFiles || "none specified")
 
     // Build system prompt
     let systemPrompt
@@ -58,7 +59,7 @@ serve(async (req) => {
 
 ${context}
 
-First provide a concise answer that directly addresses the query. Then support with evidence using direct quotes where helpful. Always cite specific article and section numbers from the source documents.
+First provide a concise answer that directly addresses the query. Then support with evidence using direct quotes where helpful. Always cite specific article and section numbers from the source documents. If the information is from the most recent document, make sure to emphasize that.
 `
     } else {
       systemPrompt = `You are Poli, an AI assistant specialized in New Era University policies and procedures. I don't have specific policy information to reference right now.`

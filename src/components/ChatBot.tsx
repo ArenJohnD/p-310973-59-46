@@ -1,4 +1,3 @@
-
 import { useState, useRef, useEffect } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -346,9 +345,73 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
       const allSections: DocumentSection[] = [];
       const documentInfo = {};
       
-      for (const doc of referenceDocuments) {
+      // Sort by creation date (newest first)
+      const sortedDocs = [...referenceDocuments].sort((a, b) => {
+        if (a.created_at && b.created_at) {
+          return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+        }
+        return 0;
+      });
+      
+      // Always process the most recent document first
+      const mostRecentDoc = sortedDocs[0];
+      console.log(`Most recent document: ${mostRecentDoc?.file_name} (${mostRecentDoc?.created_at})`);
+      
+      try {
+        console.log(`Processing LATEST document: ${mostRecentDoc.file_name}`);
+        
+        // Get a signed URL for the document
+        const { data: fileData } = await supabase.storage
+          .from('policy_documents')
+          .createSignedUrl(mostRecentDoc.file_path, 3600);
+          
+        if (!fileData?.signedUrl) {
+          console.error(`Could not get signed URL for ${mostRecentDoc.file_path}`);
+        } else {
+          // Extract text from the PDF
+          const text = await extractTextFromPDF(fileData.signedUrl);
+          console.log(`Extracted text length from LATEST document: ${text.length} characters`);
+          
+          // Extract sections from the text with position information
+          const sections = extractDocumentSections(text, mostRecentDoc.id, mostRecentDoc.file_name);
+          
+          // Add special metadata to mark these sections as coming from the newest document
+          const mostRecentSections = sections.map(section => ({
+            ...section,
+            isFromMostRecent: true
+          }));
+          
+          // Add sections to document info for citation references
+          mostRecentSections.forEach(section => {
+            if (section.articleNumber) {
+              documentInfo[`article ${section.articleNumber}`] = {
+                documentId: mostRecentDoc.id,
+                position: section.position,
+                fileName: mostRecentDoc.file_name
+              };
+            }
+            
+            if (section.sectionId) {
+              documentInfo[`section ${section.sectionId}`] = {
+                documentId: mostRecentDoc.id,
+                position: section.position,
+                fileName: mostRecentDoc.file_name
+              };
+            }
+          });
+          
+          allSections.push(...mostRecentSections);
+          console.log(`Extracted ${mostRecentSections.length} sections from LATEST document`);
+        }
+      } catch (err) {
+        console.error(`Error processing latest document ${mostRecentDoc.file_name}:`, err);
+      }
+      
+      // Process remaining documents (up to 4 more)
+      const remainingDocsToProcess = sortedDocs.slice(1, 5);
+      for (const doc of remainingDocsToProcess) {
         try {
-          console.log(`Processing document: ${doc.file_name}`);
+          console.log(`Processing additional document: ${doc.file_name}`);
           
           // Get a signed URL for the document
           const { data: fileData } = await supabase.storage
@@ -402,10 +465,22 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
         };
       }
       
-      const bestMatches = findBestMatch(query, allSections);
+      // Find best matches but prioritize sections from the most recent document
+      const bestMatches = findBestMatch(query, allSections).sort((a, b) => {
+        // Prioritize matches from the most recent document
+        if (a.isFromMostRecent && !b.isFromMostRecent) return -1;
+        if (!a.isFromMostRecent && b.isFromMostRecent) return 1;
+        // Otherwise use the regular score
+        return b.score - a.score;
+      });
       
       if (bestMatches.length > 0) {
         console.log(`Found ${bestMatches.length} relevant sections`);
+        
+        // Log the document sources of the best matches for debugging
+        bestMatches.slice(0, 5).forEach((match, index) => {
+          console.log(`Match ${index + 1}: from document "${match.fileName}"${match.isFromMostRecent ? " (LATEST)" : ""}`);
+        });
         
         const context = bestMatches
           .map(match => `${match.title}\n${match.content}`)
@@ -416,7 +491,12 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
         
         try {
           const { data, error } = await supabase.functions.invoke('huggingface-chat', {
-            body: { query, context, documentInfo }
+            body: { 
+              query, 
+              context, 
+              documentInfo,
+              sourceFiles: bestMatches.map(m => m.fileName).filter(Boolean)
+            }
           });
 
           if (error) throw new Error(error.message);
