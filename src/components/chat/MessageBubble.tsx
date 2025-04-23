@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Message, Citation } from '@/types/chat';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { ExternalLink } from 'lucide-react';
+import { ExternalLink, Link as LinkIcon } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/components/ui/use-toast';
 
@@ -17,7 +17,7 @@ interface MessageBubbleProps {
 export const MessageBubble = ({ message, citations = [], onCitationClick }: MessageBubbleProps) => {
   const [selectedCitation, setSelectedCitation] = useState<Citation | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  
+
   const handleLinkClick = (href: string) => {
     if (href.startsWith('citation-')) {
       const citationId = href;
@@ -33,34 +33,35 @@ export const MessageBubble = ({ message, citations = [], onCitationClick }: Mess
     }
     return false; // Use default link behavior
   };
-  
-  const handleViewDocument = async () => {
-    if (!selectedCitation || !selectedCitation.documentId) return;
-    
+
+  const handleViewDocument = async (citation?: Citation | null) => {
+    const citationToUse = citation ?? selectedCitation;
+    if (!citationToUse || !citationToUse.documentId) return;
+
     try {
       setIsLoading(true);
-      
+
       // Get the file path from reference_documents table
       const { data: documentData, error: documentError } = await supabase
         .from('reference_documents')
         .select('file_path, file_name')
-        .eq('id', selectedCitation.documentId)
+        .eq('id', citationToUse.documentId)
         .single();
-        
+
       if (documentError) throw documentError;
-      
+
       if (documentData) {
         // Get a signed URL for the document
         const { data: fileData, error: fileError } = await supabase.storage
           .from('policy_documents')
           .createSignedUrl(documentData.file_path, 3600);
-          
+
         if (fileError) throw fileError;
-        
+
         if (fileData?.signedUrl) {
           // Open the document in a new tab
           window.open(fileData.signedUrl, '_blank');
-          // Close the dialog
+          // Close the dialog if triggered from modal
           setSelectedCitation(null);
         } else {
           throw new Error("Couldn't generate URL for the document");
@@ -80,27 +81,29 @@ export const MessageBubble = ({ message, citations = [], onCitationClick }: Mess
     }
   };
 
+  // Find the first valid citation with a document
+  const firstCitation = citations?.find(c => c.documentId);
+
   return (
-    <div 
+    <div
       className={`flex ${message.sender === "user" ? "justify-end" : "justify-start"}`}
     >
-      <div 
-        className={`max-w-[80%] rounded-[20px] px-4 py-3 ${
-          message.sender === "user" 
-            ? "bg-[rgba(49,159,67,0.1)] text-black" 
-            : "bg-[rgba(49,159,67,1)] text-white"
-        }`}
+      <div
+        className={`max-w-[80%] rounded-[20px] px-4 py-3 ${message.sender === "user"
+          ? "bg-[rgba(49,159,67,0.1)] text-black"
+          : "bg-[rgba(49,159,67,1)] text-white"
+          }`}
       >
         {message.sender === "bot" ? (
           <div className="markdown-content">
-            <ReactMarkdown 
+            <ReactMarkdown
               className="text-[16px] whitespace-pre-line"
               components={{
                 a: ({ href, children }) => {
                   if (href && handleLinkClick(href)) {
                     return (
-                      <Button 
-                        variant="link" 
+                      <Button
+                        variant="link"
                         className={`p-0 h-auto font-semibold underline ${message.sender === "user" ? "text-blue-600" : "text-blue-200"}`}
                         onClick={() => {
                           const citation = citations.find(c => c.id === href);
@@ -126,6 +129,34 @@ export const MessageBubble = ({ message, citations = [], onCitationClick }: Mess
             >
               {message.text}
             </ReactMarkdown>
+            {/* --------- ADD VIEW DOCUMENT LINK IF CITATIONS EXIST --------- */}
+            {citations && citations.length > 0 && firstCitation?.documentId && (
+              <div className="mt-4 flex flex-col gap-1">
+                <Button
+                  variant="link"
+                  className={`p-0 h-auto underline font-semibold flex items-center text-sm ${message.sender === "user" ? "text-blue-600" : "text-blue-200"}`}
+                  onClick={() => handleViewDocument(firstCitation)}
+                  disabled={isLoading}
+                  aria-label="View Source Document"
+                  title={`View ${firstCitation.fileName || "Policy Document"} in full`}
+                >
+                  <LinkIcon className="h-4 w-4 mr-1" />
+                  {isLoading ? "Loading..." : "View Source Document"}
+                  {firstCitation.fileName ? (
+                    <span className="ml-1">
+                      ({firstCitation.fileName}{firstCitation.position?.startPage ? `, p.${firstCitation.position.startPage}` : ''})
+                    </span>
+                  ) : null}
+                  <ExternalLink className="h-4 w-4 ml-1" />
+                </Button>
+                {citations.length > 1 && (
+                  <span className="text-xs text-inherit opacity-80 ml-1">
+                    This answer may contain references from multiple source documents.
+                  </span>
+                )}
+              </div>
+            )}
+            {/* ------------------------------------------------------------ */}
           </div>
         ) : (
           <p className="text-[16px] whitespace-pre-line">{message.text}</p>
@@ -149,9 +180,9 @@ export const MessageBubble = ({ message, citations = [], onCitationClick }: Mess
                   {selectedCitation.position && (
                     <p>Page: {selectedCitation.position.startPage}</p>
                   )}
-                  
-                  <Button 
-                    onClick={handleViewDocument}
+
+                  <Button
+                    onClick={() => handleViewDocument(selectedCitation)}
                     disabled={isLoading}
                   >
                     {isLoading ? "Loading..." : "View Document"} <ExternalLink className="ml-2 h-4 w-4" />
