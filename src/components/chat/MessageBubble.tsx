@@ -84,6 +84,9 @@ export const MessageBubble = ({ message, citations = [], onCitationClick }: Mess
   // Find the first valid citation with a document
   const firstCitation = citations?.find(c => c.documentId);
 
+  // Determine if there are any citations with a document
+  const hasCitationsWithDocument = citations && citations.length > 0 && firstCitation?.documentId;
+
   return (
     <div
       className={`flex ${message.sender === "user" ? "justify-end" : "justify-start"}`}
@@ -104,7 +107,7 @@ export const MessageBubble = ({ message, citations = [], onCitationClick }: Mess
                     return (
                       <Button
                         variant="link"
-                        className={`p-0 h-auto font-semibold underline ${message.sender === "user" ? "text-blue-600" : "text-blue-200"}`}
+                        className="p-0 h-auto font-semibold underline text-blue-200"
                         onClick={() => {
                           const citation = citations.find(c => c.id === href);
                           if (citation && onCitationClick) {
@@ -129,12 +132,13 @@ export const MessageBubble = ({ message, citations = [], onCitationClick }: Mess
             >
               {message.text}
             </ReactMarkdown>
-            {/* --------- ADD VIEW DOCUMENT LINK IF CITATIONS EXIST --------- */}
-            {citations && citations.length > 0 && firstCitation?.documentId && (
+
+            {/* Show appended 'View Source Document' hyperlink at end of message if there are citations */}
+            {hasCitationsWithDocument && (
               <div className="mt-4 flex flex-col gap-1">
                 <Button
                   variant="link"
-                  className={`p-0 h-auto underline font-semibold flex items-center text-sm ${message.sender === "user" ? "text-blue-600" : "text-blue-200"}`}
+                  className="p-0 h-auto underline font-semibold flex items-center text-sm text-blue-200"
                   onClick={() => handleViewDocument(firstCitation)}
                   disabled={isLoading}
                   aria-label="View Source Document"
@@ -156,7 +160,7 @@ export const MessageBubble = ({ message, citations = [], onCitationClick }: Mess
                 )}
               </div>
             )}
-            {/* ------------------------------------------------------------ */}
+
           </div>
         ) : (
           <p className="text-[16px] whitespace-pre-line">{message.text}</p>
