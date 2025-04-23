@@ -1,3 +1,4 @@
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import "https://deno.land/x/xhr@0.1.0/mod.ts"
 
@@ -59,20 +60,25 @@ serve(async (req) => {
     if (context && context.length > MAX_CONTEXT_SIZE) {
       console.log(`Context too long (${context.length}), truncating to ${MAX_CONTEXT_SIZE} characters`)
       truncatedContext = context.substring(0, MAX_CONTEXT_SIZE) + 
-        "\n\n[Note: Some context was truncated due to length limitations. Please provide a more specific query for better results.]"
+        "\n\n[Note: Some context was truncated. Please ask about a specific section or policy.]"
     }
 
-    // Build system prompt
+    // Build system prompt focused on concise answers
     let systemPrompt
     if (truncatedContext) {
-      systemPrompt = `You are Poli, an AI assistant specializing in New Era University policies and procedures. Base your responses on the following context:
+      systemPrompt = `You are Poli, an AI assistant specializing in New Era University policies. Your responses must be:
+1. Brief and direct - answer in 2-3 sentences maximum
+2. Based solely on the provided context - never add external information
+3. Include exact citations when quoting policy (e.g. [Article 5: Student Conduct])
 
+Context:
 ${truncatedContext}
 
-First provide a concise answer that directly addresses the query. Then support with evidence using direct quotes where helpful. Always cite specific article and section numbers from the source documents. If the information is from the most recent document, make sure to emphasize that.
-`
+Remember: Only answer what's specifically asked using the context provided. If the answer isn't in the context, say so clearly.`
     } else {
-      systemPrompt = `You are Poli, an AI assistant specialized in New Era University policies and procedures. I don't have specific policy information to reference right now.`
+      systemPrompt = `You are Poli, a concise AI assistant for New Era University policies. I don't have any policy information to reference right now.
+
+Remember: Only provide answers from official policy documents. If no context is provided, inform the user.`
     }
 
     try {
@@ -85,8 +91,8 @@ First provide a concise answer that directly addresses the query. Then support w
       const body = JSON.stringify({
         model: GROQ_MODEL,
         messages,
-        temperature: 0.1,
-        max_tokens: 1024,
+        temperature: 0.1, // Lower temperature for more focused responses
+        max_tokens: 256,  // Limit response length to encourage conciseness
       })
 
       const groqResponse = await fetch(GROQ_ENDPOINT, {
@@ -106,7 +112,7 @@ First provide a concise answer that directly addresses the query. Then support w
         if (errorText.includes("tokens") && errorText.includes("rate_limit_exceeded")) {
           return new Response(
             JSON.stringify({ 
-              answer: "Your question requires processing a large amount of policy information. Please try asking a more specific question about a particular policy or section.",
+              answer: "Please ask about a specific policy section or try a shorter question.",
               citations: []
             }),
             { 
@@ -120,10 +126,8 @@ First provide a concise answer that directly addresses the query. Then support w
       }
 
       const data = await groqResponse.json()
-
-      // Fetch the answer from the API response
       const text = data.choices?.[0]?.message?.content?.trim() || ""
-      console.log("Groq answer fetched successfully, length:", text.length)
+      console.log("Groq answer length:", text.length)
 
       // Process citations from the response
       const processedText = processTextWithCitations(text, documentInfo || {})
@@ -141,7 +145,7 @@ First provide a concise answer that directly addresses the query. Then support w
       console.error("Error calling Groq API:", error)
       return new Response(
         JSON.stringify({ 
-          answer: "I encountered an error while processing your question. Please try a more specific query or try again later.",
+          answer: "Please try asking about a specific policy or section.",
           citations: []
         }),
         {
@@ -154,7 +158,7 @@ First provide a concise answer that directly addresses the query. Then support w
     console.error("General error:", error)
     return new Response(
       JSON.stringify({ 
-        answer: "An unexpected error occurred. Please try again later.",
+        answer: "An error occurred. Please try again with a more specific question.",
         citations: []
       }),
       {
