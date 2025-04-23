@@ -41,6 +41,8 @@ export interface DocumentSection {
   };
   documentId?: string;
   fileName?: string;
+  isFromMostRecent?: boolean; // <-- Fix: Declare as optional
+  score?: number; // <-- Fix: Declare as optional
 }
 
 export interface Citation {
@@ -55,3 +57,4 @@ export interface Citation {
   };
   fileName?: string;
 }
+
