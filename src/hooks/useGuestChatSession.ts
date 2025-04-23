@@ -1,4 +1,3 @@
-
 import { useCallback, useEffect, useState } from "react";
 import { Message } from "@/types/chat";
 
@@ -54,18 +53,29 @@ export function useGuestChatSession({ welcomeMessage }: UseGuestChatSessionProps
 
     setMessages((prev) => [...prev, userMessage]);
 
-    // Simulate AI response by calling the same backend as authenticated user
     try {
-      // Replace with actual endpoint or edge function as needed
-      // Here, we call the "huggingface-chat" via Supabase
+      // Use the Edge Function, which now uses Mistral AI
       const response = await fetch("/functions/v1/huggingface-chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ query: text, context: "" })
       });
 
-      if (!response.ok) throw new Error("AI service unavailable.");
+      if (!response.ok) {
+        let msg = "AI service unavailable.";
+        try {
+          const errorData = await response.json();
+          if (typeof errorData.answer === "string" && errorData.answer.length < 200) {
+            msg = errorData.answer;
+          }
+        } catch {
+          // Unable to parse response, use default message
+        }
+        throw new Error(msg);
+      }
+
       const data = await response.json();
+
       const botMessage: Message = {
         id: (Date.now() + 1).toString(),
         text: data.answer || "I'm sorry, I couldn't answer that right now.",
@@ -73,8 +83,12 @@ export function useGuestChatSession({ welcomeMessage }: UseGuestChatSessionProps
         timestamp: new Date(),
       };
       setMessages((prev) => [...prev, botMessage]);
-    } catch (err) {
-      setError("Sorry, there was an issue getting a response from the AI.");
+    } catch (err: any) {
+      const friendly =
+        typeof err?.message === "string" && err.message.length < 200
+          ? err.message
+          : "Sorry, there was an issue getting a response from the AI.";
+      setError(friendly);
       setMessages((prev) => [
         ...prev,
         {
