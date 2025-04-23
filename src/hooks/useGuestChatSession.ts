@@ -69,8 +69,16 @@ export function useGuestChatSession({ welcomeMessage }: UseGuestChatSessionProps
           if (typeof errorData.answer === "string" && errorData.answer.length < 200) {
             msg = errorData.answer;
           }
+          
+          // Handle token limit errors specifically
+          if (response.status === 413) {
+            msg = errorData.answer || "Your question requires processing a large amount of information. Please try asking a more specific question.";
+          }
         } catch {
           // Unable to parse response, use default message
+          if (response.status === 413) {
+            msg = "Your question is too complex. Please try asking a more specific or shorter question.";
+          }
         }
         throw new Error(msg);
       }

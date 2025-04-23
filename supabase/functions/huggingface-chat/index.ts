@@ -1,10 +1,12 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import "https://deno.land/x/xhr@0.1.0/mod.ts"
 
 const GROQ_API_KEY = Deno.env.get('GROQ_API_KEY')
-const GROQ_MODEL = "llama3-70b-8192" // Updated to a currently supported model
+const GROQ_MODEL = "llama3-70b-8192" // Currently supported model
 const GROQ_ENDPOINT = "https://api.groq.com/openai/v1/chat/completions"
+
+// Maximum context size to prevent token limit errors
+const MAX_CONTEXT_SIZE = 4000 
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -52,12 +54,20 @@ serve(async (req) => {
     console.log("Context length:", context ? context.length : 0)
     console.log("Source files:", sourceFiles || "none specified")
 
+    // Truncate context if it's too long
+    let truncatedContext = context
+    if (context && context.length > MAX_CONTEXT_SIZE) {
+      console.log(`Context too long (${context.length}), truncating to ${MAX_CONTEXT_SIZE} characters`)
+      truncatedContext = context.substring(0, MAX_CONTEXT_SIZE) + 
+        "\n\n[Note: Some context was truncated due to length limitations. Please provide a more specific query for better results.]"
+    }
+
     // Build system prompt
     let systemPrompt
-    if (context) {
+    if (truncatedContext) {
       systemPrompt = `You are Poli, an AI assistant specializing in New Era University policies and procedures. Base your responses on the following context:
 
-${context}
+${truncatedContext}
 
 First provide a concise answer that directly addresses the query. Then support with evidence using direct quotes where helpful. Always cite specific article and section numbers from the source documents. If the information is from the most recent document, make sure to emphasize that.
 `
@@ -90,6 +100,22 @@ First provide a concise answer that directly addresses the query. Then support w
 
       if (!groqResponse.ok) {
         const errorText = await groqResponse.text()
+        console.error(`Groq API Error: ${groqResponse.status} ${errorText}`)
+        
+        // Handle token limit errors specifically
+        if (errorText.includes("tokens") && errorText.includes("rate_limit_exceeded")) {
+          return new Response(
+            JSON.stringify({ 
+              answer: "Your question requires processing a large amount of policy information. Please try asking a more specific question about a particular policy or section.",
+              citations: []
+            }),
+            { 
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+              status: 413
+            }
+          )
+        }
+        
         throw new Error(`Groq API Error: ${groqResponse.status} ${errorText}`)
       }
 
@@ -115,7 +141,7 @@ First provide a concise answer that directly addresses the query. Then support w
       console.error("Error calling Groq API:", error)
       return new Response(
         JSON.stringify({ 
-          answer: "I encountered an error while processing your question. Please try again later.",
+          answer: "I encountered an error while processing your question. Please try a more specific query or try again later.",
           citations: []
         }),
         {
