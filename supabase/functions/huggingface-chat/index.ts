@@ -1,10 +1,9 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import "https://deno.land/x/xhr@0.1.0/mod.ts"
 
-const MISTRAL_API_KEY = Deno.env.get('MISTRAL_API_KEY')
-const MISTRAL_MODEL = "mistral-large-latest"
-const MISTRAL_ENDPOINT = "https://api.mistral.ai/v1/chat/completions"
+const GROQ_API_KEY = Deno.env.get('GROQ_API_KEY')
+const GROQ_MODEL = "mixtral-8x7b-32768"
+const GROQ_ENDPOINT = "https://api.groq.com/openai/v1/chat/completions"
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -17,11 +16,11 @@ serve(async (req) => {
   }
 
   try {
-    if (!MISTRAL_API_KEY) {
-      console.error("MISTRAL_API_KEY not configured")
+    if (!GROQ_API_KEY) {
+      console.error("GROQ_API_KEY not configured")
       return new Response(
         JSON.stringify({ 
-          answer: "The Mistral API key is not configured. Please contact your administrator.",
+          answer: "The Groq API key is not configured. Please contact your administrator.",
           citations: []
         }),
         {
@@ -31,7 +30,7 @@ serve(async (req) => {
       )
     }
 
-    console.log(`Using Mistral API key starting with: ${MISTRAL_API_KEY.substring(0, 4)}...`)
+    console.log(`Using Groq API key starting with: ${GROQ_API_KEY.substring(0, 4)}...`)
 
     const { query, context, documentInfo, sourceFiles } = await req.json()
 
@@ -66,40 +65,38 @@ First provide a concise answer that directly addresses the query. Then support w
     }
 
     try {
-      // Build messages for Mistral API
+      // Build messages for Groq API
       const messages = [
         { role: "system", content: systemPrompt },
         { role: "user", content: query }
       ]
 
       const body = JSON.stringify({
-        model: MISTRAL_MODEL,
+        model: GROQ_MODEL,
         messages,
         temperature: 0.1,
-        top_p: 0.95,
         max_tokens: 1024,
-        safe_prompt: true
       })
 
-      const mistralResponse = await fetch(MISTRAL_ENDPOINT, {
+      const groqResponse = await fetch(GROQ_ENDPOINT, {
         method: "POST",
         headers: {
-          "Authorization": `Bearer ${MISTRAL_API_KEY}`,
+          "Authorization": `Bearer ${GROQ_API_KEY}`,
           "Content-Type": "application/json"
         },
         body
       })
 
-      if (!mistralResponse.ok) {
-        const errorText = await mistralResponse.text()
-        throw new Error(`Mistral API Error: ${mistralResponse.status} ${errorText}`)
+      if (!groqResponse.ok) {
+        const errorText = await groqResponse.text()
+        throw new Error(`Groq API Error: ${groqResponse.status} ${errorText}`)
       }
 
-      const data = await mistralResponse.json()
+      const data = await groqResponse.json()
 
       // Fetch the answer from the API response
       const text = data.choices?.[0]?.message?.content?.trim() || ""
-      console.log("Mistral answer fetched successfully, length:", text.length)
+      console.log("Groq answer fetched successfully, length:", text.length)
 
       // Process citations from the response
       const processedText = processTextWithCitations(text, documentInfo || {})
@@ -114,7 +111,7 @@ First provide a concise answer that directly addresses the query. Then support w
         }
       )
     } catch (error) {
-      console.error("Error calling Mistral API:", error)
+      console.error("Error calling Groq API:", error)
       return new Response(
         JSON.stringify({ 
           answer: "I encountered an error while processing your question. Please try again later.",
