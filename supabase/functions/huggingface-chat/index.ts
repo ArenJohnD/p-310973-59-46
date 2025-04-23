@@ -1,8 +1,9 @@
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import "https://deno.land/x/xhr@0.1.0/mod.ts"
 
 const GROQ_API_KEY = Deno.env.get('GROQ_API_KEY')
-const GROQ_MODEL = "mixtral-8x7b-32768"
+const GROQ_MODEL = "llama3-70b-8192" // Updated to a currently supported model
 const GROQ_ENDPOINT = "https://api.groq.com/openai/v1/chat/completions"
 
 const corsHeaders = {

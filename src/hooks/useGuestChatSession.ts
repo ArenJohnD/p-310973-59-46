@@ -55,7 +55,7 @@ export function useGuestChatSession({ welcomeMessage }: UseGuestChatSessionProps
     setMessages((prev) => [...prev, userMessage]);
 
     try {
-      // Use the Edge Function, which now uses Mistral AI
+      // Still using the endpoint named huggingface-chat but it's now using Groq API internally
       const response = await fetch("/functions/v1/huggingface-chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
