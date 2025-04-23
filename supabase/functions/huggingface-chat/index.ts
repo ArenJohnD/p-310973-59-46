@@ -6,7 +6,7 @@ const GROQ_API_KEY = Deno.env.get('GROQ_API_KEY')
 const GROQ_MODEL = "llama3-70b-8192" // Currently supported model
 const GROQ_ENDPOINT = "https://api.groq.com/openai/v1/chat/completions"
 
-// Maximum context size to prevent token limit errors
+// Maximum context size - reduced to avoid token limit errors
 const MAX_CONTEXT_SIZE = 4000 
 
 const corsHeaders = {
@@ -63,22 +63,25 @@ serve(async (req) => {
         "\n\n[Note: Some context was truncated. Please ask about a specific section or policy.]"
     }
 
-    // Build system prompt focused on concise answers
+    // Build system prompt with greater emphasis on using available context
     let systemPrompt
     if (truncatedContext) {
-      systemPrompt = `You are Poli, an AI assistant specializing in New Era University policies. Your responses must be:
-1. Brief and direct - answer in 2-3 sentences maximum
-2. Based solely on the provided context - never add external information
-3. Include exact citations when quoting policy (e.g. [Article 5: Student Conduct])
+      systemPrompt = `You are Poli, an AI assistant for New Era University policies. Follow these instructions precisely:
+
+1. ALWAYS base your answers ONLY on the provided context below
+2. If the answer is in the context, respond with the relevant information (3-4 sentences)
+3. If the answer is NOT clearly in the context, say "Based on the available policy documents, I don't see specific information about [topic]. You may want to check with the administration for details."
+4. When quoting policies, use exact citations (e.g. [Article 5: Student Conduct])
+5. Never invent information or make assumptions beyond what's provided
 
 Context:
 ${truncatedContext}
 
-Remember: Only answer what's specifically asked using the context provided. If the answer isn't in the context, say so clearly.`
+Remember: Your ONLY source of truth is the above context. Do not reference external knowledge.`
     } else {
-      systemPrompt = `You are Poli, a concise AI assistant for New Era University policies. I don't have any policy information to reference right now.
+      systemPrompt = `You are Poli, a helpful AI assistant for New Era University policies. I don't have any policy documents to reference right now.
 
-Remember: Only provide answers from official policy documents. If no context is provided, inform the user.`
+Important: Only provide answers from official policy documents. Since no context is provided, inform the user you need policy documents to answer accurately.`
     }
 
     try {
@@ -91,8 +94,8 @@ Remember: Only provide answers from official policy documents. If no context is 
       const body = JSON.stringify({
         model: GROQ_MODEL,
         messages,
-        temperature: 0.1, // Lower temperature for more focused responses
-        max_tokens: 256,  // Limit response length to encourage conciseness
+        temperature: 0.2, // Slightly increased for better comprehension
+        max_tokens: 512,  // Increased to allow more thorough responses when needed
       })
 
       const groqResponse = await fetch(GROQ_ENDPOINT, {
@@ -145,7 +148,7 @@ Remember: Only provide answers from official policy documents. If no context is 
       console.error("Error calling Groq API:", error)
       return new Response(
         JSON.stringify({ 
-          answer: "Please try asking about a specific policy or section.",
+          answer: "There was an issue retrieving information from the policy documents. Please try asking about a specific section or policy.",
           citations: []
         }),
         {
@@ -158,7 +161,7 @@ Remember: Only provide answers from official policy documents. If no context is 
     console.error("General error:", error)
     return new Response(
       JSON.stringify({ 
-        answer: "An error occurred. Please try again with a more specific question.",
+        answer: "An error occurred processing your question. Please try again with a more specific question about university policies.",
         citations: []
       }),
       {
