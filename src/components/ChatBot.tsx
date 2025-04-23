@@ -70,6 +70,9 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
   const initialSetupDone = useRef(false);
   const sessionsLoaded = useRef(false);
 
+  // Add a forceRefreshDocuments state
+  const [forceRefreshDocuments, setForceRefreshDocuments] = useState(0);
+
   useEffect(() => {
     const checkIfMobile = () => {
       setIsMobile(window.innerWidth < 768);
@@ -165,7 +168,10 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
         });
       })
       .finally(() => setLoadingDocuments(false));
-    
+  // Now depend on forceRefreshDocuments to always refetch when necessary
+  }, [forceRefreshDocuments, user]);
+
+  useEffect(() => {
     if (user) {
       setLoadingHistory(true);
       if (!sessionsLoaded.current) {
@@ -315,11 +321,19 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
     }
   };
 
-  const findRelevantInformationWithCitations = async (query: string, referenceDocuments: ReferenceDocument[]): Promise<{ text: string, citations: Citation[] }> => {
+  // Handler to be passed to ReferenceDocumentManager
+  const handleDocumentChange = () => {
+    setForceRefreshDocuments(prev => prev + 1); // force re-fetch document list
+  };
+
+  // For AI queries, ensure the latest referenceDocuments are passed
+  const findRelevantInformationWithCitations = async (query: string, referenceDocsArg?: ReferenceDocument[]) => {
+    // Always pass the latest document list for every query
+    const docsToQuery = referenceDocsArg || referenceDocuments;
     console.log("Finding relevant information for query:", query);
-    console.log("Reference documents available:", referenceDocuments.length);
+    console.log("Reference documents available:", docsToQuery.length);
     
-    if (referenceDocuments.length === 0) {
+    if (docsToQuery.length === 0) {
       try {
         console.log("No reference documents found, using HuggingFace API directly");
         const { data, error } = await supabase.functions.invoke('huggingface-chat', {
@@ -346,7 +360,7 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
       const documentInfo = {};
       
       // Sort by creation date (newest first)
-      const sortedDocs = [...referenceDocuments].sort((a, b) => {
+      const sortedDocs = [...docsToQuery].sort((a, b) => {
         if (a.created_at && b.created_at) {
           return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
         }
@@ -852,6 +866,8 @@ export const ChatBot = ({ isMaximized = false }: ChatBotProps) => {
           />
         </div>
       )}
+      {/* Render the ReferenceDocumentManager and pass the callback */}
+      {/* <ReferenceDocumentManager onDocumentChange={handleDocumentChange} /> */}
     </div>
   );
 };

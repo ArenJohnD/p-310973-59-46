@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/components/ui/use-toast";
@@ -23,7 +22,11 @@ interface ReferenceDocument {
   created_at: string;
 }
 
-export function ReferenceDocumentManager() {
+interface ReferenceDocumentManagerProps {
+  onDocumentChange?: () => void;
+}
+
+export function ReferenceDocumentManager({ onDocumentChange }: ReferenceDocumentManagerProps) {
   const [isUploading, setIsUploading] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -65,7 +68,6 @@ export function ReferenceDocumentManager() {
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.target.files && event.target.files.length > 0) {
       const file = event.target.files[0];
-      // Check if file is a PDF
       if (file.type !== "application/pdf") {
         toast({
           title: "Invalid file type",
@@ -91,7 +93,6 @@ export function ReferenceDocumentManager() {
     try {
       setIsUploading(true);
 
-      // 1. Upload file to storage
       const fileName = `reference-${Date.now()}-${selectedFile.name}`;
       const filePath = `reference_documents/${fileName}`;
 
@@ -101,7 +102,6 @@ export function ReferenceDocumentManager() {
 
       if (uploadError) throw uploadError;
 
-      // 2. Insert record in database
       const { error: dbError } = await supabase
         .from('reference_documents')
         .insert({
@@ -119,12 +119,10 @@ export function ReferenceDocumentManager() {
         description: "Reference document uploaded successfully",
       });
 
-      // Reset state
       setSelectedFile(null);
       
-      // Refresh document list
       fetchDocuments();
-
+      if (onDocumentChange) onDocumentChange();
     } catch (error) {
       console.error('Error uploading document:', error);
       toast({
@@ -141,7 +139,6 @@ export function ReferenceDocumentManager() {
     try {
       setIsDeleting(true);
 
-      // 1. Get the file path from database
       const { data, error: fetchError } = await supabase
         .from('reference_documents')
         .select('file_path')
@@ -150,7 +147,6 @@ export function ReferenceDocumentManager() {
 
       if (fetchError) throw fetchError;
 
-      // 2. Delete file from storage
       if (data && data.file_path) {
         const { error: storageError } = await supabase.storage
           .from('policy_documents')
@@ -159,7 +155,6 @@ export function ReferenceDocumentManager() {
         if (storageError) throw storageError;
       }
 
-      // 3. Delete record from database
       const { error: dbError } = await supabase
         .from('reference_documents')
         .delete()
@@ -172,9 +167,8 @@ export function ReferenceDocumentManager() {
         description: "Document deleted successfully",
       });
 
-      // Refresh document list
       fetchDocuments();
-
+      if (onDocumentChange) onDocumentChange();
     } catch (error) {
       console.error('Error deleting document:', error);
       toast({
@@ -195,7 +189,6 @@ export function ReferenceDocumentManager() {
       </p>
       
       <div className="space-y-4">
-        {/* File input section */}
         <div className="bg-white border rounded-md p-4">
           <h4 className="font-medium mb-2">Upload New Reference Document</h4>
           <div className="flex flex-col gap-3">
@@ -232,7 +225,6 @@ export function ReferenceDocumentManager() {
           </div>
         </div>
         
-        {/* Documents list section */}
         <div className="bg-white border rounded-md p-4">
           <h4 className="font-medium mb-2">Existing Reference Documents</h4>
           
