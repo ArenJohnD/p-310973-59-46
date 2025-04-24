@@ -1,6 +1,6 @@
 
-import { useState } from "react";
-import { MessageCircle, X, Maximize } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { MessageCircle, X, Maximize, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Message } from "@/types/chat";
 import { Button } from "@/components/ui/button";
@@ -13,15 +13,57 @@ export function ChatBubble() {
   const [isMaximized, setIsMaximized] = useState(false);
   const [inputValue, setInputValue] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [hasDocuments, setHasDocuments] = useState<boolean | null>(null);
   const { toast } = useToast();
+  const messagesEndRef = useRef<HTMLDivElement>(null);
   const [messages, setMessages] = useState<Message[]>([
     {
       id: "welcome",
-      text: "Hello! I'm your AI assistant. How can I help you today?",
+      text: "Hello! I'm your AI assistant. I can answer questions based on the reference documents that have been uploaded. How can I help you today?",
       sender: "bot",
       timestamp: new Date(),
     },
   ]);
+
+  // Check if reference documents exist when chat is opened
+  useEffect(() => {
+    if (isOpen && hasDocuments === null) {
+      checkForDocuments();
+    }
+  }, [isOpen]);
+
+  // Scroll to bottom whenever messages change
+  useEffect(() => {
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [messages]);
+
+  const checkForDocuments = async () => {
+    try {
+      const { count, error } = await supabase
+        .from('reference_documents')
+        .select('*', { count: 'exact', head: true });
+      
+      if (error) throw error;
+      
+      setHasDocuments(count ? count > 0 : false);
+      
+      if (!count || count === 0) {
+        setMessages(prev => [
+          ...prev,
+          {
+            id: "no-docs",
+            text: "No reference documents have been uploaded yet. Please ask an administrator to upload documents so I can assist you better.",
+            sender: "bot",
+            timestamp: new Date(),
+          }
+        ]);
+      }
+    } catch (error) {
+      console.error('Error checking for documents:', error);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -39,6 +81,14 @@ export function ChatBubble() {
     setIsLoading(true);
 
     try {
+      // Add typing indicator
+      setMessages(prev => [...prev, {
+        id: "typing",
+        text: "...",
+        sender: "bot",
+        timestamp: new Date(),
+      }]);
+
       const { data, error } = await supabase.functions.invoke('mistral-chat', {
         body: {
           messages: messages.concat(userMessage).map(msg => ({
@@ -50,16 +100,31 @@ export function ChatBubble() {
 
       if (error) throw error;
 
-      const botMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        text: data.answer,
-        sender: "bot",
-        timestamp: new Date(),
-      };
+      // Remove typing indicator and add actual response
+      setMessages((prev) => {
+        const filtered = prev.filter(msg => msg.id !== "typing");
+        return [...filtered, {
+          id: (Date.now() + 1).toString(),
+          text: data.answer,
+          sender: "bot",
+          timestamp: new Date(),
+        }];
+      });
 
-      setMessages((prev) => [...prev, botMessage]);
     } catch (error) {
       console.error('Chat error:', error);
+      
+      // Remove typing indicator
+      setMessages((prev) => {
+        const filtered = prev.filter(msg => msg.id !== "typing");
+        return [...filtered, {
+          id: (Date.now() + 1).toString(),
+          text: "I'm sorry, I couldn't process your request. Please try again later.",
+          sender: "bot",
+          timestamp: new Date(),
+        }];
+      });
+      
       toast({
         variant: "destructive",
         title: "Error",
@@ -85,7 +150,7 @@ export function ChatBubble() {
             : "w-[350px] h-[500px] animate-in slide-in-from-bottom-5 duration-200"
         )}>
           <div className="p-4 bg-primary text-primary-foreground rounded-t-lg flex justify-between items-center">
-            <h3 className="font-semibold">Chat Assistant</h3>
+            <h3 className="font-semibold">Policy Assistant</h3>
             <div className="flex gap-2">
               <Button
                 variant="ghost"
@@ -123,6 +188,7 @@ export function ChatBubble() {
                 <p className="text-sm">{message.text}</p>
               </div>
             ))}
+            <div ref={messagesEndRef} />
           </div>
 
           <form onSubmit={handleSubmit} className="p-4 border-t">
@@ -132,8 +198,15 @@ export function ChatBubble() {
                 onChange={(e) => setInputValue(e.target.value)}
                 placeholder="Type your message..."
                 className="flex-1"
+                disabled={isLoading}
               />
-              <Button type="submit">Send</Button>
+              <Button type="submit" disabled={isLoading}>
+                {isLoading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  "Send"
+                )}
+              </Button>
             </div>
           </form>
         </div>
