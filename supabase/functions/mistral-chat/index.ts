@@ -12,10 +12,26 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Constants for token management
-const MAX_TOKENS_PER_DOC = 8000; // Approximate max tokens per document
-const MAX_TOTAL_TOKENS = 20000; // Maximum total tokens to send to Mistral
-const MAX_RESPONSE_TOKENS = 1000; // Maximum tokens for response
+// Constants for token management - more restrictive limits
+const MAX_TOKENS_PER_DOC = 3000; // Reduced from 8000
+const MAX_TOTAL_TOKENS = 12000; // Reduced from 20000
+const MAX_RESPONSE_TOKENS = 1000; // Keep same response token limit
+const RESERVE_TOKENS_FOR_MESSAGES = 4000; // Reserve tokens for conversation history
+
+// Simple function to estimate tokens (roughly 4 chars per token)
+function estimateTokens(text: string): number {
+  return Math.ceil(text.length / 4);
+}
+
+// Function to truncate text to a target token count
+function truncateToTokens(text: string, maxTokens: number): string {
+  const estimatedTokensPerChar = 0.25; // ~4 chars per token
+  const estimatedChars = maxTokens / estimatedTokensPerChar;
+  if (text.length > estimatedChars) {
+    return text.substring(0, Math.floor(estimatedChars)) + "...";
+  }
+  return text;
+}
 
 serve(async (req) => {
   // Handle CORS preflight requests
@@ -48,9 +64,36 @@ serve(async (req) => {
       });
     }
 
-    // Get content from the documents with length limitation
+    // Estimate tokens for the conversation history
+    let messagesTokens = 0;
+    for (const msg of messages) {
+      messagesTokens += estimateTokens(msg.content);
+    }
+
+    console.log(`Estimated tokens for conversation: ${messagesTokens}`);
+    
+    // Adjust the available tokens for documents based on conversation size
+    const availableTokensForDocs = Math.max(
+      MAX_TOTAL_TOKENS - messagesTokens - RESERVE_TOKENS_FOR_MESSAGES, 
+      MAX_TOTAL_TOKENS / 2
+    ); // Ensure at least half of total tokens are available for docs
+    
+    console.log(`Available tokens for documents: ${availableTokensForDocs}`);
+
+    // Get content from the documents with strict length limitation
     let documentContentArray = [];
     let totalTokenCount = 0;
+    
+    // Sort documents by most recently updated first (if available)
+    // This is a simple heuristic to prioritize newer content
+    documents.sort((a, b) => {
+      const aPath = a.file_path.toLowerCase();
+      const bPath = b.file_path.toLowerCase();
+      // Sort by simple metadata if available
+      if (aPath.includes('updated') && !bPath.includes('updated')) return -1;
+      if (!aPath.includes('updated') && bPath.includes('updated')) return 1;
+      return 0;
+    });
     
     for (const doc of documents) {
       try {
@@ -74,34 +117,52 @@ serve(async (req) => {
         // For simple text extraction we're just converting to text
         const text = await response.text();
         
-        // Roughly estimate token count (approximation: ~4 chars per token)
-        const estimatedTokens = Math.ceil(text.length / 4);
+        // Roughly estimate token count
+        const estimatedTokens = estimateTokens(text);
         
-        // Split large text into chunks if needed
+        console.log(`Document ${doc.file_name}: ~${estimatedTokens} tokens`);
+        
+        // Skip this document entirely if it would exceed our token budget
+        if (totalTokenCount + Math.min(estimatedTokens, MAX_TOKENS_PER_DOC) > availableTokensForDocs) {
+          console.log(`Skipping document ${doc.file_name} to stay within token budget`);
+          continue;
+        }
+        
+        // Split large text into chunks with stricter token limits
         if (estimatedTokens > MAX_TOKENS_PER_DOC) {
-          // Simple chunking based on character count
-          const chunkSize = Math.floor(MAX_TOKENS_PER_DOC * 4); // Convert tokens to approximate char count
-          for (let i = 0; i < text.length; i += chunkSize) {
-            const chunk = text.substring(i, i + chunkSize);
+          const maxTokensPerChunk = MAX_TOKENS_PER_DOC; 
+          const chunkSize = Math.floor(maxTokensPerChunk * 4); // Convert tokens to approximate char count
+          
+          // Calculate how many chunks we can include based on remaining token budget
+          const remainingTokens = availableTokensForDocs - totalTokenCount;
+          const maxChunks = Math.floor(remainingTokens / maxTokensPerChunk);
+          const chunksToTake = Math.min(3, maxChunks); // Take at most 3 chunks per document
+          
+          console.log(`Document too large. Taking up to ${chunksToTake} chunks of ~${maxTokensPerChunk} tokens each`);
+          
+          for (let i = 0; i < chunksToTake && i < Math.ceil(text.length / chunkSize); i++) {
+            const chunk = text.substring(i * chunkSize, (i + 1) * chunkSize);
+            const chunkWithHeader = `Document: ${doc.file_name} (part ${i + 1})\n${chunk}\n\n`;
             
-            // Only add chunk if we haven't exceeded our total token budget
-            if ((totalTokenCount + Math.ceil(chunk.length / 4)) <= MAX_TOTAL_TOKENS) {
-              documentContentArray.push(`Document: ${doc.file_name} (part ${Math.floor(i/chunkSize) + 1})\n${chunk}\n\n`);
-              totalTokenCount += Math.ceil(chunk.length / 4);
-            } else {
-              break; // Stop adding more chunks if we've reached token limit
+            documentContentArray.push(chunkWithHeader);
+            totalTokenCount += estimateTokens(chunkWithHeader);
+            
+            if (totalTokenCount >= availableTokensForDocs) {
+              break;
             }
           }
         } else {
-          // If document is small enough, add the whole document
-          if ((totalTokenCount + estimatedTokens) <= MAX_TOTAL_TOKENS) {
-            documentContentArray.push(`Document: ${doc.file_name}\n${text}\n\n`);
-            totalTokenCount += estimatedTokens;
-          }
+          // If document fits within our per-doc limit
+          const truncatedText = truncateToTokens(text, MAX_TOKENS_PER_DOC);
+          const docWithHeader = `Document: ${doc.file_name}\n${truncatedText}\n\n`;
+          
+          documentContentArray.push(docWithHeader);
+          totalTokenCount += estimateTokens(docWithHeader);
         }
         
         // Stop processing more documents if we've reached our token budget
-        if (totalTokenCount >= MAX_TOTAL_TOKENS) {
+        if (totalTokenCount >= availableTokensForDocs) {
+          console.log(`Reached token budget (${totalTokenCount}/${availableTokensForDocs}). Stopping document processing.`);
           break;
         }
         
@@ -113,7 +174,8 @@ serve(async (req) => {
     // Join all document content
     const documentContent = documentContentArray.join("");
     
-    console.log(`Sending approximately ${totalTokenCount} tokens to Mistral API`);
+    console.log(`Sending approximately ${totalTokenCount} tokens of document content to Mistral API`);
+    console.log(`Total tokens (docs + conversation): ~${totalTokenCount + messagesTokens + RESERVE_TOKENS_FOR_MESSAGES}`);
     
     // Prepare system message with instructions to only use reference documents
     const systemMessage = {
