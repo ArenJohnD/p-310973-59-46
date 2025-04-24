@@ -68,6 +68,41 @@ export type Database = {
         }
         Relationships: []
       }
+      document_embeddings: {
+        Row: {
+          content: string
+          created_at: string
+          document_id: string
+          embedding: string | null
+          id: string
+          section_id: string | null
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          document_id: string
+          embedding?: string | null
+          id?: string
+          section_id?: string | null
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          document_id?: string
+          embedding?: string | null
+          id?: string
+          section_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "document_embeddings_document_id_fkey"
+            columns: ["document_id"]
+            isOneToOne: false
+            referencedRelation: "reference_documents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       document_sections: {
         Row: {
           article_number: string | null
