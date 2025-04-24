@@ -1,6 +1,6 @@
 
 import { useState } from "react";
-import { MessageCircle, X } from "lucide-react";
+import { MessageCircle, X, Maximize } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Message } from "@/types/chat";
 import { Button } from "@/components/ui/button";
@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 
 export function ChatBubble() {
   const [isOpen, setIsOpen] = useState(false);
+  const [isMaximized, setIsMaximized] = useState(false);
   const [inputValue, setInputValue] = useState("");
   const [messages, setMessages] = useState<Message[]>([
     {
@@ -45,19 +46,42 @@ export function ChatBubble() {
   };
 
   return (
-    <div className="fixed bottom-4 right-4 z-50">
+    <div className={cn(
+      "fixed z-50 transition-all duration-300",
+      isMaximized 
+        ? "inset-4 flex items-center justify-center"
+        : "bottom-4 right-4"
+    )}>
       {isOpen ? (
-        <div className="bg-white rounded-lg shadow-lg w-[350px] h-[500px] flex flex-col animate-in slide-in-from-bottom-5 duration-200">
+        <div className={cn(
+          "bg-white rounded-lg shadow-lg flex flex-col",
+          isMaximized 
+            ? "w-full h-full max-w-4xl max-h-[800px] animate-in fade-in duration-200"
+            : "w-[350px] h-[500px] animate-in slide-in-from-bottom-5 duration-200"
+        )}>
           <div className="p-4 bg-primary text-primary-foreground rounded-t-lg flex justify-between items-center">
             <h3 className="font-semibold">Chat Assistant</h3>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8 text-primary-foreground"
-              onClick={() => setIsOpen(false)}
-            >
-              <X className="h-5 w-5" />
-            </Button>
+            <div className="flex gap-2">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-primary-foreground"
+                onClick={() => setIsMaximized(!isMaximized)}
+              >
+                <Maximize className="h-5 w-5" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-primary-foreground"
+                onClick={() => {
+                  setIsOpen(false);
+                  setIsMaximized(false);
+                }}
+              >
+                <X className="h-5 w-5" />
+              </Button>
+            </div>
           </div>
           
           <div className="flex-1 overflow-y-auto p-4 space-y-4">
