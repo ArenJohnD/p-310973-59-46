@@ -1,8 +1,8 @@
+
 import {
   BrowserRouter,
   Routes,
   Route,
-  Navigate,
   useNavigate,
   useLocation
 } from "react-router-dom";
@@ -16,7 +16,6 @@ const queryClient = new QueryClient();
 
 const Index = lazy(() => import("@/pages/Index"));
 const Login = lazy(() => import("@/pages/Login"));
-const GuestChat = lazy(() => import("@/pages/GuestChat"));
 const Admin = lazy(() => import("@/pages/Admin"));
 const PolicyDocuments = lazy(() => import("@/pages/PolicyDocuments"));
 const PDFViewer = lazy(() => import("@/pages/PDFViewer"));
@@ -116,7 +115,6 @@ function AppContent() {
     <Suspense fallback={<LoadingPage />}>
       <Routes>
         <Route path="/login" element={<Login />} />
-        <Route path="/guest-chat" element={<GuestChat />} />
         <Route path="/" element={
           <ProtectedRoute>
             <Index />
