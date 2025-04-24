@@ -387,6 +387,17 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: boolean
       }
+      match_documents: {
+        Args: {
+          query_embedding: string
+          match_threshold: number
+          match_count: number
+        }
+        Returns: {
+          content: string
+          similarity: number
+        }[]
+      }
       set_user_as_admin: {
         Args: { _email: string }
         Returns: undefined
