@@ -12,6 +12,11 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Constants for token management
+const MAX_TOKENS_PER_DOC = 8000; // Approximate max tokens per document
+const MAX_TOTAL_TOKENS = 20000; // Maximum total tokens to send to Mistral
+const MAX_RESPONSE_TOKENS = 1000; // Maximum tokens for response
+
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
@@ -43,8 +48,10 @@ serve(async (req) => {
       });
     }
 
-    // Get content from the documents
-    let documentContent = "";
+    // Get content from the documents with length limitation
+    let documentContentArray = [];
+    let totalTokenCount = 0;
+    
     for (const doc of documents) {
       try {
         // Create a signed URL for the document
@@ -57,7 +64,7 @@ serve(async (req) => {
           continue;
         }
 
-        // Extract text from PDF (simplified approach - in production you'd want to use a proper PDF parser)
+        // Extract text from PDF
         const response = await fetch(signedUrlData.signedUrl);
         if (!response.ok) {
           console.error(`Error fetching document ${doc.file_name}:`, response.statusText);
@@ -65,16 +72,49 @@ serve(async (req) => {
         }
         
         // For simple text extraction we're just converting to text
-        // In a production environment, you'd want to use a proper PDF extraction library
         const text = await response.text();
         
-        // Add document identifier and content
-        documentContent += `Document: ${doc.file_name}\n${text}\n\n`;
+        // Roughly estimate token count (approximation: ~4 chars per token)
+        const estimatedTokens = Math.ceil(text.length / 4);
+        
+        // Split large text into chunks if needed
+        if (estimatedTokens > MAX_TOKENS_PER_DOC) {
+          // Simple chunking based on character count
+          const chunkSize = Math.floor(MAX_TOKENS_PER_DOC * 4); // Convert tokens to approximate char count
+          for (let i = 0; i < text.length; i += chunkSize) {
+            const chunk = text.substring(i, i + chunkSize);
+            
+            // Only add chunk if we haven't exceeded our total token budget
+            if ((totalTokenCount + Math.ceil(chunk.length / 4)) <= MAX_TOTAL_TOKENS) {
+              documentContentArray.push(`Document: ${doc.file_name} (part ${Math.floor(i/chunkSize) + 1})\n${chunk}\n\n`);
+              totalTokenCount += Math.ceil(chunk.length / 4);
+            } else {
+              break; // Stop adding more chunks if we've reached token limit
+            }
+          }
+        } else {
+          // If document is small enough, add the whole document
+          if ((totalTokenCount + estimatedTokens) <= MAX_TOTAL_TOKENS) {
+            documentContentArray.push(`Document: ${doc.file_name}\n${text}\n\n`);
+            totalTokenCount += estimatedTokens;
+          }
+        }
+        
+        // Stop processing more documents if we've reached our token budget
+        if (totalTokenCount >= MAX_TOTAL_TOKENS) {
+          break;
+        }
+        
       } catch (error) {
         console.error(`Error processing document ${doc.file_name}:`, error);
       }
     }
 
+    // Join all document content
+    const documentContent = documentContentArray.join("");
+    
+    console.log(`Sending approximately ${totalTokenCount} tokens to Mistral API`);
+    
     // Prepare system message with instructions to only use reference documents
     const systemMessage = {
       role: "system", 
@@ -89,33 +129,49 @@ serve(async (req) => {
     // Add system message to the beginning of messages array
     const augmentedMessages = [systemMessage, ...messages];
 
-    const response = await fetch(MISTRAL_API_URL, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${MISTRAL_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: "mistral-tiny",
-        messages: augmentedMessages,
-        temperature: 0.7,
-        max_tokens: 1000,
-      }),
-    });
+    // Make request to Mistral API
+    try {
+      const response = await fetch(MISTRAL_API_URL, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${MISTRAL_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: "mistral-small",
+          messages: augmentedMessages,
+          temperature: 0.7,
+          max_tokens: MAX_RESPONSE_TOKENS,
+        }),
+      });
 
-    if (!response.ok) {
-      const error = await response.json();
-      console.error('Mistral API error:', error);
-      throw new Error('Failed to get response from Mistral');
+      if (!response.ok) {
+        const error = await response.json();
+        console.error('Mistral API error:', error);
+        
+        // Handle token limit error specifically
+        if (error.message && error.message.includes("too large for model")) {
+          return new Response(JSON.stringify({
+            answer: "I'm sorry, but there are too many reference documents for me to process at once. Please ask your administrator to optimize the document storage or ask a more specific question that might require fewer documents."
+          }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+        
+        throw new Error('Failed to get response from Mistral');
+      }
+
+      const data = await response.json();
+      
+      return new Response(JSON.stringify({
+        answer: data.choices[0].message.content,
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    } catch (error) {
+      console.error('Error calling Mistral API:', error);
+      throw error;
     }
-
-    const data = await response.json();
-    
-    return new Response(JSON.stringify({
-      answer: data.choices[0].message.content,
-    }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
 
   } catch (error) {
     console.error('Error in mistral-chat function:', error);
