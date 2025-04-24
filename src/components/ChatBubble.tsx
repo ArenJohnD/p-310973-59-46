@@ -5,23 +5,27 @@ import { cn } from "@/lib/utils";
 import { Message } from "@/types/chat";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/components/ui/use-toast";
 
 export function ChatBubble() {
   const [isOpen, setIsOpen] = useState(false);
   const [isMaximized, setIsMaximized] = useState(false);
   const [inputValue, setInputValue] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const { toast } = useToast();
   const [messages, setMessages] = useState<Message[]>([
     {
       id: "welcome",
-      text: "Hello! How can I help you today?",
+      text: "Hello! I'm your AI assistant. How can I help you today?",
       sender: "bot",
       timestamp: new Date(),
     },
   ]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!inputValue.trim()) return;
+    if (!inputValue.trim() || isLoading) return;
 
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -32,17 +36,38 @@ export function ChatBubble() {
 
     setMessages((prev) => [...prev, userMessage]);
     setInputValue("");
+    setIsLoading(true);
 
-    // Simple bot response
-    setTimeout(() => {
+    try {
+      const { data, error } = await supabase.functions.invoke('mistral-chat', {
+        body: {
+          messages: messages.concat(userMessage).map(msg => ({
+            role: msg.sender === 'user' ? 'user' : 'assistant',
+            content: msg.text
+          }))
+        }
+      });
+
+      if (error) throw error;
+
       const botMessage: Message = {
         id: (Date.now() + 1).toString(),
-        text: "I'm a simple demo bot. I just echo what you say!",
+        text: data.answer,
         sender: "bot",
         timestamp: new Date(),
       };
+
       setMessages((prev) => [...prev, botMessage]);
-    }, 1000);
+    } catch (error) {
+      console.error('Chat error:', error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to get a response. Please try again.",
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
