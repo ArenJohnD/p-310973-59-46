@@ -19,19 +19,15 @@ serve(async (req) => {
   }
 
   try {
-    console.log('Received request to mistral-chat function');
     const { messages } = await req.json();
     
     // Create a Supabase client
     const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
     
-    console.log('Fetching reference documents');
     // Fetch all reference documents
     const { data: documents, error: docError } = await supabase
       .from('reference_documents')
-      .select('id, file_name, file_path')
-      .eq('is_blocked', false)
-      .eq('processed', true);
+      .select('id, file_name, file_path');
     
     if (docError) {
       console.error('Error fetching reference documents:', docError);
@@ -40,7 +36,6 @@ serve(async (req) => {
 
     // If no reference documents found
     if (!documents || documents.length === 0) {
-      console.log('No reference documents found');
       return new Response(JSON.stringify({
         answer: "I don't have any reference documents to answer from. Please ask an administrator to upload relevant documents."
       }), {
@@ -48,14 +43,10 @@ serve(async (req) => {
       });
     }
 
-    console.log(`Found ${documents.length} reference documents`);
-
     // Get content from the documents
     let documentContent = "";
     for (const doc of documents) {
       try {
-        console.log(`Processing document: ${doc.file_name}`);
-        
         // Create a signed URL for the document
         const { data: signedUrlData, error: signedUrlError } = await supabase.storage
           .from('policy_documents')
@@ -66,21 +57,16 @@ serve(async (req) => {
           continue;
         }
 
-        // Extract text from document
+        // Extract text from PDF (simplified approach - in production you'd want to use a proper PDF parser)
         const response = await fetch(signedUrlData.signedUrl);
         if (!response.ok) {
-          console.error(`Error fetching document ${doc.file_name}: ${response.status} ${response.statusText}`);
+          console.error(`Error fetching document ${doc.file_name}:`, response.statusText);
           continue;
         }
         
-        // Get document content
+        // For simple text extraction we're just converting to text
+        // In a production environment, you'd want to use a proper PDF extraction library
         const text = await response.text();
-        console.log(`Successfully retrieved content for ${doc.file_name}, size: ${text.length} characters`);
-        
-        // Check for empty content
-        if (!text || text.trim().length === 0) {
-          console.warn(`Document ${doc.file_name} appears to be empty`);
-        }
         
         // Add document identifier and content
         documentContent += `Document: ${doc.file_name}\n${text}\n\n`;
@@ -88,18 +74,6 @@ serve(async (req) => {
         console.error(`Error processing document ${doc.file_name}:`, error);
       }
     }
-
-    // Check if we have any content to work with
-    if (!documentContent.trim()) {
-      console.warn('No document content was successfully extracted');
-      return new Response(JSON.stringify({
-        answer: "I couldn't extract any content from the reference documents. Please contact an administrator."
-      }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
-
-    console.log(`Total document content size: ${documentContent.length} characters`);
 
     // Prepare system message with instructions to only use reference documents
     const systemMessage = {
@@ -115,7 +89,6 @@ serve(async (req) => {
     // Add system message to the beginning of messages array
     const augmentedMessages = [systemMessage, ...messages];
 
-    console.log('Calling Mistral API');
     const response = await fetch(MISTRAL_API_URL, {
       method: 'POST',
       headers: {
@@ -131,24 +104,12 @@ serve(async (req) => {
     });
 
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error(`Mistral API error: ${response.status} ${response.statusText}`, errorText);
-      
-      let errorMessage = 'Failed to get response from Mistral';
-      try {
-        const error = JSON.parse(errorText);
-        if (error.message) {
-          errorMessage = error.message;
-        }
-      } catch {
-        // Use default error message if can't parse JSON
-      }
-      
-      throw new Error(errorMessage);
+      const error = await response.json();
+      console.error('Mistral API error:', error);
+      throw new Error('Failed to get response from Mistral');
     }
 
     const data = await response.json();
-    console.log('Received response from Mistral API');
     
     return new Response(JSON.stringify({
       answer: data.choices[0].message.content,
@@ -159,8 +120,7 @@ serve(async (req) => {
   } catch (error) {
     console.error('Error in mistral-chat function:', error);
     return new Response(JSON.stringify({ 
-      error: 'Failed to process your request',
-      message: error.message 
+      error: 'Failed to process your request' 
     }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
