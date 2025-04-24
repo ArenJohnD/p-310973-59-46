@@ -12,21 +12,20 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Constants for token management - more restrictive limits
-const MAX_TOKENS_PER_DOC = 3000; // Reduced from 8000
-const MAX_TOTAL_TOKENS = 12000; // Reduced from 20000
-const MAX_RESPONSE_TOKENS = 1000; // Keep same response token limit
-const RESERVE_TOKENS_FOR_MESSAGES = 4000; // Reserve tokens for conversation history
+// Constants for token management
+const MAX_TOKENS_PER_DOC = 3000;
+const MAX_TOTAL_TOKENS = 12000;
+const MAX_RESPONSE_TOKENS = 1000;
+const RESERVE_TOKENS_FOR_MESSAGES = 4000;
 
-// Simple function to estimate tokens (roughly 4 chars per token)
+// Simple function to estimate tokens
 function estimateTokens(text: string): number {
   return Math.ceil(text.length / 4);
 }
 
 // Function to truncate text to a target token count
 function truncateToTokens(text: string, maxTokens: number): string {
-  const estimatedTokensPerChar = 0.25; // ~4 chars per token
-  const estimatedChars = maxTokens / estimatedTokensPerChar;
+  const estimatedChars = maxTokens * 4;
   if (text.length > estimatedChars) {
     return text.substring(0, Math.floor(estimatedChars)) + "...";
   }
@@ -58,6 +57,10 @@ serve(async (req) => {
       }),
     });
 
+    if (!embeddingResponse.ok) {
+      throw new Error('Failed to generate embedding');
+    }
+
     const embeddingData = await embeddingResponse.json();
     const queryEmbedding = embeddingData.data[0].embedding;
 
@@ -65,7 +68,7 @@ serve(async (req) => {
     const { data: relevantDocuments, error: searchError } = await supabase
       .rpc('match_documents', {
         query_embedding: queryEmbedding,
-        match_threshold: 0.7,
+        match_threshold: 0.7, // Adjust this threshold based on testing
         match_count: 5
       });
 
@@ -74,12 +77,23 @@ serve(async (req) => {
       throw new Error('Failed to search documents');
     }
 
-    // Prepare context from relevant documents
-    const context = relevantDocuments
-      ? relevantDocuments
-          .map(doc => doc.content)
-          .join('\n\n')
-      : '';
+    // Process and combine relevant documents while managing token count
+    let combinedContext = '';
+    let totalTokens = 0;
+
+    if (relevantDocuments && relevantDocuments.length > 0) {
+      for (const doc of relevantDocuments) {
+        const docTokens = estimateTokens(doc.content);
+        if (totalTokens + docTokens > MAX_TOTAL_TOKENS - RESERVE_TOKENS_FOR_MESSAGES) {
+          break;
+        }
+        
+        // Add document content to context
+        const truncatedContent = truncateToTokens(doc.content, MAX_TOKENS_PER_DOC);
+        combinedContext += truncatedContent + '\n\n';
+        totalTokens += estimateTokens(truncatedContent);
+      }
+    }
 
     // Create system message with context
     const systemMessage = {
@@ -89,11 +103,13 @@ serve(async (req) => {
       Never make up information or use knowledge outside of the provided context.
       
       Context:
-      ${context}`
+      ${combinedContext || 'No relevant context found in the knowledge base.'}`
     };
 
     // Add system message to the beginning of messages array
     const augmentedMessages = [systemMessage, ...messages];
+
+    console.log('Sending request to Mistral with context length:', combinedContext.length);
 
     // Make request to Mistral API with context-enhanced messages
     const response = await fetch(MISTRAL_API_URL, {
@@ -120,6 +136,7 @@ serve(async (req) => {
     
     return new Response(JSON.stringify({
       answer: data.choices[0].message.content,
+      context: combinedContext ? 'Response based on relevant documents from knowledge base' : 'No relevant documents found',
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
@@ -127,7 +144,8 @@ serve(async (req) => {
   } catch (error) {
     console.error('Error in mistral-chat function:', error);
     return new Response(JSON.stringify({ 
-      error: 'Failed to process your request' 
+      error: 'Failed to process your request',
+      details: error.message
     }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
