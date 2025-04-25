@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/components/ui/use-toast";
 import { Button } from "@/components/ui/button";
-import { Loader2, Upload, Trash2, FileText } from "lucide-react";
+import { Loader2, Upload, Trash2, FileText, Upload as UploadIcon } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -14,6 +14,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { Badge } from "@/components/ui/badge";
 
 interface ReferenceDocument {
   id: string;
@@ -182,105 +183,146 @@ export function ReferenceDocumentManager({ onDocumentChange }: ReferenceDocument
   };
 
   return (
-    <div className="border rounded-md p-4 bg-gray-50">
-      <h3 className="text-lg font-medium mb-4">AI Reference Documents</h3>
-      <p className="text-sm text-gray-500 mb-4">
-        Upload PDF documents that will be used as reference by the AI chatbot to answer user questions.
-      </p>
-      
-      <div className="space-y-4">
-        <div className="bg-white border rounded-md p-4">
-          <h4 className="font-medium mb-2">Upload New Reference Document</h4>
-          <div className="flex flex-col gap-3">
-            <input
-              type="file"
-              accept="application/pdf"
-              onChange={handleFileChange}
-              className="border rounded-md p-2"
-            />
-            <div className="flex gap-2">
-              <Button 
-                onClick={uploadFile} 
-                disabled={!selectedFile || isUploading}
-                className="bg-[rgba(49,159,67,1)] hover:bg-[rgba(39,139,57,1)]"
+    <div className="space-y-6">
+      {/* Upload Section */}
+      <div className="bg-white border border-gray-200 rounded-lg p-6">
+        <div className="flex items-start justify-between">
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900">Upload Reference Document</h3>
+            <p className="text-sm text-gray-500 mt-1">
+              Upload PDF documents that will be used as reference by the AI chatbot.
+            </p>
+          </div>
+          <Badge variant="secondary" className="text-xs">
+            PDF Only
+          </Badge>
+        </div>
+
+        <div className="mt-4">
+          <div className="flex items-center gap-4">
+            <div className="flex-1">
+              <label 
+                htmlFor="file-upload" 
+                className="relative flex flex-col items-center justify-center w-full h-[140px] cursor-pointer rounded-lg border-2 border-dashed border-gray-200 bg-gray-50/50 hover:bg-gray-50 hover:border-[rgba(49,159,67,0.5)] transition-all group"
               >
-                {isUploading ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                    Uploading...
-                  </>
-                ) : (
-                  <>
-                    <Upload className="h-4 w-4 mr-2" />
-                    Upload Document
-                  </>
-                )}
-              </Button>
-              {selectedFile && (
-                <p className="text-sm text-gray-500 my-auto">
-                  Selected: {selectedFile.name} ({Math.round(selectedFile.size / 1024)} KB)
-                </p>
-              )}
+                <input
+                  id="file-upload"
+                  type="file"
+                  accept="application/pdf"
+                  onChange={handleFileChange}
+                  className="sr-only"
+                />
+                <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                  <UploadIcon className="h-8 w-8 text-gray-400 group-hover:text-[rgba(49,159,67,1)] mb-2" />
+                  <p className="text-sm text-gray-500">
+                    {selectedFile ? (
+                      <span className="font-medium text-[rgba(49,159,67,1)]">{selectedFile.name}</span>
+                    ) : (
+                      <>
+                        <span className="font-semibold text-[rgba(49,159,67,1)]">Click to upload</span>{" "}
+                        <span className="text-gray-500">or drag and drop</span>
+                      </>
+                    )}
+                  </p>
+                  <p className="text-xs text-gray-500 mt-1">PDF files only</p>
+                </div>
+              </label>
             </div>
+            <Button
+              onClick={uploadFile}
+              disabled={!selectedFile || isUploading}
+              className="bg-[rgba(49,159,67,1)] hover:bg-[rgba(39,139,57,1)] text-white shadow-sm min-w-[120px]"
+            >
+              {isUploading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Uploading...
+                </>
+              ) : (
+                <>
+                  <Upload className="mr-2 h-4 w-4" />
+                  Upload
+                </>
+              )}
+            </Button>
           </div>
         </div>
-        
-        <div className="bg-white border rounded-md p-4">
-          <h4 className="font-medium mb-2">Existing Reference Documents</h4>
-          
+      </div>
+
+      {/* Documents List */}
+      <div className="bg-white border border-gray-200 rounded-lg">
+        <div className="p-6 border-b border-gray-200">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900">Reference Documents</h3>
+              <p className="text-sm text-gray-500 mt-1">
+                Manage your uploaded reference documents
+              </p>
+            </div>
+            <Badge variant="secondary">
+              {documents.length} {documents.length === 1 ? 'document' : 'documents'}
+            </Badge>
+          </div>
+        </div>
+
+        <div className="divide-y divide-gray-200">
           {isLoading ? (
-            <div className="flex justify-center py-4">
-              <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
+            <div className="flex items-center justify-center p-8">
+              <Loader2 className="h-6 w-6 animate-spin text-[rgba(49,159,67,1)]" />
+              <span className="ml-3 text-gray-600">Loading documents...</span>
             </div>
           ) : documents.length > 0 ? (
-            <div className="space-y-2">
-              {documents.map(doc => (
-                <div key={doc.id} className="flex justify-between items-center p-3 bg-gray-50 border rounded-md">
-                  <div className="flex items-center gap-2">
-                    <FileText className="h-5 w-5 text-gray-600" />
-                    <div className="truncate">
-                      <p className="font-medium truncate max-w-md">{doc.file_name}</p>
-                      <p className="text-xs text-gray-500">
-                        Uploaded: {new Date(doc.created_at).toLocaleDateString()}
-                      </p>
-                    </div>
+            documents.map((doc) => (
+              <div key={doc.id} className="p-4 flex items-center justify-between hover:bg-gray-50">
+                <div className="flex items-center space-x-3">
+                  <div className="p-2 bg-[rgba(49,159,67,0.1)] rounded-lg">
+                    <FileText className="h-5 w-5 text-[rgba(49,159,67,1)]" />
                   </div>
-                  <div className="flex gap-2">
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild>
-                        <Button variant="destructive" size="sm" disabled={isDeleting}>
-                          {isDeleting ? (
-                            <Loader2 className="h-4 w-4 animate-spin mr-1" />
-                          ) : (
-                            <Trash2 className="h-4 w-4 mr-1" />
-                          )}
-                          Delete
-                        </Button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>Delete Document</AlertDialogTitle>
-                          <AlertDialogDescription>
-                            Are you sure you want to delete "{doc.file_name}"? This action cannot be undone.
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel>Cancel</AlertDialogCancel>
-                          <AlertDialogAction
-                            onClick={() => deleteDocument(doc.id)}
-                            className="bg-red-500 hover:bg-red-600"
-                          >
-                            Delete
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">{doc.file_name}</p>
+                    <p className="text-xs text-gray-500">
+                      Uploaded {new Date(doc.created_at).toLocaleDateString()}
+                    </p>
                   </div>
                 </div>
-              ))}
-            </div>
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Delete Document</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        Are you sure you want to delete this reference document? This action cannot be undone.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction
+                        onClick={() => deleteDocument(doc.id)}
+                        className="bg-red-600 hover:bg-red-700 text-white"
+                      >
+                        Delete
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              </div>
+            ))
           ) : (
-            <p className="text-gray-500 py-4 text-center">No reference documents uploaded yet.</p>
+            <div className="text-center py-12">
+              <div className="flex flex-col items-center justify-center text-gray-500">
+                <FileText className="h-8 w-8 mb-2 text-gray-400" />
+                <p className="text-sm font-medium">No documents uploaded</p>
+                <p className="text-sm text-gray-400 mt-1">Upload a document to get started</p>
+              </div>
+            </div>
           )}
         </div>
       </div>

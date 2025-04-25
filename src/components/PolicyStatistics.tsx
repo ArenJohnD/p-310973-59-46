@@ -1,6 +1,5 @@
-
 import React, { useState, useEffect } from "react";
-import { Calendar } from "lucide-react";
+import { Calendar, BarChart } from "lucide-react";
 import { DateRange } from "react-day-picker";
 import { addDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth, format } from "date-fns";
 import { useQuery } from "@tanstack/react-query";
@@ -16,14 +15,16 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { DatePickerWithRange } from "./DatePickerWithRange";
+import { Badge } from "@/components/ui/badge";
+import { RefreshCw, Loader2 } from "lucide-react";
 
 export function PolicyStatistics() {
   console.log("PolicyStatistics component rendering");
   
   const today = new Date();
   const [dateRange, setDateRange] = useState<DateRange | undefined>({
-    from: today,
-    to: today,
+    from: new Date(today.setHours(0, 0, 0, 0)), // Start of today
+    to: new Date(today.setHours(23, 59, 59, 999)) // End of today
   });
   const [timeframe, setTimeframe] = useState<string>("today");
   const [refreshTrigger, setRefreshTrigger] = useState(0);
@@ -63,8 +64,8 @@ export function PolicyStatistics() {
   const updateDateRange = (newTimeframe: string) => {
     console.log("Updating timeframe to:", newTimeframe);
     const today = new Date();
-    let from = today;
-    let to = today;
+    let from = new Date(today.setHours(0, 0, 0, 0));
+    let to = new Date(today.setHours(23, 59, 59, 999));
 
     switch (newTimeframe) {
       case "today":
@@ -133,12 +134,7 @@ export function PolicyStatistics() {
           return [];
         }
 
-        // Format dates for SQL query - include beginning of from date and end of to date
-        const fromDate = format(dateRange.from, 'yyyy-MM-dd');
-        const toDate = format(addDays(dateRange.to, 1), 'yyyy-MM-dd');
-
-        console.log("Querying with date range:", fromDate, "to", toDate);
-
+        // For today, use exact timestamps, for other timeframes use date-only comparison
         const { data, error } = await supabase
           .from('policy_views')
           .select(`
@@ -147,8 +143,8 @@ export function PolicyStatistics() {
             viewer_id,
             policy_categories(title)
           `)
-          .gte('viewed_at', fromDate)
-          .lt('viewed_at', toDate);
+          .gte('viewed_at', timeframe === 'today' ? dateRange.from.toISOString() : format(dateRange.from, 'yyyy-MM-dd'))
+          .lt('viewed_at', timeframe === 'today' ? dateRange.to.toISOString() : format(addDays(dateRange.to, 1), 'yyyy-MM-dd'));
 
         if (error) {
           console.error("Supabase query error:", error);
@@ -262,82 +258,124 @@ export function PolicyStatistics() {
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
-        <Select
-          value={timeframe}
-          onValueChange={updateDateRange}
-        >
-          <SelectTrigger className="w-[180px]">
-            <SelectValue placeholder="Select timeframe" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="today">Today</SelectItem>
-            <SelectItem value="week">This Week</SelectItem>
-            <SelectItem value="month">This Month</SelectItem>
-            <SelectItem value="custom">Custom Range</SelectItem>
-          </SelectContent>
-        </Select>
-
-        {timeframe === 'custom' && (
-          <DatePickerWithRange date={dateRange} onSelect={setDateRange} />
-        )}
-        
-        <Button 
-          onClick={() => refetch()}
-          variant="outline"
-          size="sm"
-          className="ml-auto"
-        >
-          Refresh Data
-        </Button>
+    <div className="space-y-6">
+      {/* Header Section */}
+      <div className="bg-white border border-gray-200 rounded-lg p-6">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+              <BarChart className="h-5 w-5 text-[rgba(49,159,67,1)]" />
+              Policy Statistics
+            </h3>
+            <p className="text-sm text-gray-500 mt-1">
+              Track and analyze policy document views
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
+            <Badge variant="secondary" className="font-medium">
+              {processedStats.length} {processedStats.length === 1 ? 'category' : 'categories'}
+            </Badge>
+            <Button
+              onClick={() => refetch()}
+              variant="outline"
+              size="sm"
+              className="gap-1.5"
+              disabled={isLoading}
+            >
+              <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+              Refresh
+            </Button>
+          </div>
+        </div>
       </div>
 
-      {isLoading ? (
-        <div className="text-center py-8">
-          <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-gray-800 mb-2"></div>
-          <p>Loading statistics...</p>
+      {/* Controls Section */}
+      <div className="bg-white border border-gray-200 rounded-lg p-6">
+        <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+          <div className="flex flex-wrap gap-4 items-center">
+            <Select
+              value={timeframe}
+              onValueChange={updateDateRange}
+            >
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="Select timeframe" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="today">Today</SelectItem>
+                <SelectItem value="week">This Week</SelectItem>
+                <SelectItem value="month">This Month</SelectItem>
+                <SelectItem value="custom">Custom Range</SelectItem>
+              </SelectContent>
+            </Select>
+
+            {timeframe === 'custom' && (
+              <DatePickerWithRange date={dateRange} onSelect={setDateRange} />
+            )}
+          </div>
         </div>
-      ) : processedStats.length > 0 ? (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {processedStats.map((stat: any) => (
-            <Card key={stat.categoryId} className="overflow-hidden">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">
-                  {stat.title}
-                </CardTitle>
-                <Calendar className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{stat.viewCount}</div>
-                <p className="text-xs text-muted-foreground">
-                  {stat.uniqueViewers} unique viewers
-                </p>
-                {stat.lastViewed && (
-                  <div className="mt-2 text-xs text-muted-foreground">
-                    Last viewed: {stat.lastViewed}
+      </div>
+
+      {/* Statistics Grid */}
+      <div className="bg-white border border-gray-200 rounded-lg p-6">
+        {isLoading ? (
+          <div className="flex items-center justify-center h-64">
+            <div className="flex flex-col items-center gap-3">
+              <Loader2 className="h-8 w-8 animate-spin text-[rgba(49,159,67,1)]" />
+              <p className="text-sm text-gray-600">Loading statistics...</p>
+            </div>
+          </div>
+        ) : processedStats.length > 0 ? (
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            {processedStats.map((stat: any) => (
+              <Card key={stat.categoryId} className="group hover:shadow-md transition-all duration-300">
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">
+                    {stat.title}
+                  </CardTitle>
+                  <div className="p-2 bg-[rgba(49,159,67,0.1)] rounded-lg group-hover:bg-[rgba(49,159,67,0.2)] transition-colors">
+                    <BarChart className="h-4 w-4 text-[rgba(49,159,67,1)]" />
                   </div>
-                )}
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      ) : (
-        <div className="text-center py-8 border border-gray-200 rounded-lg bg-gray-50">
-          <Calendar className="h-10 w-10 text-gray-400 mx-auto mb-2" />
-          <h3 className="text-lg font-medium text-gray-700">No Data Available</h3>
-          <p className="text-gray-500 max-w-md mx-auto mt-1">
-            There are no policy views recorded for this time period. Try selecting a different date range or refresh the data.
-          </p>
-          <Button 
-            variant="outline" 
-            className="mt-4"
-            onClick={() => refetch()}
-          >
-            Refresh Data
-          </Button>
-        </div>
-      )}
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    <div>
+                      <div className="text-2xl font-bold text-[rgba(49,159,67,1)]">
+                        {stat.viewCount}
+                      </div>
+                      <p className="text-xs text-gray-500">Total Views</p>
+                    </div>
+                    {stat.lastViewed && (
+                      <div className="flex items-center justify-end text-sm">
+                        <div className="text-right">
+                          <p className="font-medium">{format(new Date(stat.lastViewed), 'MMM d')}</p>
+                          <p className="text-xs text-gray-500">Last Viewed</p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        ) : (
+          <div className="flex flex-col items-center justify-center h-64 text-center">
+            <div className="p-4 bg-gray-50 rounded-full mb-4">
+              <BarChart className="h-8 w-8 text-gray-400" />
+            </div>
+            <h3 className="text-lg font-medium text-gray-900">No Data Available</h3>
+            <p className="text-sm text-gray-500 max-w-sm mt-2">
+              There are no policy views recorded for this time period. Try selecting a different date range.
+            </p>
+            <Button 
+              variant="outline" 
+              className="mt-4"
+              onClick={() => refetch()}
+            >
+              Refresh Data
+            </Button>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

@@ -8,6 +8,7 @@ import { UserManagement } from "@/components/UserManagement";
 import { PolicyStatistics } from "@/components/PolicyStatistics";
 import { useAuth } from "@/context/AuthContext";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Loader2, LayoutGrid, BookOpen, Users, BarChart } from "lucide-react";
 
 interface PolicyCategory {
   id: string;
@@ -179,11 +180,14 @@ const Admin = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex flex-col bg-[rgba(233,233,233,1)]">
+      <div className="min-h-screen flex flex-col bg-gradient-to-b from-[#F1F1F1] to-white">
         <Header />
-        <main className="bg-white flex-1 mt-[29px] px-20 py-[52px] rounded-[40px_40px_0px_0px] max-md:px-5">
-          <div className="flex justify-center items-center h-64">
-            <p className="text-xl">Loading...</p>
+        <main className="container mx-auto px-4 flex-1">
+          <div className="max-w-[1200px] mx-auto bg-white rounded-2xl shadow-sm mt-8 p-8">
+            <div className="flex justify-center items-center h-64">
+              <Loader2 className="h-8 w-8 animate-spin text-[rgba(49,159,67,1)]" />
+              <span className="ml-3 text-gray-600">Loading dashboard...</span>
+            </div>
           </div>
         </main>
       </div>
@@ -192,17 +196,24 @@ const Admin = () => {
 
   if (!isAdmin) {
     return (
-      <div className="min-h-screen flex flex-col bg-[rgba(233,233,233,1)]">
+      <div className="min-h-screen flex flex-col bg-gradient-to-b from-[#F1F1F1] to-white">
         <Header />
-        <main className="bg-white flex-1 mt-[29px] px-20 py-[52px] rounded-[40px_40px_0px_0px] max-md:px-5">
-          <div className="flex flex-col justify-center items-center h-64">
-            <h1 className="text-2xl font-bold text-red-600 mb-4">Access Denied</h1>
-            <p className="text-gray-700">
-              You don't have admin privileges to access this page.
-            </p>
-            <p className="text-gray-500 mt-2">
-              Only accounts with @neu.edu.ph email addresses can access the admin panel.
-            </p>
+        <main className="container mx-auto px-4 flex-1">
+          <div className="max-w-[1200px] mx-auto bg-white rounded-2xl shadow-sm mt-8 p-8">
+            <div className="flex flex-col justify-center items-center h-64">
+              <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mb-4">
+                <svg className="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m0 0v2m0-2h2m-2 0H8m4-6V4" />
+                </svg>
+              </div>
+              <h1 className="text-2xl font-bold text-red-600 mb-4">Access Denied</h1>
+              <p className="text-gray-700 text-center">
+                You don't have admin privileges to access this page.
+              </p>
+              <p className="text-gray-500 mt-2 text-center">
+                Only accounts with @neu.edu.ph email addresses can access the admin panel.
+              </p>
+            </div>
           </div>
         </main>
       </div>
@@ -210,64 +221,79 @@ const Admin = () => {
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-[rgba(233,233,233,1)]">
+    <div className="min-h-screen flex flex-col bg-gradient-to-b from-[#F1F1F1] to-white">
       <Header />
-      <main className="bg-white flex-1 mt-[29px] px-20 py-[52px] rounded-[40px_40px_0px_0px] max-md:px-5">
-        <section className="text-center mb-8">
-          <h1 className="text-black text-3xl font-bold">
-            Admin Dashboard
-          </h1>
-          <p className="text-black text-xl mt-2">
-            Manage Policy Categories, AI Reference Documents, Users & View Statistics
-          </p>
-        </section>
+      <main className="container mx-auto px-4 flex-1">
+        <div className="max-w-[1200px] mx-auto">
+          {/* Dashboard Header */}
+          <div className="bg-white rounded-2xl shadow-sm mt-8 p-6 sm:p-8 border border-gray-100">
+            <div className="max-w-2xl">
+              <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
+                Admin Dashboard
+              </h1>
+              <p className="text-gray-600 mt-2">
+                Manage Policy Categories, AI Reference Documents, Users & View Statistics
+              </p>
+            </div>
+          </div>
 
-        <Tabs defaultValue="categories" className="mb-8">
-          <TabsList className="grid w-full grid-cols-4 max-w-full mx-auto space-x-2 p-1 bg-muted rounded-md">
-            <TabsTrigger 
-              value="categories" 
-              className="flex-1 whitespace-nowrap overflow-hidden text-ellipsis"
-            >
-              Categories
-            </TabsTrigger>
-            <TabsTrigger 
-              value="references" 
-              className="flex-1 whitespace-nowrap overflow-hidden text-ellipsis"
-            >
-              AI Reference
-            </TabsTrigger>
-            <TabsTrigger 
-              value="users" 
-              className="flex-1 whitespace-nowrap overflow-hidden text-ellipsis"
-            >
-              Users
-            </TabsTrigger>
-            <TabsTrigger 
-              value="statistics" 
-              className="flex-1 whitespace-nowrap overflow-hidden text-ellipsis"
-            >
-              Statistics
-            </TabsTrigger>
-          </TabsList>
-          <TabsContent value="categories" className="mt-6">
-            <AdminCategoryTable 
-              categories={categories}
-              onUpdate={handleCategoryUpdate}
-              onDelete={handleCategoryDelete}
-              onCreate={handleCategoryCreate}
-              onReorder={handleReorderCategories}
-            />
-          </TabsContent>
-          <TabsContent value="references" className="mt-6">
-            <ReferenceDocumentManager />
-          </TabsContent>
-          <TabsContent value="users" className="mt-6">
-            <UserManagement />
-          </TabsContent>
-          <TabsContent value="statistics" className="mt-6">
-            <PolicyStatistics />
-          </TabsContent>
-        </Tabs>
+          {/* Main Content */}
+          <div className="mt-8">
+            <Tabs defaultValue="categories" className="space-y-8">
+              <TabsList className="inline-flex h-auto p-1 items-center justify-center gap-1 rounded-lg bg-muted w-full max-w-2xl mx-auto">
+                <TabsTrigger 
+                  value="categories" 
+                  className="inline-flex items-center gap-2 px-3 py-2.5 rounded-md hover:bg-white data-[state=active]:bg-white data-[state=active]:text-[rgba(49,159,67,1)] data-[state=active]:shadow-sm transition-all"
+                >
+                  <LayoutGrid className="h-4 w-4" />
+                  <span className="font-medium">Categories</span>
+                </TabsTrigger>
+                <TabsTrigger 
+                  value="references"
+                  className="inline-flex items-center gap-2 px-3 py-2.5 rounded-md hover:bg-white data-[state=active]:bg-white data-[state=active]:text-[rgba(49,159,67,1)] data-[state=active]:shadow-sm transition-all"
+                >
+                  <BookOpen className="h-4 w-4" />
+                  <span className="font-medium">AI Reference</span>
+                </TabsTrigger>
+                <TabsTrigger 
+                  value="users"
+                  className="inline-flex items-center gap-2 px-3 py-2.5 rounded-md hover:bg-white data-[state=active]:bg-white data-[state=active]:text-[rgba(49,159,67,1)] data-[state=active]:shadow-sm transition-all"
+                >
+                  <Users className="h-4 w-4" />
+                  <span className="font-medium">Users</span>
+                </TabsTrigger>
+                <TabsTrigger 
+                  value="statistics"
+                  className="inline-flex items-center gap-2 px-3 py-2.5 rounded-md hover:bg-white data-[state=active]:bg-white data-[state=active]:text-[rgba(49,159,67,1)] data-[state=active]:shadow-sm transition-all"
+                >
+                  <BarChart className="h-4 w-4" />
+                  <span className="font-medium">Statistics</span>
+                </TabsTrigger>
+              </TabsList>
+
+              <div className="bg-white rounded-2xl shadow-sm p-6 sm:p-8 border border-gray-100">
+                <TabsContent value="categories" className="mt-0 focus-visible:outline-none focus-visible:ring-0">
+                  <AdminCategoryTable 
+                    categories={categories}
+                    onUpdate={handleCategoryUpdate}
+                    onDelete={handleCategoryDelete}
+                    onCreate={handleCategoryCreate}
+                    onReorder={handleReorderCategories}
+                  />
+                </TabsContent>
+                <TabsContent value="references" className="mt-0 focus-visible:outline-none focus-visible:ring-0">
+                  <ReferenceDocumentManager />
+                </TabsContent>
+                <TabsContent value="users" className="mt-0 focus-visible:outline-none focus-visible:ring-0">
+                  <UserManagement />
+                </TabsContent>
+                <TabsContent value="statistics" className="mt-0 focus-visible:outline-none focus-visible:ring-0">
+                  <PolicyStatistics />
+                </TabsContent>
+              </div>
+            </Tabs>
+          </div>
+        </div>
       </main>
     </div>
   );

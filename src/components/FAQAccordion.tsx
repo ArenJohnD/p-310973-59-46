@@ -4,6 +4,7 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
+import { HelpCircle } from "lucide-react";
 
 const faqs = [
   {
@@ -29,22 +30,37 @@ const faqs = [
 
 export const FAQAccordion = () => {
   return (
-    <section className="w-full max-w-[1075px] mx-auto mt-16">
-      <h2 className="text-black text-[25px] font-semibold mb-5">
-        Frequently Asked Questions (FAQs)
-      </h2>
-      <div className="border-b border-black w-full mb-[47px]" />
+    <section className="w-full max-w-[1075px] mx-auto">
+      <div className="flex items-center justify-between mb-8">
+        <div>
+          <h2 className="text-2xl sm:text-3xl font-bold text-gray-900">
+            Frequently Asked Questions
+          </h2>
+          <p className="text-gray-600 mt-1">
+            Find answers to common questions about our policies
+          </p>
+        </div>
+        <div className="h-10 w-10 rounded-full bg-[rgba(49,159,67,0.1)] flex items-center justify-center flex-shrink-0 ml-4">
+          <HelpCircle className="h-6 w-6 text-[rgba(49,159,67,1)]" />
+        </div>
+      </div>
+
       <Accordion type="single" collapsible className="w-full space-y-4">
         {faqs.map((faq, index) => (
           <AccordionItem
             key={index}
             value={`item-${index}`}
-            className="bg-white shadow-[0px_4px_4px_rgba(0,0,0,0.25)] border rounded-[20px] border-[rgba(0,0,0,0.2)] px-[31px] py-[25px]"
+            className="bg-white border border-gray-200 rounded-lg px-4 sm:px-6 py-4 data-[state=open]:shadow-sm transition-shadow duration-200"
           >
-            <AccordionTrigger className="text-[22px] font-semibold hover:no-underline">
-              {faq.question}
+            <AccordionTrigger className="text-base sm:text-lg font-semibold hover:no-underline text-left">
+              <div className="flex gap-3 items-start">
+                <span className="text-[rgba(49,159,67,1)] text-sm font-medium bg-[rgba(49,159,67,0.1)] px-2 py-0.5 rounded">
+                  Q{index + 1}
+                </span>
+                <span className="flex-grow">{faq.question}</span>
+              </div>
             </AccordionTrigger>
-            <AccordionContent className="text-lg">
+            <AccordionContent className="text-base text-gray-600 pt-2 pl-11">
               {faq.answer}
             </AccordionContent>
           </AccordionItem>

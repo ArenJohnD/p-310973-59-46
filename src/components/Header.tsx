@@ -1,4 +1,3 @@
-
 import { Link } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import {
@@ -7,96 +6,220 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
+  DropdownMenuLabel,
 } from "@/components/ui/dropdown-menu";
-import { LogOut, Settings, Bell } from "lucide-react";
+import { LogOut, Settings, Bell, Menu, X } from "lucide-react";
 import { useState } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
+import { useLocation, useNavigate } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
 
 export const Header = () => {
-  const { user, isAdmin, isLoading, signOut } = useAuth();
-  const [isOpen, setIsOpen] = useState(false);
-
-  const handleSignOut = async () => {
-    setIsOpen(false);
-    await signOut();
-  };
-
-  const avatarUrl = user?.user_metadata?.avatar_url || null;
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const { user, isAdmin } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
 
   return (
-    <header className="bg-[#F1F1F1] shadow-sm">
-      <div className="container mx-auto px-4 py-5 flex items-center">
-        {/* Logo and Navigation together */}
-        <div className="flex items-center space-x-10">
-          {/* Logo */}
-          <img
-            src="https://cdn.builder.io/api/v1/image/assets/e3c6b0ec50df45b58e99e24af78e19b0/1cb33a4f0fb596171796038573ac1522f5a08704?placeholderIfAbsent=true"
-            alt="NEU Logo"
-            className="h-20 w-20 object-contain"
-          />
-        
-          {/* Navigation */}
-          <nav className="flex items-center">
-            <div className="text-black text-xl font-medium flex gap-8">
-              <Link to="/" className="hover:text-gray-700 transition-colors">
-                Home
-              </Link>
-              <Link to="/about" className="hover:text-gray-700 transition-colors">
-                About Us
-              </Link>
-              <Link to="/contact" className="hover:text-gray-700 transition-colors">
-                Contact
-              </Link>
+    <header className="relative bg-white border-b border-gray-100 shadow-sm z-50">
+      <div className="container mx-auto px-4">
+        <div className="flex items-center justify-between py-4">
+          {/* Logo and Brand */}
+          <Link to="/" className="flex items-center gap-3 group">
+            <img
+              src="https://cdn.builder.io/api/v1/image/assets/e3c6b0ec50df45b58e99e24af78e19b0/1cb33a4f0fb596171796038573ac1522f5a08704?placeholderIfAbsent=true"
+              alt="NEU Logo"
+              className="h-16 w-16 sm:h-20 sm:w-20 object-contain transition-transform duration-300 group-hover:scale-105"
+            />
+            <div className="hidden sm:block">
+              <h1 className="text-xl font-bold text-gray-900 group-hover:text-[rgba(49,159,67,1)] transition-colors">
+                NEUPoliSeek
+              </h1>
+              <p className="text-sm text-gray-500">
+                Policy Management System
+              </p>
             </div>
+          </Link>
+
+          {/* Desktop Navigation */}
+          <nav className="hidden md:flex items-center space-x-6">
+            <Link 
+              to="/" 
+              className={cn(
+                "px-4 py-2 rounded-lg transition-all duration-200",
+                location.pathname === "/" 
+                  ? "text-[rgba(49,159,67,1)] bg-[rgba(49,159,67,0.1)] font-medium" 
+                  : "text-gray-600 hover:text-[rgba(49,159,67,1)] hover:bg-[rgba(49,159,67,0.05)]"
+              )}
+            >
+              Home
+            </Link>
+            <Link 
+              to="/about"
+              className={cn(
+                "px-4 py-2 rounded-lg transition-all duration-200",
+                location.pathname === "/about"
+                  ? "text-[rgba(49,159,67,1)] bg-[rgba(49,159,67,0.1)] font-medium"
+                  : "text-gray-600 hover:text-[rgba(49,159,67,1)] hover:bg-[rgba(49,159,67,0.05)]"
+              )}
+            >
+              About Us
+            </Link>
+            <Link 
+              to="/contact"
+              className={cn(
+                "px-4 py-2 rounded-lg transition-all duration-200",
+                location.pathname === "/contact"
+                  ? "text-[rgba(49,159,67,1)] bg-[rgba(49,159,67,0.1)] font-medium"
+                  : "text-gray-600 hover:text-[rgba(49,159,67,1)] hover:bg-[rgba(49,159,67,0.05)]"
+              )}
+            >
+              Contact
+            </Link>
           </nav>
-        </div>
-        
-        {/* Right side icons - pushed to the right */}
-        <div className="ml-auto flex items-center gap-8">
-          <Bell className="h-8 w-8 text-gray-700" />
-          
-          {user && (
-            <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
-              <DropdownMenuTrigger className="focus:outline-none">
-                <Avatar className="h-12 w-12 bg-white border border-gray-200">
-                  {avatarUrl ? (
-                    <AvatarImage src={avatarUrl} alt={user.email || "User"} />
-                  ) : (
-                    <AvatarFallback className="bg-white text-gray-800 text-lg">
-                      {user.email?.substring(0, 2).toUpperCase() || "U"}
-                    </AvatarFallback>
+
+          {/* Right side icons */}
+          <div className="flex items-center gap-4">
+            {/* Notifications */}
+            <Button
+              variant="ghost"
+              size="icon"
+              className="relative hidden sm:flex hover:bg-[rgba(49,159,67,0.1)] text-gray-600 hover:text-[rgba(49,159,67,1)]"
+            >
+              <Bell className="h-5 w-5" />
+              <span className="absolute top-1 right-1 w-2 h-2 bg-[rgba(49,159,67,1)] rounded-full" />
+            </Button>
+
+            {/* User Menu */}
+            {user ? (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button 
+                    variant="ghost" 
+                    className="relative h-10 w-10 rounded-full border-2 border-gray-200 hover:border-[rgba(49,159,67,1)] transition-colors"
+                  >
+                    <Avatar className="h-9 w-9">
+                      <AvatarImage src={user.user_metadata?.avatar_url} />
+                      <AvatarFallback className="bg-[rgba(49,159,67,0.1)] text-[rgba(49,159,67,1)]">
+                        {user.email?.charAt(0).toUpperCase()}
+                      </AvatarFallback>
+                    </Avatar>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56">
+                  <DropdownMenuLabel className="font-normal">
+                    <div className="flex flex-col space-y-1">
+                      <p className="text-sm font-medium leading-none">{user.email}</p>
+                      <p className="text-xs leading-none text-gray-500">
+                        {isAdmin ? 'Administrator' : 'User'}
+                      </p>
+                    </div>
+                  </DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  {isAdmin && (
+                    <DropdownMenuItem 
+                      onClick={() => navigate('/admin')}
+                      className="text-[rgba(49,159,67,1)] hover:text-[rgba(49,159,67,1)] hover:bg-[rgba(49,159,67,0.1)]"
+                    >
+                      <Settings className="mr-2 h-4 w-4" />
+                      <span>Admin Dashboard</span>
+                    </DropdownMenuItem>
                   )}
-                </Avatar>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-full min-w-[220px] bg-white z-50 text-base">
-                <div className="px-4 py-3 text-base font-medium break-words">
-                  {user.email}
-                  {isLoading && <span className="ml-2 text-xs">(checking permissions...)</span>}
-                  {!isLoading && isAdmin && <span className="ml-2 text-xs text-green-600">(admin)</span>}
-                </div>
-                
-                <DropdownMenuSeparator />
-                
-                {isAdmin && (
-                  <DropdownMenuItem asChild className="cursor-pointer text-base">
-                    <Link to="/admin" className="flex items-center">
-                      <Settings className="mr-2 h-5 w-5" />
-                      Admin Dashboard
-                    </Link>
+                  <DropdownMenuItem
+                    onClick={() => supabase.auth.signOut()}
+                    className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                  >
+                    <LogOut className="mr-2 h-4 w-4" />
+                    <span>Log out</span>
                   </DropdownMenuItem>
-                )}
-                
-                <DropdownMenuItem 
-                  onClick={handleSignOut}
-                  className="cursor-pointer text-red-500 focus:text-red-500 focus:bg-red-50 text-base"
-                >
-                  <LogOut className="mr-2 h-5 w-5" />
-                  Sign out
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : (
+              <Button
+                variant="default"
+                className="bg-[rgba(49,159,67,1)] hover:bg-[rgba(39,139,57,1)] text-white hidden sm:flex"
+                onClick={() => navigate('/login')}
+              >
+                Sign In
+              </Button>
+            )}
+
+            {/* Mobile menu button */}
+            <Button
+              variant="ghost"
+              size="icon"
+              className="md:hidden"
+              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+            >
+              {isMobileMenuOpen ? (
+                <X className="h-6 w-6" />
+              ) : (
+                <Menu className="h-6 w-6" />
+              )}
+            </Button>
+          </div>
         </div>
+      </div>
+
+      {/* Mobile menu */}
+      <div
+        className={cn(
+          "fixed inset-x-0 top-[73px] p-4 bg-white border-t border-b border-gray-100 shadow-sm md:hidden transition-all duration-200 ease-in-out",
+          isMobileMenuOpen ? "translate-y-0 opacity-100" : "-translate-y-full opacity-0"
+        )}
+      >
+        <nav className="flex flex-col space-y-1">
+          <Link
+            to="/"
+            className={cn(
+              "px-4 py-3 rounded-lg transition-all duration-200",
+              location.pathname === "/"
+                ? "text-[rgba(49,159,67,1)] bg-[rgba(49,159,67,0.1)] font-medium"
+                : "text-gray-600 hover:text-[rgba(49,159,67,1)] hover:bg-[rgba(49,159,67,0.05)]"
+            )}
+            onClick={() => setIsMobileMenuOpen(false)}
+          >
+            Home
+          </Link>
+          <Link
+            to="/about"
+            className={cn(
+              "px-4 py-3 rounded-lg transition-all duration-200",
+              location.pathname === "/about"
+                ? "text-[rgba(49,159,67,1)] bg-[rgba(49,159,67,0.1)] font-medium"
+                : "text-gray-600 hover:text-[rgba(49,159,67,1)] hover:bg-[rgba(49,159,67,0.05)]"
+            )}
+            onClick={() => setIsMobileMenuOpen(false)}
+          >
+            About Us
+          </Link>
+          <Link
+            to="/contact"
+            className={cn(
+              "px-4 py-3 rounded-lg transition-all duration-200",
+              location.pathname === "/contact"
+                ? "text-[rgba(49,159,67,1)] bg-[rgba(49,159,67,0.1)] font-medium"
+                : "text-gray-600 hover:text-[rgba(49,159,67,1)] hover:bg-[rgba(49,159,67,0.05)]"
+            )}
+            onClick={() => setIsMobileMenuOpen(false)}
+          >
+            Contact
+          </Link>
+          {!user && (
+            <Button
+              variant="default"
+              className="w-full mt-2 bg-[rgba(49,159,67,1)] hover:bg-[rgba(39,139,57,1)] text-white"
+              onClick={() => {
+                navigate('/login');
+                setIsMobileMenuOpen(false);
+              }}
+            >
+              Sign In
+            </Button>
+          )}
+        </nav>
       </div>
     </header>
   );

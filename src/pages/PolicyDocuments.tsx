@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -6,8 +5,9 @@ import { Header } from "@/components/Header";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/use-toast";
 import { useAuth } from "@/context/AuthContext";
-import { Loader2, FileText } from "lucide-react";
+import { Loader2, FileText, AlertCircle } from "lucide-react";
 import { FileUploadManager } from "@/components/FileUploadManager";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 interface PolicyCategory {
   id: string;
@@ -29,6 +29,7 @@ const PolicyDocuments = () => {
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [viewTracked, setViewTracked] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     refreshAdminStatus();
@@ -71,7 +72,12 @@ const PolicyDocuments = () => {
     const fetchData = async () => {
       try {
         setLoading(true);
+        setError(null);
         
+        if (!id) {
+          throw new Error("No category ID provided");
+        }
+
         const { data: categoryData, error: categoryError } = await supabase
           .from('policy_categories')
           .select('*')
@@ -79,9 +85,10 @@ const PolicyDocuments = () => {
           .single();
           
         if (categoryError) throw categoryError;
+        if (!categoryData) throw new Error("Category not found");
+        
         setCategory(categoryData);
 
-        // Fetch document information
         const { data: documentData, error: documentError } = await supabase
           .from('policy_documents')
           .select('id, file_name, file_path')
@@ -94,7 +101,6 @@ const PolicyDocuments = () => {
         if (documentData && documentData.length > 0) {
           setDocument(documentData[0]);
           
-          // Get download URL for the PDF
           const { data: fileData, error: fileError } = await supabase.storage
             .from('policy_documents')
             .createSignedUrl(documentData[0].file_path, 3600);
@@ -108,6 +114,7 @@ const PolicyDocuments = () => {
         }
       } catch (error) {
         console.error("Error fetching policy category:", error);
+        setError(error instanceof Error ? error.message : "Failed to load policy category");
         toast({
           title: "Error",
           description: "Failed to load policy category",
@@ -128,8 +135,26 @@ const PolicyDocuments = () => {
         <main className="bg-white flex-1 mt-[29px] px-20 py-[52px] rounded-[40px_40px_0px_0px] max-md:px-5">
           <div className="flex justify-center items-center h-64">
             <Loader2 className="h-8 w-8 animate-spin text-gray-500" />
-            <p className="ml-2 text-xl">Loading...</p>
+            <p className="ml-2 text-xl">Loading policy documents...</p>
           </div>
+        </main>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen flex flex-col bg-[rgba(233,233,233,1)]">
+        <Header />
+        <main className="bg-white flex-1 mt-[29px] px-20 py-[52px] rounded-[40px_40px_0px_0px] max-md:px-5">
+          <Alert variant="destructive" className="mb-4">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>Error</AlertTitle>
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+          <Button onClick={() => navigate('/')} className="bg-gray-500 hover:bg-gray-600">
+            Return to Home
+          </Button>
         </main>
       </div>
     );
@@ -146,13 +171,6 @@ const PolicyDocuments = () => {
           <p className="text-black text-xl mt-2">
             View policy documents for this category
           </p>
-          {isAdmin && (
-            <div className="mt-4">
-              <p className="text-sm text-green-600 bg-green-50 p-2 rounded inline-block">
-                Admin Mode: You have access to manage documents
-              </p>
-            </div>
-          )}
         </section>
         
         <div className="flex justify-center mb-8 gap-4">
@@ -162,24 +180,7 @@ const PolicyDocuments = () => {
           >
             Back to Home
           </Button>
-          
-          {isAdmin && (
-            <Button 
-              onClick={() => navigate('/admin')}
-              className="bg-[rgba(49,159,67,1)] hover:bg-[rgba(39,139,57,1)]"
-            >
-              Manage in Admin
-            </Button>
-          )}
         </div>
-
-        {isAdmin && (
-          <FileUploadManager 
-            categoryId={id || ''} 
-            onFileChange={() => window.location.reload()}
-            existingDocument={document}
-          />
-        )}
 
         {pdfUrl ? (
           <div className="border rounded-lg bg-gray-50 overflow-hidden">
@@ -206,11 +207,6 @@ const PolicyDocuments = () => {
           <div className="flex justify-center items-center border rounded-lg bg-gray-50 min-h-[70vh] p-8">
             <div className="text-center">
               <p className="text-xl font-medium text-gray-700 mb-4">No Document Available</p>
-              <p className="text-gray-500 max-w-md mx-auto">
-                {isAdmin 
-                  ? "Use the upload button above to add a PDF document for this category."
-                  : "There is no document available for this category yet."}
-              </p>
             </div>
           </div>
         )}

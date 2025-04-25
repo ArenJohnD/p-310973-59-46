@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -31,6 +30,9 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Search, RefreshCw, UserCog, Shield, ShieldAlert, UserX } from "lucide-react";
 
 type UserRole = Database["public"]["Enums"]["app_role"];
 
@@ -383,173 +385,211 @@ export const UserManagement = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-bold">User Management</h2>
-        <Button onClick={handleRefreshClick} variant="outline" size="sm">
-          Refresh
-        </Button>
+      {/* Header Section */}
+      <div className="bg-white border border-gray-200 rounded-lg p-6">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+              <UserCog className="h-5 w-5 text-[rgba(49,159,67,1)]" />
+              User Management
+            </h3>
+            <p className="text-sm text-gray-500 mt-1">
+              Manage user roles, permissions, and access
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
+            <Badge variant="secondary" className="font-medium">
+              {users.length} {users.length === 1 ? 'user' : 'users'}
+            </Badge>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleRefreshClick}
+              className="gap-1.5"
+              disabled={loading}
+            >
+              <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+              Refresh
+            </Button>
+          </div>
+        </div>
+
+        {fetchError && (
+          <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+            <p className="text-sm text-red-600">{fetchError}</p>
+          </div>
+        )}
       </div>
-      
-      <div className="rounded-md border overflow-hidden">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Name</TableHead>
-              <TableHead>Email</TableHead>
-              <TableHead>Role</TableHead>
-              <TableHead>Created At</TableHead>
-              <TableHead>Last Sign In</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {users.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={7} className="text-center py-6">
-                  No users found
-                </TableCell>
+
+      {/* Users Table */}
+      <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+        <div className="overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow className="bg-gray-50">
+                <TableHead className="w-[250px]">User</TableHead>
+                <TableHead className="w-[150px] text-center">Role</TableHead>
+                <TableHead className="w-[180px]">Last Sign In</TableHead>
+                <TableHead className="w-[120px] text-center">Status</TableHead>
+                <TableHead className="w-[200px] text-right">Actions</TableHead>
               </TableRow>
-            ) : (
-              users.map((user) => (
-                <TableRow key={user.id} className={user.is_blocked ? "bg-gray-100" : ""}>
-                  <TableCell>{user.full_name || "N/A"}</TableCell>
-                  <TableCell>{user.email}</TableCell>
-                  <TableCell>
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                      user.role === "admin" ? "bg-green-100 text-green-800" : "bg-blue-100 text-blue-800"
-                    }`}>
-                      {user.role}
-                    </span>
-                  </TableCell>
-                  <TableCell>{formatDate(user.created_at)}</TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-1">
-                      <Clock className="h-3 w-3 text-gray-500" />
-                      {getLastSignInTime(user)}
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    {user.is_blocked ? (
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
-                        Blocked
-                      </span>
-                    ) : (
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                        user.is_active 
-                          ? "bg-green-100 text-green-800" 
-                          : "bg-yellow-100 text-yellow-800"
-                      }`}>
-                        {user.is_active ? "Active" : "Inactive"}
-                      </span>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex justify-end items-center space-x-2">
-                      <Select
-                        value={user.role}
-                        onValueChange={(value: string) => {
-                          const roleValue = value as UserRole;
-                          handleRoleChange(user.id, roleValue);
-                        }}
-                        disabled={updatingUserId === user.id}
-                      >
-                        <SelectTrigger className="w-[100px]">
-                          {updatingUserId === user.id ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : (
-                            <SelectValue />
-                          )}
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="admin">Admin</SelectItem>
-                          <SelectItem value="user">User</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      
-                      <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                          <Button 
-                            variant="outline" 
-                            size="icon" 
-                            className={`w-8 h-8 p-0 ${user.is_blocked ? "bg-green-50" : "bg-red-50"}`}
-                          >
-                            <Ban className={`h-4 w-4 ${user.is_blocked ? "text-green-600" : "text-red-600"}`} />
-                          </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>
-                              {user.is_blocked ? "Unblock User" : "Block User"}
-                            </AlertDialogTitle>
-                            <AlertDialogDescription>
-                              {user.is_blocked 
-                                ? `Are you sure you want to unblock ${user.email}? They will regain access to the system.`
-                                : `Are you sure you want to block ${user.email}? They will lose access to the system.`
-                              }
-                            </AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel>Cancel</AlertDialogCancel>
-                            <AlertDialogAction
-                              onClick={() => handleBlockUser(user.id, !user.is_blocked)}
-                              className={user.is_blocked ? "bg-green-600 hover:bg-green-700" : "bg-red-600 hover:bg-red-700"}
-                            >
-                              {blockingUserId === user.id ? (
-                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                              ) : null}
-                              {user.is_blocked ? "Unblock" : "Block"}
-                            </AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
-                      
-                      <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                          <Button 
-                            variant="outline" 
-                            size="icon" 
-                            className="w-8 h-8 p-0 bg-red-50"
-                          >
-                            <Trash className="h-4 w-4 text-red-600" />
-                          </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>Delete User</AlertDialogTitle>
-                            <AlertDialogDescription>
-                              Are you sure you want to delete {user.email}? This action cannot be undone.
-                            </AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel>Cancel</AlertDialogCancel>
-                            <AlertDialogAction
-                              onClick={() => handleDeleteUser(user.id)}
-                              className="bg-red-600 hover:bg-red-700"
-                            >
-                              {deletingUserId === user.id ? (
-                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                              ) : null}
-                              Delete
-                            </AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
+            </TableHeader>
+            <TableBody>
+              {loading ? (
+                <TableRow>
+                  <TableCell colSpan={5} className="h-32">
+                    <div className="flex justify-center items-center">
+                      <Loader2 className="h-6 w-6 animate-spin text-[rgba(49,159,67,1)]" />
+                      <span className="ml-3 text-gray-600">Loading users...</span>
                     </div>
                   </TableCell>
                 </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
+              ) : users.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={5} className="h-32">
+                    <div className="flex flex-col items-center justify-center text-gray-500">
+                      <UserX className="h-8 w-8 mb-2 text-gray-400" />
+                      <p className="text-sm font-medium">No users found</p>
+                      <p className="text-sm text-gray-400">Users will appear here once they sign up</p>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ) : (
+                users.map((user) => (
+                  <TableRow key={user.id} className="hover:bg-gray-50/50">
+                    <TableCell>
+                      <div>
+                        <p className="font-medium text-gray-900">{user.full_name || 'Unnamed User'}</p>
+                        <p className="text-sm text-gray-500">{user.email}</p>
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <Select
+                        value={user.role}
+                        onValueChange={(value: UserRole) => handleRoleChange(user.id, value)}
+                        disabled={updatingUserId === user.id}
+                      >
+                        <SelectTrigger className="w-[130px] mx-auto">
+                          <SelectValue>
+                            <div className="flex items-center gap-2">
+                              {user.role === 'admin' ? (
+                                <ShieldAlert className="h-4 w-4 text-[rgba(49,159,67,1)]" />
+                              ) : (
+                                <Shield className="h-4 w-4 text-gray-400" />
+                              )}
+                              <span className="capitalize">{user.role}</span>
+                            </div>
+                          </SelectValue>
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="user">
+                            <div className="flex items-center gap-2">
+                              <Shield className="h-4 w-4" />
+                              User
+                            </div>
+                          </SelectItem>
+                          <SelectItem value="admin">
+                            <div className="flex items-center gap-2">
+                              <ShieldAlert className="h-4 w-4" />
+                              Admin
+                            </div>
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </TableCell>
+                    <TableCell>
+                      <span className="text-sm text-gray-500">
+                        {getLastSignInTime(user)}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <Badge 
+                        variant={user.is_blocked ? "destructive" : user.is_active ? "success" : "secondary"}
+                        className="font-medium"
+                      >
+                        {user.is_blocked ? "Blocked" : user.is_active ? "Active" : "Inactive"}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center justify-end gap-2">
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className={user.is_blocked ? 
+                                "text-[rgba(49,159,67,1)] hover:text-[rgba(39,139,57,1)] hover:bg-[rgba(49,159,67,0.1)] border-[rgba(49,159,67,0.2)]" :
+                                "text-amber-600 hover:text-amber-700 hover:bg-amber-50 border-amber-200"
+                              }
+                              disabled={blockingUserId === user.id}
+                            >
+                              <Ban className="h-4 w-4" />
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>
+                                {user.is_blocked ? "Unblock User" : "Block User"}
+                              </AlertDialogTitle>
+                              <AlertDialogDescription>
+                                {user.is_blocked
+                                  ? "This will allow the user to access the system again."
+                                  : "This will prevent the user from accessing the system."}
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancel</AlertDialogCancel>
+                              <AlertDialogAction
+                                onClick={() => handleBlockUser(user.id, !user.is_blocked)}
+                                className={user.is_blocked ?
+                                  "bg-[rgba(49,159,67,1)] hover:bg-[rgba(39,139,57,1)] text-white" :
+                                  "bg-amber-600 hover:bg-amber-700 text-white"
+                                }
+                              >
+                                {user.is_blocked ? "Unblock" : "Block"}
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
+                              disabled={deletingUserId === user.id}
+                            >
+                              <Trash className="h-4 w-4" />
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Delete User</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                Are you sure you want to delete this user? This action cannot be undone.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancel</AlertDialogCancel>
+                              <AlertDialogAction
+                                onClick={() => handleDeleteUser(user.id)}
+                                className="bg-red-600 hover:bg-red-700 text-white"
+                              >
+                                Delete
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </div>
       </div>
-      
-      <p className="text-sm text-gray-500">
-        Note: Users with "Admin" role can access the admin dashboard and manage all content.
-        Users with "User" role have normal access to the application.
-        Blocked users cannot sign in to the application.
-        Active status is maintained while users are signed in and using the application.
-      </p>
     </div>
   );
 };
