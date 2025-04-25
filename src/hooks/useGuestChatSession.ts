@@ -63,15 +63,13 @@ export function useGuestChatSession({ welcomeMessage }: UseGuestChatSessionProps
         }
       });
 
-      if (!response.ok) {
-        throw new Error('Failed to get AI response');
+      if (response.error) {
+        throw new Error(response.error.message || 'Failed to get AI response');
       }
-
-      const data = await response.json();
 
       const botMessage: Message = {
         id: (Date.now() + 1).toString(),
-        text: data.answer || "I'm sorry, I couldn't answer that right now.",
+        text: response.data.answer || "I'm sorry, I couldn't answer that right now.",
         sender: "bot",
         timestamp: new Date(),
       };
