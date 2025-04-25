@@ -50,13 +50,6 @@ export const FAQAccordion = () => {
           </AccordionItem>
         ))}
       </Accordion>
-      <div className="flex justify-center mt-[68px] max-md:mt-10">
-        <img
-          src="https://cdn.builder.io/api/v1/image/assets/e3c6b0ec50df45b58e99e24af78e19b0/a97d5687b32c3139caeeb9427a6a201bd794bc40?placeholderIfAbsent=true"
-          alt="Bottom Logo"
-          className="aspect-[1] object-contain w-[100px]"
-        />
-      </div>
     </section>
   );
 };

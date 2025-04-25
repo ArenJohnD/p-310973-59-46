@@ -1,4 +1,3 @@
-
 import {
   BrowserRouter,
   Routes,
@@ -11,6 +10,7 @@ import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { Toaster } from "@/components/ui/toaster";
 import { Loader2 } from "lucide-react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { toast } from "@/components/ui/use-toast";
 
 const queryClient = new QueryClient();
 
@@ -84,8 +84,6 @@ const AdminRoute = ({ children }: { children: React.ReactNode }) => {
   
   return (user && isAdmin) ? <>{children}</> : null;
 };
-
-import { toast } from "@/components/ui/use-toast";
 
 function AppContent() {
   const { isLoading, user } = useAuth();

@@ -1,8 +1,7 @@
-
 import { Header } from "@/components/Header";
 import { PolicyGrid } from "@/components/PolicyGrid";
 import { FAQAccordion } from "@/components/FAQAccordion";
-import { ChatBubble } from "@/components/ChatBubble";
+import { ChatIcon } from "@/components/ChatIcon";
 
 export default function Index() {
   return (
@@ -24,7 +23,7 @@ export default function Index() {
           <FAQAccordion />
         </div>
       </div>
-      <ChatBubble />
+      <ChatIcon />
     </div>
   );
 }
