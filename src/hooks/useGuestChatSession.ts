@@ -1,4 +1,3 @@
-
 import { useCallback, useEffect, useState } from "react";
 import { Message } from "@/types/chat";
 
@@ -55,32 +54,15 @@ export function useGuestChatSession({ welcomeMessage }: UseGuestChatSessionProps
     setMessages((prev) => [...prev, userMessage]);
 
     try {
-      // Still using the endpoint named huggingface-chat but it's now using Groq API internally
-      const response = await fetch("/functions/v1/huggingface-chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query: text, context: "" })
+      const response = await supabase.functions.invoke('mistral-chat', {
+        body: { 
+          query: text, 
+          context: "" 
+        }
       });
 
       if (!response.ok) {
-        let msg = "AI service unavailable.";
-        try {
-          const errorData = await response.json();
-          if (typeof errorData.answer === "string" && errorData.answer.length < 200) {
-            msg = errorData.answer;
-          }
-          
-          // Handle token limit errors specifically
-          if (response.status === 413) {
-            msg = errorData.answer || "Your question requires processing a large amount of information. Please try asking a more specific question.";
-          }
-        } catch {
-          // Unable to parse response, use default message
-          if (response.status === 413) {
-            msg = "Your question is too complex. Please try asking a more specific or shorter question.";
-          }
-        }
-        throw new Error(msg);
+        throw new Error('Failed to get AI response');
       }
 
       const data = await response.json();
@@ -91,6 +73,7 @@ export function useGuestChatSession({ welcomeMessage }: UseGuestChatSessionProps
         sender: "bot",
         timestamp: new Date(),
       };
+      
       setMessages((prev) => [...prev, botMessage]);
     } catch (err: any) {
       const friendly =
