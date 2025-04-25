@@ -1,5 +1,7 @@
+
 import { useCallback, useEffect, useState } from "react";
 import { Message } from "@/types/chat";
+import { supabase } from "@/integrations/supabase/client";
 
 // For session-based persistence
 const LOCAL_STORAGE_KEY = "guest_chat_messages_v1";
