@@ -30,6 +30,7 @@ export function ChatWindow({ welcomeMessage = "Hello! How can I help you?" }: Ch
       };
       setMessages(prev => [...prev, userMessage]);
 
+      // Call the Mistral chat edge function with all previous messages
       const response = await supabase.functions.invoke('mistral-chat', {
         body: { 
           messages: [...messages, userMessage],
@@ -37,7 +38,10 @@ export function ChatWindow({ welcomeMessage = "Hello! How can I help you?" }: Ch
         }
       });
 
-      if (response.error) throw response.error;
+      if (response.error) {
+        console.error('Edge function error:', response.error);
+        throw new Error(response.error.message || 'Failed to get a response');
+      }
 
       const { answer, context } = response.data;
       
@@ -49,7 +53,7 @@ export function ChatWindow({ welcomeMessage = "Hello! How can I help you?" }: Ch
       };
 
       setMessages(prev => [...prev, botMessage]);
-      setCitations(context);
+      setCitations(context || []);
 
     } catch (error) {
       console.error('Chat error:', error);
