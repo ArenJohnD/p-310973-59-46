@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -10,13 +11,15 @@ import {
   History,
   ChevronLeft,
   ChevronRight,
-  ChevronDown, // Added ChevronDown
-  ChevronUp,   // Added ChevronUp
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/components/ui/use-toast";
 
 interface Message {
   type: "user" | "bot";
@@ -52,30 +55,73 @@ export function PoliChat() {
   ]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const { toast } = useToast();
 
   const handleSend = async () => {
     if (!input.trim()) return;
 
     const userMessage = input.trim();
     setInput("");
+    
+    // Add user message to chat
     setMessages((prev) => [
       ...prev,
       { type: "user", content: userMessage, timestamp: new Date() },
     ]);
+    
     setIsLoading(true);
 
-    setTimeout(() => {
+    try {
+      // Format messages for Mistral API
+      const formattedMessages = messages.map(msg => ({
+        id: Date.now().toString() + Math.random().toString(),
+        text: msg.content,
+        sender: msg.type === "user" ? "user" : "bot",
+        timestamp: msg.timestamp
+      }));
+      
+      // Add the new user message
+      formattedMessages.push({
+        id: Date.now().toString(),
+        text: userMessage,
+        sender: "user",
+        timestamp: new Date()
+      });
+
+      // Call the Mistral chat edge function
+      const response = await supabase.functions.invoke('mistral-chat', {
+        body: { 
+          messages: formattedMessages,
+          context: "" 
+        }
+      });
+
+      if (response.error) {
+        console.error('Edge function error:', response.error);
+        throw new Error(response.error.message || 'Failed to get a response');
+      }
+
+      const { answer } = response.data;
+      
+      // Add bot response to chat
       setMessages((prev) => [
         ...prev,
         {
           type: "bot",
-          content:
-            "Hello! I'm Poli, your AI assistant. I'm here to help you find and understand NEU's policies. How can I assist you today?",
+          content: answer,
           timestamp: new Date(),
         },
       ]);
+    } catch (error) {
+      console.error('Chat error:', error);
+      toast({
+        title: "Error",
+        description: "Failed to get a response. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
       setIsLoading(false);
-    }, 1000);
+    }
   };
 
   const toggleMaximize = () => {
@@ -168,13 +214,11 @@ export function PoliChat() {
                 {/* Chat Header */}
                 <div className="bg-gradient-to-r from-[rgba(49,159,67,1)] to-[rgba(39,139,57,1)] p-4 flex items-center justify-between shadow-md flex-shrink-0">
                   <div className="flex items-center gap-3">
-                    {/* --- MODIFIED BUTTON: Context-aware Icon --- */}
                     <Button
                       variant="ghost"
                       size="icon"
                       className="h-8 w-8 rounded-lg bg-white/10 hover:bg-white/20 transition-colors"
                       onClick={toggleHistory}
-                      // Update aria-label based on context
                       aria-label={
                         isMaximized
                           ? (isHistoryOpen ? "Hide History Sidebar" : "Show History Sidebar")
@@ -182,14 +226,12 @@ export function PoliChat() {
                       }
                     >
                       {isMaximized ? (
-                        // Maximized View: Left/Right for Sidebar
                         isHistoryOpen ? (
                           <ChevronLeft className="h-4 w-4 text-white" />
                         ) : (
                           <ChevronRight className="h-4 w-4 text-white" />
                         )
                       ) : (
-                        // Default View: Up/Down for Dropdown
                         isHistoryOpen ? (
                           <ChevronUp className="h-4 w-4 text-white" />
                         ) : (
@@ -197,7 +239,6 @@ export function PoliChat() {
                         )
                       )}
                     </Button>
-                    {/* --- END MODIFIED BUTTON --- */}
 
                     <div className="bg-white/10 rounded-lg p-1.5">
                       <MessageCircle className="h-4 w-4 text-white" />

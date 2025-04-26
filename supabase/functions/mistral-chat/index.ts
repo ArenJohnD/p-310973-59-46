@@ -22,7 +22,7 @@ serve(async (req) => {
 
   try {
     const { messages, context } = await req.json();
-    console.log('Received chat request with context:', context);
+    console.log('Received chat request with', messages.length, 'messages');
 
     // Format the conversation for Mistral
     const formattedMessages = messages.map(msg => ({
@@ -30,13 +30,22 @@ serve(async (req) => {
       content: msg.text
     }));
 
+    // Add system message with context if provided
     if (context) {
       formattedMessages.unshift({
         role: 'system',
-        content: `Use this context to help answer questions: ${context}`
+        content: `You are Poli, the NEU Policy Assistant, designed to help users find and understand NEU's policies. 
+                  Use this context to help answer questions: ${context}`
+      });
+    } else {
+      formattedMessages.unshift({
+        role: 'system',
+        content: 'You are Poli, the NEU Policy Assistant, designed to help users find and understand NEU\'s policies. Be helpful, clear, and concise. If you don\'t know something, admit it and suggest where they might find the information.'
       });
     }
 
+    console.log('Sending request to Mistral API');
+    
     // Call Mistral API
     const response = await fetch('https://api.mistral.ai/v1/chat/completions', {
       method: 'POST',
@@ -52,14 +61,14 @@ serve(async (req) => {
     });
 
     if (!response.ok) {
-      const error = await response.text();
-      console.error('Mistral API error:', error);
-      throw new Error('Failed to get response from Mistral');
+      const errorText = await response.text();
+      console.error('Mistral API error:', response.status, errorText);
+      throw new Error(`Failed to get response from Mistral: ${response.status} ${errorText}`);
     }
 
     const data = await response.json();
     const answer = data.choices[0].message.content;
-    console.log('Received answer from Mistral:', answer);
+    console.log('Received answer from Mistral');
 
     return new Response(
       JSON.stringify({ answer, context: [] }),
