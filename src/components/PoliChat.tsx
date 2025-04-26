@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -257,15 +256,6 @@ export function PoliChat() {
                       aria-label={isMaximized ? "Minimize Chat" : "Maximize Chat"}
                     >
                       {isMaximized ? <Minimize2 className="h-4 w-4 text-white" /> : <Maximize2 className="h-4 w-4 text-white" />}
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 rounded-lg bg-white/10 hover:bg-white/20 transition-colors"
-                      onClick={() => { setIsOpen(false); setIsMaximized(false); setIsHistoryOpen(false); }}
-                      aria-label="Close Chat"
-                    >
-                      <X className="h-4 w-4 text-white" />
                     </Button>
                   </div>
                 </div>
