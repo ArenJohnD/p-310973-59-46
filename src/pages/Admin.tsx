@@ -3,7 +3,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/components/ui/use-toast";
 import { Header } from "@/components/Header";
 import { AdminCategoryTable } from "@/components/AdminCategoryTable";
-import { ReferenceDocumentManager } from "@/components/ReferenceDocumentManager";
 import { UserManagement } from "@/components/UserManagement";
 import { PolicyStatistics } from "@/components/PolicyStatistics";
 import { useAuth } from "@/context/AuthContext";
@@ -249,13 +248,6 @@ const Admin = () => {
                   <span className="font-medium">Categories</span>
                 </TabsTrigger>
                 <TabsTrigger 
-                  value="references"
-                  className="inline-flex items-center gap-2 px-3 py-2.5 rounded-md hover:bg-white data-[state=active]:bg-white data-[state=active]:text-[rgba(49,159,67,1)] data-[state=active]:shadow-sm transition-all"
-                >
-                  <BookOpen className="h-4 w-4" />
-                  <span className="font-medium">AI Reference</span>
-                </TabsTrigger>
-                <TabsTrigger 
                   value="users"
                   className="inline-flex items-center gap-2 px-3 py-2.5 rounded-md hover:bg-white data-[state=active]:bg-white data-[state=active]:text-[rgba(49,159,67,1)] data-[state=active]:shadow-sm transition-all"
                 >
@@ -280,9 +272,6 @@ const Admin = () => {
                     onCreate={handleCategoryCreate}
                     onReorder={handleReorderCategories}
                   />
-                </TabsContent>
-                <TabsContent value="references" className="mt-0 focus-visible:outline-none focus-visible:ring-0">
-                  <ReferenceDocumentManager />
                 </TabsContent>
                 <TabsContent value="users" className="mt-0 focus-visible:outline-none focus-visible:ring-0">
                   <UserManagement />
