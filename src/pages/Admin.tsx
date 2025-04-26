@@ -1,13 +1,14 @@
 import { useState, useEffect } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase } from "@/lib/supabase";
 import { toast } from "@/components/ui/use-toast";
 import { Header } from "@/components/Header";
 import { AdminCategoryTable } from "@/components/AdminCategoryTable";
 import { UserManagement } from "@/components/UserManagement";
 import { PolicyStatistics } from "@/components/PolicyStatistics";
+import { DocumentManager } from "@/components/DocumentManager";
 import { useAuth } from "@/context/AuthContext";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Loader2, LayoutGrid, BookOpen, Users, BarChart } from "lucide-react";
+import { Loader2, LayoutGrid, BookOpen, Users, BarChart, FileText } from "lucide-react";
 
 interface PolicyCategory {
   id: string;
@@ -248,6 +249,13 @@ const Admin = () => {
                   <span className="font-medium">Categories</span>
                 </TabsTrigger>
                 <TabsTrigger 
+                  value="documents" 
+                  className="inline-flex items-center gap-2 px-3 py-2.5 rounded-md hover:bg-white data-[state=active]:bg-white data-[state=active]:text-[rgba(49,159,67,1)] data-[state=active]:shadow-sm transition-all"
+                >
+                  <FileText className="h-4 w-4" />
+                  <span className="font-medium">Documents</span>
+                </TabsTrigger>
+                <TabsTrigger 
                   value="users"
                   className="inline-flex items-center gap-2 px-3 py-2.5 rounded-md hover:bg-white data-[state=active]:bg-white data-[state=active]:text-[rgba(49,159,67,1)] data-[state=active]:shadow-sm transition-all"
                 >
@@ -272,6 +280,11 @@ const Admin = () => {
                     onCreate={handleCategoryCreate}
                     onReorder={handleReorderCategories}
                   />
+                </TabsContent>
+                <TabsContent value="documents" className="mt-8">
+                  <div className="bg-white rounded-2xl shadow-sm p-6 sm:p-8">
+                    <DocumentManager />
+                  </div>
                 </TabsContent>
                 <TabsContent value="users" className="mt-0 focus-visible:outline-none focus-visible:ring-0">
                   <UserManagement />

@@ -30,7 +30,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { ChevronUp, ChevronDown, Trash, Plus, FileText, LayoutGrid } from "lucide-react";
+import { ChevronUp, ChevronDown, Trash, Plus, FileText, LayoutGrid, Loader2, RefreshCw } from "lucide-react";
 import { FileUploadManager } from "@/components/FileUploadManager";
 import { Badge } from "@/components/ui/badge";
 
@@ -127,6 +127,33 @@ export const AdminCategoryTable = ({
 
   return (
     <div className="space-y-6">
+      {/* Section Header */}
+      <div className="flex items-center justify-between pb-4 border-b">
+        <div className="flex items-center gap-2">
+          <div className="p-2 bg-[rgba(49,159,67,0.1)] rounded-lg">
+            <LayoutGrid className="h-5 w-5 text-[rgba(49,159,67,1)]" />
+          </div>
+          <div>
+            <h2 className="text-lg font-semibold">Category Management</h2>
+            <p className="text-sm text-gray-500">Manage policy categories and their order</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="text-sm text-gray-500">
+            {categories.length} {categories.length === 1 ? 'category' : 'categories'}
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => onReorder([...categories])}
+            className="ml-2"
+          >
+            <RefreshCw className="mr-2 h-4 w-4" />
+            Refresh
+          </Button>
+        </div>
+      </div>
+
       <div className="flex flex-col sm:flex-row sm:items-center gap-4 mb-6">
         <div className="flex-1 flex items-center gap-4">
           <Input
@@ -142,9 +169,6 @@ export const AdminCategoryTable = ({
           >
             <Plus className="mr-2 h-4 w-4" /> Add Category
           </Button>
-        </div>
-        <div className="text-sm text-gray-500">
-          {categories.length} {categories.length === 1 ? 'category' : 'categories'} total
         </div>
       </div>
 

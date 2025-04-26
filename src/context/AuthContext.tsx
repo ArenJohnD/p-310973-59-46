@@ -1,4 +1,3 @@
-
 import { 
   createContext, 
   useContext, 
@@ -7,7 +6,7 @@ import {
   ReactNode 
 } from "react";
 import { User, Session } from "@supabase/supabase-js";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase } from "@/lib/supabase";
 import { toast } from "@/components/ui/use-toast";
 import { useNavigate, useLocation } from "react-router-dom";
 

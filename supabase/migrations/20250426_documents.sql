@@ -1,3 +1,28 @@
+-- Create storage bucket for reference documents
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('reference_documents', 'reference_documents', false);
+
+-- Set up storage bucket policies
+CREATE POLICY "Reference documents are viewable by authenticated users only"
+ON storage.objects FOR SELECT
+TO authenticated
+USING (bucket_id = 'reference_documents');
+
+CREATE POLICY "Reference documents are insertable by authenticated users"
+ON storage.objects FOR INSERT
+TO authenticated
+WITH CHECK (bucket_id = 'reference_documents');
+
+CREATE POLICY "Reference documents are updatable by uploader"
+ON storage.objects FOR UPDATE
+TO authenticated
+USING (bucket_id = 'reference_documents' AND auth.uid() = owner);
+
+CREATE POLICY "Reference documents are deletable by uploader"
+ON storage.objects FOR DELETE
+TO authenticated
+USING (bucket_id = 'reference_documents' AND auth.uid() = owner);
+
 -- Create documents table
 CREATE TABLE IF NOT EXISTS public.documents (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
