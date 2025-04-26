@@ -1,53 +1,23 @@
-import React, { useState, useEffect } from 'react';
-import { Document, DocumentUpload } from '../types/documents';
-import { documentService } from '../lib/documents';
+import React, { useState } from 'react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Card } from './ui/card';
-import { toast } from './ui/use-toast';
 import { Loader2, Upload, Trash2, FileText } from 'lucide-react';
 
 export function DocumentManager() {
-    const [documents, setDocuments] = useState<Document[]>([]);
+    // Local state for file selection (purely UI, not connected to backend)
     const [file, setFile] = useState<File | null>(null);
-    const [isLoading, setIsLoading] = useState(false);
     const [isUploading, setIsUploading] = useState(false);
+    const [isLoading, setIsLoading] = useState(false);
 
-    useEffect(() => {
-        loadDocuments();
-        verifyBucketSetup();
-    }, []);
-
-    const verifyBucketSetup = async () => {
-        try {
-            const result = await documentService.verifyStorageBucket();
-            if (!result) {
-                toast({
-                    title: 'Storage Setup Issue',
-                    description: 'There might be an issue with the storage configuration. Please check the console for details.',
-                    variant: 'destructive',
-                });
-            }
-        } catch (error) {
-            console.error('Failed to verify storage bucket:', error);
-        }
-    };
-
-    const loadDocuments = async () => {
-        try {
-            setIsLoading(true);
-            const docs = await documentService.getDocuments();
-            setDocuments(docs);
-        } catch (error) {
-            toast({
-                title: 'Error',
-                description: 'Failed to load documents',
-                variant: 'destructive',
-            });
-        } finally {
-            setIsLoading(false);
-        }
-    };
+    // Dummy static documents for UI display
+    const documents = [
+        {
+            id: '1',
+            title: 'Sample Document',
+            created_at: new Date().toLocaleDateString(),
+        },
+    ];
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files[0]) {
@@ -55,69 +25,20 @@ export function DocumentManager() {
         }
     };
 
-    const handleSubmit = async (e: React.FormEvent) => {
+    const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        if (!file) {
-            toast({
-                title: 'Error',
-                description: 'Please select a file to upload',
-                variant: 'destructive',
-            });
-            return;
-        }
-
+        // No backend logic, just UI feedback
         setIsUploading(true);
-
-        try {
-            // Extract title from filename (remove extension)
-            const fileName = file.name;
-            const title = fileName.substring(0, fileName.lastIndexOf('.'));
-            
-            // For now, we'll use a placeholder content
-            // In a real implementation, you might want to extract text from the file
-            const content = `Content from ${fileName}`;
-
-            const document: DocumentUpload = {
-                title,
-                content,
-                file,
-            };
-
-            await documentService.uploadDocument(document);
-            toast({
-                title: 'Success',
-                description: 'Document uploaded successfully',
-            });
-
-            // Reset form
-            setFile(null);
-            loadDocuments();
-        } catch (error) {
-            toast({
-                title: 'Error',
-                description: 'Failed to upload document',
-                variant: 'destructive',
-            });
-        } finally {
+        setTimeout(() => {
             setIsUploading(false);
-        }
+            setFile(null);
+            // No actual upload
+        }, 1000);
     };
 
-    const handleDelete = async (id: string) => {
-        try {
-            await documentService.deleteDocument(id);
-            toast({
-                title: 'Success',
-                description: 'Document deleted successfully',
-            });
-            loadDocuments();
-        } catch (error) {
-            toast({
-                title: 'Error',
-                description: 'Failed to delete document',
-                variant: 'destructive',
-            });
-        }
+    const handleDelete = (id: string) => {
+        // No backend logic, just UI feedback
+        // No actual delete
     };
 
     return (
@@ -164,7 +85,7 @@ export function DocumentManager() {
                     )}
                     <Button 
                         type="submit" 
-                        className="w-full" 
+                        className="w-full bg-[rgba(49,159,67,1)] hover:bg-[rgba(39,139,57,1)] text-white" 
                         disabled={isUploading || !file}
                     >
                         {isUploading ? (
@@ -203,7 +124,7 @@ export function DocumentManager() {
                                         <div>
                                             <h4 className="font-medium">{doc.title}</h4>
                                             <p className="text-xs text-gray-500">
-                                                {new Date(doc.created_at).toLocaleDateString()}
+                                                {doc.created_at}
                                             </p>
                                         </div>
                                     </div>
