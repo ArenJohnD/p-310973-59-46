@@ -127,30 +127,31 @@ export const AdminCategoryTable = ({
 
   return (
     <div className="space-y-6">
-      {/* Section Header */}
-      <div className="flex items-center justify-between pb-4 border-b">
-        <div className="flex items-center gap-2">
-          <div className="p-2 bg-[rgba(49,159,67,0.1)] rounded-lg">
-            <LayoutGrid className="h-5 w-5 text-[rgba(49,159,67,1)]" />
-          </div>
+      <div className="bg-white border border-gray-200 rounded-lg p-6">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
-            <h2 className="text-lg font-semibold">Category Management</h2>
-            <p className="text-sm text-gray-500">Manage policy categories and their order</p>
+            <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+              <LayoutGrid className="h-5 w-5 text-[rgba(49,159,67,1)]" />
+              Category Management
+            </h3>
+            <p className="text-sm text-gray-500 mt-1">
+              Manage policy categories and their order
+            </p>
           </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="text-sm text-gray-500">
-            {categories.length} {categories.length === 1 ? 'category' : 'categories'}
+          <div className="flex items-center gap-3">
+            <Badge variant="secondary" className="font-medium">
+              {categories.length} {categories.length === 1 ? 'category' : 'categories'}
+            </Badge>
+            <Button
+              onClick={() => onReorder([...categories])}
+              variant="outline"
+              size="sm"
+              className="gap-1.5"
+            >
+              <RefreshCw className="h-4 w-4" />
+              Refresh
+            </Button>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => onReorder([...categories])}
-            className="ml-2"
-          >
-            <RefreshCw className="mr-2 h-4 w-4" />
-            Refresh
-          </Button>
         </div>
       </div>
 

@@ -4,7 +4,7 @@ import { Document, Page, pdfjs } from 'react-pdf';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ChevronLeft, ChevronRight, Search, ZoomIn, ZoomOut, AlertCircle } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Search, ZoomIn, ZoomOut, AlertCircle, FileText } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { findTextPositionInPage } from '@/utils/pdfUtils';
 import 'react-pdf/dist/esm/Page/AnnotationLayer.css';
@@ -218,106 +218,77 @@ const PDFViewer = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="container mx-auto py-6 px-4">
-        <Card className="shadow-lg">
-          <CardHeader className="bg-white border-b">
-            <CardTitle className="text-2xl font-bold text-gray-800">
-              {documentTitle || "Document Viewer"}
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-6">
-            <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-6">
-              <div className="flex items-center gap-2 bg-white p-2 rounded-lg shadow-sm">
-                <Button
-                  onClick={() => setPageNumber((prev) => Math.max(1, prev - 1))}
-                  disabled={pageNumber <= 1}
-                  variant="outline"
-                  size="icon"
-                  className="hover:bg-gray-100"
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                </Button>
-                <span className="text-sm font-medium text-gray-700">
-                  Page {pageNumber} of {numPages}
-                </span>
-                <Button
-                  onClick={() => setPageNumber((prev) => Math.min(numPages || prev, prev + 1))}
-                  disabled={pageNumber >= (numPages || 1)}
-                  variant="outline"
-                  size="icon"
-                  className="hover:bg-gray-100"
-                >
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
-              </div>
+    <div className="min-h-screen bg-gradient-to-br from-[rgba(232,255,241,1)] via-[rgba(220,255,235,1)] to-[rgba(49,159,67,0.10)] flex flex-col items-center py-8 px-2">
+      <div className="w-full max-w-3xl">
+        {/* Section Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6 bg-white border border-gray-200 rounded-lg p-6 shadow">
+          <div className="flex items-center gap-2">
+            <FileText className="h-5 w-5 text-[rgba(49,159,67,1)]" />
+            <h2 className="text-xl font-semibold text-gray-900 truncate">{documentTitle || 'PDF Document'}</h2>
+          </div>
+          <div className="flex gap-2">
+            {pdfUrl && (
+              <Button variant="outline" size="sm" onClick={() => window.open(pdfUrl, '_blank')} className="flex items-center gap-2">
+                <FileText className="h-4 w-4" />
+                Open in New Tab
+              </Button>
+            )}
+          </div>
+        </div>
 
-              <div className="flex items-center gap-2 bg-white p-2 rounded-lg shadow-sm">
-                <Button
-                  onClick={() => setScale((prev) => Math.max(0.5, prev - 0.1))}
-                  variant="outline"
-                  size="icon"
-                  className="hover:bg-gray-100"
-                >
-                  <ZoomOut className="h-4 w-4" />
-                </Button>
-                <span className="text-sm font-medium text-gray-700 min-w-[60px] text-center">
-                  {Math.round(scale * 100)}%
-                </span>
-                <Button
-                  onClick={() => setScale((prev) => Math.min(2, prev + 0.1))}
-                  variant="outline"
-                  size="icon"
-                  className="hover:bg-gray-100"
-                >
-                  <ZoomIn className="h-4 w-4" />
-                </Button>
-              </div>
+        {/* Search and Controls */}
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-4">
+          <div className="flex-1 flex items-center gap-2 bg-white rounded-lg border border-gray-200 px-3 py-2 shadow-sm">
+            <Search className="h-5 w-5 text-gray-400" />
+            <Input
+              value={searchText}
+              onChange={e => handleSearch(e.target.value)}
+              placeholder="Search in document..."
+              className="border-0 focus:ring-0 text-sm bg-transparent"
+            />
+            <Button variant="ghost" size="icon" onClick={navigateToNextResult} disabled={searchResults.length === 0}>
+              <ChevronRight className="h-5 w-5 text-gray-500" />
+            </Button>
+          </div>
+          <div className="flex gap-2">
+            <Button variant="outline" size="icon" onClick={() => setScale(s => Math.max(0.5, s - 0.1))}><ZoomOut className="h-5 w-5" /></Button>
+            <Button variant="outline" size="icon" onClick={() => setScale(s => Math.min(2, s + 0.1))}><ZoomIn className="h-5 w-5" /></Button>
+          </div>
+        </div>
 
-              <div className="flex items-center gap-2 bg-white p-2 rounded-lg shadow-sm">
-                <Input
-                  type="text"
-                  placeholder="Search in document..."
-                  value={searchText}
-                  onChange={(e) => handleSearch(e.target.value)}
-                  className="w-64 h-9"
-                />
-                <Button
-                  onClick={navigateToNextResult}
-                  variant="outline"
-                  size="icon"
-                  disabled={searchResults.length === 0}
-                  className="hover:bg-gray-100"
-                >
-                  <Search className="h-4 w-4" />
-                </Button>
-              </div>
+        {/* PDF Viewer Card - maximize content area */}
+        <div className="bg-white rounded-lg shadow border border-gray-200 p-2 flex flex-col items-center">
+          {loading ? (
+            <div className="flex flex-col items-center justify-center w-full h-[80vh]">
+              <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
+              <p className="text-lg font-medium text-gray-700">Loading document...</p>
             </div>
-
-            <Separator className="my-4" />
-
-            <div className="flex justify-center bg-white rounded-lg shadow-sm p-4">
-              {pdfUrl && (
-                <Document
-                  file={pdfUrl}
-                  onLoadSuccess={({ numPages }) => setNumPages(numPages)}
-                  loading={
-                    <div className="flex justify-center items-center h-64">
-                      <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                    </div>
-                  }
-                >
-                  <Page
-                    pageNumber={pageNumber}
-                    scale={scale}
-                    renderTextLayer={true}
-                    renderAnnotationLayer={true}
-                  />
-                </Document>
-              )}
-            </div>
-          </CardContent>
-        </Card>
+          ) : error ? (
+            <Alert variant="destructive" className="w-full mb-4">
+              <AlertCircle className="h-5 w-5" />
+              <AlertTitle>Error</AlertTitle>
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          ) : pdfUrl ? (
+            <Document
+              file={pdfUrl}
+              onLoadSuccess={onDocumentLoadSuccess}
+              className="w-full flex flex-col items-center"
+            >
+              <Page pageNumber={pageNumber} scale={scale} />
+            </Document>
+          ) : null}
+          {/* Navigation */}
+          <div className="flex items-center justify-center gap-2 mt-4">
+            <Button variant="outline" size="icon" onClick={() => changePage(-1)} disabled={pageNumber <= 1}>
+              <ChevronLeft className="h-5 w-5" />
+            </Button>
+            <span className="text-sm text-gray-700">Page {pageNumber} of {numPages || 1}</span>
+            <Button variant="outline" size="icon" onClick={() => changePage(1)} disabled={pageNumber >= (numPages || 1)}>
+              <ChevronRight className="h-5 w-5" />
+            </Button>
+          </div>
+        </div>
       </div>
     </div>
   );

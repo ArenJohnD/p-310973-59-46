@@ -5,7 +5,7 @@ import { Header } from "@/components/Header";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/use-toast";
 import { useAuth } from "@/context/AuthContext";
-import { Loader2, FileText, AlertCircle } from "lucide-react";
+import { Loader2, FileText, AlertCircle, ChevronLeft } from "lucide-react";
 import { FileUploadManager } from "@/components/FileUploadManager";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
@@ -130,13 +130,67 @@ const PolicyDocuments = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex flex-col bg-[rgba(233,233,233,1)]">
+      <div className="min-h-screen flex flex-col bg-gradient-to-br from-[rgba(232,255,241,1)] via-[rgba(220,255,235,1)] to-[rgba(49,159,67,0.10)]">
         <Header />
-        <main className="bg-white flex-1 mt-[29px] px-20 py-[52px] rounded-[40px_40px_0px_0px] max-md:px-5">
-          <div className="flex justify-center items-center h-64">
-            <Loader2 className="h-8 w-8 animate-spin text-gray-500" />
-            <p className="ml-2 text-xl">Loading policy documents...</p>
+        <main className="flex-1 mt-[29px] px-4 py-8 md:px-20 md:py-[52px] rounded-[40px_40px_0px_0px] max-md:px-5">
+          <section className="text-center mb-8">
+            <h1 className="text-black text-3xl font-bold flex items-center justify-center gap-2">
+              <FileText className="h-7 w-7 text-[rgba(49,159,67,1)]" />
+              {category?.title || "Policy Category"}
+            </h1>
+            <p className="text-black text-xl mt-2">
+              View policy documents for this category
+            </p>
+          </section>
+          <div className="flex justify-center mb-8 gap-4">
+            <Button 
+              onClick={() => navigate('/')} 
+              className="bg-gray-500 hover:bg-gray-600 flex items-center gap-2"
+            >
+              <ChevronLeft className="h-5 w-5" />
+              Back to Home
+            </Button>
+            {pdfUrl && (
+              <Button
+                onClick={() => window.open(pdfUrl, '_blank')}
+                variant="outline"
+                size="sm"
+                className="flex items-center gap-2"
+              >
+                <FileText className="h-5 w-5" />
+                Open in New Tab
+              </Button>
+            )}
           </div>
+          {pdfUrl ? (
+            <div className="border rounded-lg bg-gray-50 shadow-lg overflow-hidden max-w-3xl mx-auto">
+              <div className="p-4 bg-gray-100 border-b flex justify-between items-center">
+                <div className="flex items-center">
+                  <FileText className="h-5 w-5 text-gray-700 mr-2" />
+                  <h3 className="font-medium text-lg">{document?.file_name}</h3>
+                </div>
+                <Button
+                  onClick={() => window.open(pdfUrl, '_blank')}
+                  variant="outline"
+                  size="sm"
+                  className="flex items-center gap-2"
+                >
+                  <FileText className="h-4 w-4" />
+                  Open in New Tab
+                </Button>
+              </div>
+              <iframe
+                src={pdfUrl}
+                title={document?.file_name}
+                className="w-full min-h-[600px] bg-white border-0"
+              />
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center h-64">
+              <Loader2 className="h-8 w-8 animate-spin text-gray-500" />
+              <p className="ml-2 text-xl">Loading policy documents...</p>
+            </div>
+          )}
         </main>
       </div>
     );
@@ -144,9 +198,9 @@ const PolicyDocuments = () => {
 
   if (error) {
     return (
-      <div className="min-h-screen flex flex-col bg-[rgba(233,233,233,1)]">
+      <div className="min-h-screen flex flex-col bg-gradient-to-br from-[rgba(232,255,241,1)] via-[rgba(220,255,235,1)] to-[rgba(49,159,67,0.10)]">
         <Header />
-        <main className="bg-white flex-1 mt-[29px] px-20 py-[52px] rounded-[40px_40px_0px_0px] max-md:px-5">
+        <main className="flex-1 mt-[29px] px-20 py-[52px] rounded-[40px_40px_0px_0px] max-md:px-5">
           <Alert variant="destructive" className="mb-4">
             <AlertCircle className="h-4 w-4" />
             <AlertTitle>Error</AlertTitle>
@@ -161,53 +215,65 @@ const PolicyDocuments = () => {
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-[rgba(233,233,233,1)]">
+    <div className="min-h-screen flex flex-col bg-gradient-to-br from-[rgba(232,255,241,1)] via-[rgba(220,255,235,1)] to-[rgba(49,159,67,0.10)]">
       <Header />
-      <main className="bg-white flex-1 mt-[29px] px-20 py-[52px] rounded-[40px_40px_0px_0px] max-md:px-5">
+      <main className="flex-1 mt-[29px] px-4 py-8 md:px-20 md:py-[52px] rounded-[40px_40px_0px_0px] max-md:px-5">
         <section className="text-center mb-8">
-          <h1 className="text-black text-3xl font-bold">
+          <h1 className="text-black text-3xl font-bold flex items-center justify-center gap-2">
+            <FileText className="h-7 w-7 text-[rgba(49,159,67,1)]" />
             {category?.title || "Policy Category"}
           </h1>
           <p className="text-black text-xl mt-2">
             View policy documents for this category
           </p>
         </section>
-        
         <div className="flex justify-center mb-8 gap-4">
           <Button 
-            onClick={() => navigate('/')}
-            className="bg-gray-500 hover:bg-gray-600"
+            onClick={() => navigate('/')} 
+            className="bg-gray-500 hover:bg-gray-600 flex items-center gap-2"
           >
+            <ChevronLeft className="h-5 w-5" />
             Back to Home
           </Button>
+          {pdfUrl && (
+            <Button
+              onClick={() => window.open(pdfUrl, '_blank')}
+              variant="outline"
+              size="sm"
+              className="flex items-center gap-2"
+            >
+              <FileText className="h-5 w-5" />
+              Open in New Tab
+            </Button>
+          )}
         </div>
-
         {pdfUrl ? (
-          <div className="border rounded-lg bg-gray-50 overflow-hidden">
+          <div className="border rounded-lg bg-gray-50 shadow-lg overflow-hidden max-w-3xl mx-auto">
             <div className="p-4 bg-gray-100 border-b flex justify-between items-center">
               <div className="flex items-center">
                 <FileText className="h-5 w-5 text-gray-700 mr-2" />
-                <h3 className="font-medium">{document?.file_name}</h3>
+                <h3 className="font-medium text-lg">{document?.file_name}</h3>
               </div>
               <Button
                 onClick={() => window.open(pdfUrl, '_blank')}
                 variant="outline"
                 size="sm"
+                className="flex items-center gap-2"
               >
+                <FileText className="h-4 w-4" />
                 Open in New Tab
               </Button>
             </div>
             <iframe
               src={pdfUrl}
-              className="w-full min-h-[70vh]"
-              title={`${category?.title} Document`}
+              title={document?.file_name}
+              className="w-full min-h-[600px] bg-white border-0"
             />
           </div>
         ) : (
-          <div className="flex justify-center items-center border rounded-lg bg-gray-50 min-h-[70vh] p-8">
-            <div className="text-center">
-              <p className="text-xl font-medium text-gray-700 mb-4">No Document Available</p>
-            </div>
+          <div className="flex flex-col items-center justify-center h-64">
+            <Loader2 className="h-8 w-8 animate-spin text-gray-500" />
+            <p className="ml-2 text-xl">Loading policy documents...</p>
           </div>
         )}
       </main>

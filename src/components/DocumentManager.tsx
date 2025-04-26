@@ -43,7 +43,35 @@ export function DocumentManager() {
 
     return (
         <div className="space-y-6">
-            <div className="bg-white rounded-lg border border-gray-200 p-6">
+            <div className="bg-white border border-gray-200 rounded-lg p-6">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                    <div>
+                        <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                            <FileText className="h-5 w-5 text-[rgba(49,159,67,1)]" />
+                            Document Management
+                        </h3>
+                        <p className="text-sm text-gray-500 mt-1">
+                            Upload and manage AI reference documents.
+                        </p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                        <span className="inline-block bg-gray-100 text-gray-700 rounded px-3 py-1 text-sm font-medium">
+                            {documents.length} {documents.length === 1 ? 'document' : 'documents'}
+                        </span>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            className="gap-1.5"
+                            onClick={() => { /* UI only, no backend */ }}
+                        >
+                            <Loader2 className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+                            Refresh
+                        </Button>
+                    </div>
+                </div>
+            </div>
+
+            <div className="bg-white rounded-lg border border-gray-200 p-4">
                 <h3 className="text-lg font-medium mb-4">Upload Document</h3>
                 <form onSubmit={handleSubmit} className="space-y-4">
                     <div className="flex items-center justify-center w-full">
@@ -103,7 +131,7 @@ export function DocumentManager() {
                 </form>
             </div>
 
-            <div className="bg-white rounded-lg border border-gray-200 p-6">
+            <div className="bg-white rounded-lg border border-gray-200 p-4">
                 <h3 className="text-lg font-medium mb-4">Uploaded Documents</h3>
                 {isLoading ? (
                     <div className="flex justify-center items-center h-32">
