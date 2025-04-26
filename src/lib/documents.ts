@@ -83,22 +83,22 @@ export const documentService = {
                 const fileExt = document.file.name.split('.').pop();
                 const fileName = `${Math.random()}.${fileExt}`;
                 
-                // First, check if the bucket exists
+                // Verify bucket exists before upload
                 const { data: buckets, error: bucketsError } = await supabase.storage.listBuckets();
                 if (bucketsError) {
                     console.error('Error checking buckets:', bucketsError);
                     throw bucketsError;
                 }
 
-                const documentsBucketExists = buckets.some(bucket => bucket.name === 'reference_documents');
+                const documentsBucketExists = buckets.some(bucket => bucket.name === 'policy_documents');
                 if (!documentsBucketExists) {
-                    console.error('Reference documents bucket does not exist');
-                    throw new Error('Storage bucket "reference_documents" does not exist');
+                    console.error('Policy documents bucket does not exist');
+                    throw new Error('Storage bucket "policy_documents" does not exist');
                 }
 
                 // Attempt file upload
                 const { data: uploadData, error: uploadError } = await supabase.storage
-                    .from('reference_documents')
+                    .from('policy_documents')
                     .upload(fileName, document.file);
 
                 if (uploadError) {
@@ -109,9 +109,9 @@ export const documentService = {
                 filePath = uploadData.path;
             }
 
-            // Insert document record
+            // Insert document record with improved error handling
             const { data, error } = await supabase
-                .from('reference_documents')
+                .from('policy_documents')
                 .insert({
                     file_name: document.title,
                     file_path: filePath,
@@ -119,7 +119,6 @@ export const documentService = {
                     mime_type: document.file?.type || 'text/plain',
                     uploaded_by: userData.user.id,
                     processed: false,
-                    is_blocked: false
                 })
                 .select()
                 .single();
@@ -138,7 +137,7 @@ export const documentService = {
                 created_at: data.created_at,
                 updated_at: data.updated_at,
                 created_by: data.uploaded_by,
-                is_active: !data.is_blocked
+                is_active: true
             };
         } catch (error) {
             console.error('Document upload failed:', error);
@@ -197,4 +196,4 @@ export const documentService = {
             is_active: !doc.is_blocked
         }));
     }
-}; 
+};

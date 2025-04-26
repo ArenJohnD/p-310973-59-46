@@ -9,6 +9,42 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      documents: {
+        Row: {
+          content: string
+          created_at: string
+          created_by: string | null
+          file_path: string | null
+          file_type: string | null
+          id: string
+          is_active: boolean | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          created_by?: string | null
+          file_path?: string | null
+          file_type?: string | null
+          id?: string
+          is_active?: boolean | null
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          created_by?: string | null
+          file_path?: string | null
+          file_type?: string | null
+          id?: string
+          is_active?: boolean | null
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       policy_categories: {
         Row: {
           created_at: string
@@ -142,48 +178,6 @@ export type Database = {
           last_sign_in_at?: string | null
           role?: Database["public"]["Enums"]["app_role"]
           updated_at?: string
-        }
-        Relationships: []
-      }
-      reference_documents: {
-        Row: {
-          created_at: string
-          file_name: string
-          file_path: string
-          file_size: number
-          id: string
-          is_blocked: boolean | null
-          last_processed_at: string | null
-          mime_type: string
-          processed: boolean | null
-          updated_at: string
-          uploaded_by: string
-        }
-        Insert: {
-          created_at?: string
-          file_name: string
-          file_path: string
-          file_size: number
-          id?: string
-          is_blocked?: boolean | null
-          last_processed_at?: string | null
-          mime_type: string
-          processed?: boolean | null
-          updated_at?: string
-          uploaded_by: string
-        }
-        Update: {
-          created_at?: string
-          file_name?: string
-          file_path?: string
-          file_size?: number
-          id?: string
-          is_blocked?: boolean | null
-          last_processed_at?: string | null
-          mime_type?: string
-          processed?: boolean | null
-          updated_at?: string
-          uploaded_by?: string
         }
         Relationships: []
       }
