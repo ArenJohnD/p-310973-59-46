@@ -226,7 +226,7 @@ const Admin = () => {
       <main className="container mx-auto px-4 flex-1">
         <div className="max-w-[1200px] mx-auto">
           {/* Dashboard Header */}
-          <div className="bg-white rounded-2xl shadow-sm mt-8 p-6 sm:p-8 border border-gray-100">
+          <div className="bg-[rgba(49,159,67,0.1)] rounded-2xl shadow-sm mt-8 p-6 sm:p-8 border border-[rgba(49,159,67,0.2)]">
             <div className="max-w-2xl">
               <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
                 Admin Dashboard
