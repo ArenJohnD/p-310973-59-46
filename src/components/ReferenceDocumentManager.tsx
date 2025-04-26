@@ -1,8 +1,9 @@
+
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/components/ui/use-toast";
 import { Button } from "@/components/ui/button";
-import { Loader2, Upload, Trash2, FileText, Upload as UploadIcon } from "lucide-react";
+import { Loader2, Upload, Trash2, FileText, Upload as UploadIcon, RefreshCw } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -21,6 +22,8 @@ interface ReferenceDocument {
   file_name: string;
   file_path: string;
   created_at: string;
+  processed: boolean;
+  last_processed_at: string | null;
 }
 
 interface ReferenceDocumentManagerProps {
@@ -31,6 +34,7 @@ export function ReferenceDocumentManager({ onDocumentChange }: ReferenceDocument
   const [isUploading, setIsUploading] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [isProcessing, setIsProcessing] = useState<Record<string, boolean>>({});
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [documents, setDocuments] = useState<ReferenceDocument[]>([]);
 
@@ -44,7 +48,7 @@ export function ReferenceDocumentManager({ onDocumentChange }: ReferenceDocument
       
       const { data, error } = await supabase
         .from('reference_documents')
-        .select('id, file_name, file_path, created_at')
+        .select('id, file_name, file_path, created_at, processed, last_processed_at')
         .order('created_at', { ascending: false });
       
       if (error) throw error;
@@ -103,7 +107,7 @@ export function ReferenceDocumentManager({ onDocumentChange }: ReferenceDocument
 
       if (uploadError) throw uploadError;
 
-      const { error: dbError } = await supabase
+      const { data: docData, error: dbError } = await supabase
         .from('reference_documents')
         .insert({
           file_name: selectedFile.name,
@@ -111,7 +115,10 @@ export function ReferenceDocumentManager({ onDocumentChange }: ReferenceDocument
           file_size: selectedFile.size,
           mime_type: selectedFile.type,
           uploaded_by: (await supabase.auth.getUser()).data.user?.id || '',
-        });
+          processed: false,
+        })
+        .select('id')
+        .single();
 
       if (dbError) throw dbError;
 
@@ -124,6 +131,11 @@ export function ReferenceDocumentManager({ onDocumentChange }: ReferenceDocument
       
       fetchDocuments();
       if (onDocumentChange) onDocumentChange();
+      
+      // Process the document after upload
+      if (docData && docData.id) {
+        processDocument(docData.id);
+      }
     } catch (error) {
       console.error('Error uploading document:', error);
       toast({
@@ -133,6 +145,36 @@ export function ReferenceDocumentManager({ onDocumentChange }: ReferenceDocument
       });
     } finally {
       setIsUploading(false);
+    }
+  };
+  
+  const processDocument = async (documentId: string) => {
+    setIsProcessing(prev => ({ ...prev, [documentId]: true }));
+    
+    try {
+      const response = await supabase.functions.invoke('process-document', {
+        body: { documentId }
+      });
+      
+      if (response.error) {
+        throw response.error;
+      }
+      
+      toast({
+        title: "Document processed",
+        description: "Document has been processed for AI retrieval",
+      });
+      
+      fetchDocuments();
+    } catch (error) {
+      console.error('Error processing document:', error);
+      toast({
+        title: "Processing failed",
+        description: "Could not process document. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsProcessing(prev => ({ ...prev, [documentId]: false }));
     }
   };
 
@@ -154,6 +196,16 @@ export function ReferenceDocumentManager({ onDocumentChange }: ReferenceDocument
           .remove([data.file_path]);
 
         if (storageError) throw storageError;
+      }
+      
+      // Delete embeddings first (due to foreign key)
+      const { error: embeddingError } = await supabase
+        .from('document_embeddings')
+        .delete()
+        .eq('document_id', documentId);
+      
+      if (embeddingError) {
+        console.error('Error deleting embeddings:', embeddingError);
       }
 
       const { error: dbError } = await supabase
@@ -283,36 +335,62 @@ export function ReferenceDocumentManager({ onDocumentChange }: ReferenceDocument
                     <p className="text-xs text-gray-500">
                       Uploaded {new Date(doc.created_at).toLocaleDateString()}
                     </p>
+                    {doc.processed ? (
+                      <Badge variant="outline" className="mt-1 bg-green-50 text-green-700 border-green-200 text-xs">
+                        Processed for AI
+                      </Badge>
+                    ) : (
+                      <Badge variant="outline" className="mt-1 bg-amber-50 text-amber-700 border-amber-200 text-xs">
+                        Not processed
+                      </Badge>
+                    )}
                   </div>
                 </div>
-                <AlertDialog>
-                  <AlertDialogTrigger asChild>
+                <div className="flex items-center space-x-2">
+                  {!doc.processed && (
                     <Button
                       variant="outline"
                       size="sm"
-                      className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
+                      disabled={isProcessing[doc.id]}
+                      onClick={() => processDocument(doc.id)}
+                      className="text-blue-600 hover:text-blue-700 hover:bg-blue-50 border-blue-200"
                     >
-                      <Trash2 className="h-4 w-4" />
+                      {isProcessing[doc.id] ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <RefreshCw className="h-4 w-4" />
+                      )}
                     </Button>
-                  </AlertDialogTrigger>
-                  <AlertDialogContent>
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>Delete Document</AlertDialogTitle>
-                      <AlertDialogDescription>
-                        Are you sure you want to delete this reference document? This action cannot be undone.
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                      <AlertDialogCancel>Cancel</AlertDialogCancel>
-                      <AlertDialogAction
-                        onClick={() => deleteDocument(doc.id)}
-                        className="bg-red-600 hover:bg-red-700 text-white"
+                  )}
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
                       >
-                        Delete
-                      </AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Delete Document</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          Are you sure you want to delete this reference document? This action cannot be undone.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                          onClick={() => deleteDocument(doc.id)}
+                          className="bg-red-600 hover:bg-red-700 text-white"
+                        >
+                          Delete
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                </div>
               </div>
             ))
           ) : (
