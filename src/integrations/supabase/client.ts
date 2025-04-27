@@ -5,10 +5,6 @@ import type { Database } from './types';
 const SUPABASE_URL = "https://jwxrtvuyerntqiqyqbsz.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp3eHJ0dnV5ZXJudHFpcXlxYnN6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDM5MzIzNDcsImV4cCI6MjA1OTUwODM0N30.55KgUK0VmWpp_mktAXlM_7hxNf67PdfdR9k1bYvHw08";
 
-if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {
-    throw new Error('Missing Supabase environment variables');
-}
-
 // Import the supabase client like this:
 // import { supabase } from "@/integrations/supabase/client";
 

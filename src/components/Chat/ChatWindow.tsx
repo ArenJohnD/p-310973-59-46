@@ -33,8 +33,7 @@ export function ChatWindow({ welcomeMessage = "Hello! How can I help you?" }: Ch
       // Call the Mistral chat edge function with all previous messages
       const response = await supabase.functions.invoke('mistral-chat', {
         body: { 
-          messages: [...messages, userMessage],
-          context: "" 
+          messages: [...messages, userMessage]
         }
       });
 
