@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
 const corsHeaders = {
@@ -12,10 +11,10 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  const mistralApiKey = Deno.env.get('MISTRAL_API_KEY');
-  if (!mistralApiKey) {
+  const openrouterApiKey = Deno.env.get('OPENROUTER_API_KEY');
+  if (!openrouterApiKey) {
     return new Response(
-      JSON.stringify({ error: 'Mistral API key not configured' }),
+      JSON.stringify({ error: 'OpenRouter API key not configured' }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
     );
   }
@@ -24,7 +23,7 @@ serve(async (req) => {
     const { messages, context } = await req.json();
     console.log('Received chat request with', messages.length, 'messages');
 
-    // Format the conversation for Mistral
+    // Format the conversation for OpenRouter
     const formattedMessages = messages.map(msg => ({
       role: msg.sender === 'user' ? 'user' : 'assistant',
       content: msg.text
@@ -34,8 +33,7 @@ serve(async (req) => {
     if (context) {
       formattedMessages.unshift({
         role: 'system',
-        content: `You are Poli, the NEU Policy Assistant, designed to help users find and understand NEU's policies. 
-                  Use this context to help answer questions: ${context}`
+        content: `You are Poli, the NEU Policy Assistant, designed to help users find and understand NEU's policies. \nUse this context to help answer questions: ${context}`
       });
     } else {
       formattedMessages.unshift({
@@ -44,17 +42,16 @@ serve(async (req) => {
       });
     }
 
-    console.log('Sending request to Mistral API');
-    
-    // Call Mistral API
-    const response = await fetch('https://api.mistral.ai/v1/chat/completions', {
+    console.log('Sending request to OpenRouter API');
+    // Call OpenRouter API
+    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${mistralApiKey}`,
+        'Authorization': `Bearer ${openrouterApiKey}`,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        model: 'mistral-medium',
+        model: 'mistral-7b-instruct:free',
         messages: formattedMessages,
         temperature: 0.7,
       })
@@ -62,13 +59,13 @@ serve(async (req) => {
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('Mistral API error:', response.status, errorText);
-      throw new Error(`Failed to get response from Mistral: ${response.status} ${errorText}`);
+      console.error('OpenRouter API error:', response.status, errorText);
+      throw new Error(`Failed to get response from OpenRouter: ${response.status} ${errorText}`);
     }
 
     const data = await response.json();
     const answer = data.choices[0].message.content;
-    console.log('Received answer from Mistral');
+    console.log('Received answer from OpenRouter');
 
     return new Response(
       JSON.stringify({ answer, context: [] }),
