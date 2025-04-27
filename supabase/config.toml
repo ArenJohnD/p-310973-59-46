@@ -1,1 +1,8 @@
+
 project_id = "jwxrtvuyerntqiqyqbsz"
+
+[functions.process-document]
+verify_jwt = true
+
+[functions.mistral-chat]
+verify_jwt = false
