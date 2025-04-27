@@ -18,6 +18,21 @@ import { DatePickerWithRange } from "./DatePickerWithRange";
 import { Badge } from "@/components/ui/badge";
 import { RefreshCw, Loader2 } from "lucide-react";
 
+interface ViewStats {
+  currentPeriodData: Array<{
+    category_id: string;
+    viewed_at: string;
+    viewer_id: string;
+    policy_categories: {
+      title: string;
+    };
+  }>;
+  lastViewedData: Array<{
+    category_id: string;
+    viewed_at: string;
+  }>;
+}
+
 export function PolicyStatistics() {
   console.log("PolicyStatistics component rendering");
   
@@ -64,19 +79,25 @@ export function PolicyStatistics() {
   const updateDateRange = (newTimeframe: string) => {
     console.log("Updating timeframe to:", newTimeframe);
     const today = new Date();
-    let from = new Date(today.setHours(0, 0, 0, 0));
-    let to = new Date(today.setHours(23, 59, 59, 999));
+    let from = new Date(today);
+    let to = new Date(today);
 
     switch (newTimeframe) {
       case "today":
+        from.setHours(0, 0, 0, 0);
+        to.setHours(23, 59, 59, 999);
         break;
       case "week":
-        from = startOfWeek(today);
-        to = endOfWeek(today);
+        from = startOfWeek(today, { weekStartsOn: 1 }); // Start from Monday
+        to = endOfWeek(today, { weekStartsOn: 1 }); // End on Sunday
+        from.setHours(0, 0, 0, 0);
+        to.setHours(23, 59, 59, 999);
         break;
       case "month":
         from = startOfMonth(today);
         to = endOfMonth(today);
+        from.setHours(0, 0, 0, 0);
+        to.setHours(23, 59, 59, 999);
         break;
       case "custom":
         return; // Don't update the date range for custom selection
@@ -84,6 +105,7 @@ export function PolicyStatistics() {
         break;
     }
 
+    console.log("New date range:", { from, to });
     setDateRange({ from, to });
     setTimeframe(newTimeframe);
   };
@@ -119,9 +141,9 @@ export function PolicyStatistics() {
   });
 
   // Get view statistics
-  const { data: viewStats, isLoading: isStatsLoading, error, refetch } = useQuery({
+  const { data: viewStats, isLoading: isStatsLoading, error, refetch } = useQuery<ViewStats, Error>({
     queryKey: ['policyViewStats', dateRange?.from, dateRange?.to, refreshTrigger],
-    queryFn: async () => {
+    queryFn: async (): Promise<ViewStats> => {
       try {
         console.log("Fetching policy stats for date range:", 
           dateRange?.from ? format(dateRange.from, 'yyyy-MM-dd') : 'undefined', 
@@ -130,11 +152,43 @@ export function PolicyStatistics() {
         );
         
         if (!dateRange?.from || !dateRange?.to) {
-          console.log("Date range incomplete, returning empty array");
-          return [];
+          console.log("Date range incomplete, returning empty arrays");
+          return {
+            currentPeriodData: [],
+            lastViewedData: []
+          };
         }
 
-        // For today, use exact timestamps, for other timeframes use date-only comparison
+        // Get the last viewed date for each category using a subquery
+        const { data: lastViewedData, error: lastViewedError } = await supabase
+          .from('policy_views')
+          .select('category_id, viewed_at')
+          .in('category_id', (await supabase.from('policy_categories').select('id')).data?.map(c => c.id) || [])
+          .order('viewed_at', { ascending: false })
+          .limit(1);
+
+        // Get the last viewed dates for all categories using distinct on
+        const { data: lastViewedDates, error: lastViewedDatesError } = await supabase
+          .from('policy_views')
+          .select('category_id, viewed_at')
+          .or(`category_id.in.(${(await supabase.from('policy_categories').select('id')).data?.map(c => c.id).join(',')})`)
+          .order('category_id, viewed_at', { ascending: false })
+          .limit(1000);  // Set a reasonable limit
+
+        if (lastViewedError || lastViewedDatesError) {
+          console.error("Error fetching last viewed data:", lastViewedError || lastViewedDatesError);
+          throw lastViewedError || lastViewedDatesError;
+        }
+
+        // Process last viewed dates to get the most recent date for each category
+        const lastViewedByCategory = lastViewedDates?.reduce((acc: Record<string, string>, view) => {
+          if (!acc[view.category_id] || new Date(view.viewed_at) > new Date(acc[view.category_id])) {
+            acc[view.category_id] = view.viewed_at;
+          }
+          return acc;
+        }, {}) || {};
+
+        // Then get the view statistics for the current timeframe
         const { data, error } = await supabase
           .from('policy_views')
           .select(`
@@ -152,7 +206,15 @@ export function PolicyStatistics() {
         }
 
         console.log("Raw view data from Supabase:", data);
-        return data || [];
+        console.log("Last viewed dates by category:", lastViewedByCategory);
+        
+        return {
+          currentPeriodData: data || [],
+          lastViewedData: Object.entries(lastViewedByCategory).map(([category_id, viewed_at]) => ({
+            category_id,
+            viewed_at
+          }))
+        };
       } catch (error) {
         console.error('Error fetching policy view stats:', error);
         toast({
@@ -180,13 +242,23 @@ export function PolicyStatistics() {
         viewCount: 0,
         uniqueViewers: new Set(),
         dates: new Set(),
+        lastViewed: null
       };
       return acc;
     }, {});
     
+    // Add last viewed date from the separate query
+    if (viewStats?.lastViewedData) {
+      viewStats.lastViewedData.forEach(lastViewed => {
+        if (statsByCategory[lastViewed.category_id]) {
+          statsByCategory[lastViewed.category_id].lastViewed = format(new Date(lastViewed.viewed_at), 'MMM d');
+        }
+      });
+    }
+    
     // Then add view data where available
-    if (viewStats && viewStats.length > 0) {
-      viewStats.forEach((view: any) => {
+    if (viewStats?.currentPeriodData && viewStats.currentPeriodData.length > 0) {
+      viewStats.currentPeriodData.forEach((view: any) => {
         const categoryId = view.category_id;
         if (statsByCategory[categoryId]) {
           statsByCategory[categoryId].viewCount++;
@@ -201,9 +273,9 @@ export function PolicyStatistics() {
       ...category,
       uniqueViewers: category.uniqueViewers.size,
       dates: Array.from(category.dates).sort(),
-      lastViewed: category.dates.size > 0 
+      lastViewed: category.lastViewed || (category.dates.size > 0 
         ? Array.from(category.dates).sort().pop() 
-        : null
+        : null)
     }));
   }, [allCategories, viewStats]);
 

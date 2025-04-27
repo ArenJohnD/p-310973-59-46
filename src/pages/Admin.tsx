@@ -5,10 +5,9 @@ import { Header } from "@/components/Header";
 import { AdminCategoryTable } from "@/components/AdminCategoryTable";
 import { UserManagement } from "@/components/UserManagement";
 import { PolicyStatistics } from "@/components/PolicyStatistics";
-import { DocumentManager } from "@/components/DocumentManager";
 import { useAuth } from "@/context/AuthContext";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Loader2, LayoutGrid, BookOpen, Users, BarChart, FileText } from "lucide-react";
+import { Loader2, LayoutGrid, BookOpen, Users, BarChart } from "lucide-react";
 
 interface PolicyCategory {
   id: string;
@@ -240,31 +239,24 @@ const Admin = () => {
           {/* Main Content */}
           <div className="mt-8">
             <Tabs defaultValue="categories" className="space-y-8">
-              <TabsList className="inline-flex h-auto p-1 items-center justify-center gap-1 rounded-lg bg-muted w-full max-w-2xl mx-auto">
+              <TabsList className="inline-flex h-auto p-1 items-center justify-center gap-4 rounded-lg bg-muted w-full max-w-2xl mx-auto">
                 <TabsTrigger 
                   value="categories" 
-                  className="inline-flex items-center gap-2 px-3 py-2.5 rounded-md hover:bg-white data-[state=active]:bg-white data-[state=active]:text-[rgba(49,159,67,1)] data-[state=active]:shadow-sm transition-all"
+                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-md hover:bg-white data-[state=active]:bg-white data-[state=active]:text-[rgba(49,159,67,1)] data-[state=active]:shadow-sm transition-all"
                 >
                   <LayoutGrid className="h-4 w-4" />
                   <span className="font-medium">Categories</span>
                 </TabsTrigger>
                 <TabsTrigger 
-                  value="documents" 
-                  className="inline-flex items-center gap-2 px-3 py-2.5 rounded-md hover:bg-white data-[state=active]:bg-white data-[state=active]:text-[rgba(49,159,67,1)] data-[state=active]:shadow-sm transition-all"
-                >
-                  <FileText className="h-4 w-4" />
-                  <span className="font-medium">Documents</span>
-                </TabsTrigger>
-                <TabsTrigger 
                   value="users"
-                  className="inline-flex items-center gap-2 px-3 py-2.5 rounded-md hover:bg-white data-[state=active]:bg-white data-[state=active]:text-[rgba(49,159,67,1)] data-[state=active]:shadow-sm transition-all"
+                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-md hover:bg-white data-[state=active]:bg-white data-[state=active]:text-[rgba(49,159,67,1)] data-[state=active]:shadow-sm transition-all"
                 >
                   <Users className="h-4 w-4" />
                   <span className="font-medium">Users</span>
                 </TabsTrigger>
                 <TabsTrigger 
                   value="statistics"
-                  className="inline-flex items-center gap-2 px-3 py-2.5 rounded-md hover:bg-white data-[state=active]:bg-white data-[state=active]:text-[rgba(49,159,67,1)] data-[state=active]:shadow-sm transition-all"
+                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-md hover:bg-white data-[state=active]:bg-white data-[state=active]:text-[rgba(49,159,67,1)] data-[state=active]:shadow-sm transition-all"
                 >
                   <BarChart className="h-4 w-4" />
                   <span className="font-medium">Statistics</span>
@@ -280,11 +272,6 @@ const Admin = () => {
                     onCreate={handleCategoryCreate}
                     onReorder={handleReorderCategories}
                   />
-                </TabsContent>
-                <TabsContent value="documents" className="mt-8">
-                  <div className="bg-white rounded-2xl shadow-sm p-6 sm:p-8">
-                    <DocumentManager />
-                  </div>
                 </TabsContent>
                 <TabsContent value="users" className="mt-0 focus-visible:outline-none focus-visible:ring-0">
                   <UserManagement />
