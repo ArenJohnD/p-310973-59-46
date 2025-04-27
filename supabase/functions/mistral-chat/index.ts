@@ -115,7 +115,7 @@ serve(async (req) => {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        model: 'mistral-7b-instruct:free',
+        model: 'mistralai/mistral-7b-instruct:free',
         messages: formattedMessages,
         temperature: 0.7,
       })
