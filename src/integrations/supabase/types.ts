@@ -9,39 +9,56 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
-      documents: {
+      chat_messages: {
         Row: {
-          content: string
-          created_at: string
-          created_by: string | null
-          file_path: string | null
-          file_type: string | null
+          content: string | null
           id: string
-          is_active: boolean | null
-          title: string
-          updated_at: string
+          sender: string | null
+          session_id: string | null
+          timestamp: string | null
         }
         Insert: {
-          content: string
-          created_at?: string
-          created_by?: string | null
-          file_path?: string | null
-          file_type?: string | null
+          content?: string | null
           id?: string
-          is_active?: boolean | null
-          title: string
-          updated_at?: string
+          sender?: string | null
+          session_id?: string | null
+          timestamp?: string | null
         }
         Update: {
-          content?: string
-          created_at?: string
-          created_by?: string | null
-          file_path?: string | null
-          file_type?: string | null
+          content?: string | null
           id?: string
-          is_active?: boolean | null
-          title?: string
-          updated_at?: string
+          sender?: string | null
+          session_id?: string | null
+          timestamp?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_messages_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "chat_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      chat_sessions: {
+        Row: {
+          created_at: string | null
+          id: string
+          title: string | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          title?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          title?: string | null
+          user_id?: string | null
         }
         Relationships: []
       }
