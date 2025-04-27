@@ -62,9 +62,11 @@ serve(async (req)=>{
     }
     const data = await response.json();
     const answer = data.choices[0].message.content;
+    const documentUrl = '/document/New Era University - Policies.pdf';
+    const answerWithLink = `${answer}\n\n[View Policy Document](${documentUrl})`;
     console.log('Received answer from OpenRouter');
     return new Response(JSON.stringify({
-      answer,
+      answer: answerWithLink,
       context: []
     }), {
       headers: {
