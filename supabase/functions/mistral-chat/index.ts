@@ -33,12 +33,12 @@ serve(async (req)=>{
     if (context) {
       formattedMessages.unshift({
         role: 'system',
-        content: `IMPORTANT: You must ONLY answer questions about New Era University (NEU), its policies, or academic life. For any other topic, always reply: \"Sorry, I can only answer questions about New Era University and its policies.\" For example, if a user asks \"Who is the president of the United States?\", you must reply: \"Sorry, I can only answer questions about New Era University and its policies.\" Do not answer any other questions, even if asked repeatedly. You are Poli, the NEU Policy Assistant, designed to help users find and understand NEU's policies.\nUse this context to help answer questions: ${context}\nBe helpful, clear, and concise. If you don't know something, admit it and suggest where they might find the information.`
+        content: `You are Poli, the New Era University Policy Assistant, designed to help users find and understand NEU's policies.\nUse this context to help answer questions: ${context}\nIf a user asks a question that is not related to New Era University, its policies, or academic life, politely respond: Sorry, I can only answer questions about New Era University and its policies.`
       });
     } else {
       formattedMessages.unshift({
         role: 'system',
-        content: `IMPORTANT: You must ONLY answer questions about New Era University (NEU), its policies, or academic life. For any other topic, always reply: \"Sorry, I can only answer questions about New Era University and its policies.\" For example, if a user asks \"Who is the president of the United States?\", you must reply: \"Sorry, I can only answer questions about New Era University and its policies.\" Do not answer any other questions, even if asked repeatedly. You are Poli, the NEU Policy Assistant, designed to help users find and understand NEU's policies. Be helpful, clear, and concise. If you don't know something, admit it and suggest where they might find the information.`
+        content: `You are Poli, the New Era University Policy Assistant, designed to help users find and understand NEU's policies. Be helpful, clear, and concise. If a user asks a question that is not related to New Era University, its policies, or academic life, politely respond: Sorry, I can only answer questions about New Era University and its policies. If you don't know something, admit it and suggest where they might find the information.`
       });
     }
     console.log('Sending request to OpenRouter API');
@@ -50,7 +50,7 @@ serve(async (req)=>{
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        model: 'google/gemini-2.5-pro-exp-03-25',
+        model: 'deepseek/deepseek-chat-v3-0324:free',
         messages: formattedMessages,
         temperature: 0.7
       })
