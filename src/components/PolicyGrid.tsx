@@ -61,7 +61,7 @@ export const PolicyGrid = () => {
           </h2>
           <p className="text-gray-600">Select a category to view its policies and guidelines</p>
         </div>
-        <div className="h-12 w-12 rounded-full bg-[rgba(49,159,67,0.1)] flex items-center justify-center">
+        <div className="h-12 w-12 rounded-full bg-white/80 backdrop-blur-sm flex items-center justify-center shadow-sm">
           <svg
             className="w-6 h-6 text-[rgba(49,159,67,1)]"
             fill="none"
@@ -80,7 +80,7 @@ export const PolicyGrid = () => {
       
       <div className="w-full max-w-[1075px] mx-auto">
         {loading ? (
-          <div className="flex justify-center items-center py-16">
+          <div className="flex justify-center items-center py-16 bg-white/60 backdrop-blur-sm rounded-2xl shadow-sm">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[rgba(49,159,67,1)]" />
             <p className="ml-3 text-gray-600">Loading categories...</p>
           </div>
@@ -91,7 +91,7 @@ export const PolicyGrid = () => {
             ))}
           </div>
         ) : (
-          <div className="text-center py-16 bg-gray-50 rounded-lg border border-gray-100">
+          <div className="text-center py-16 bg-white/60 backdrop-blur-sm rounded-2xl shadow-sm">
             <svg
               className="mx-auto h-12 w-12 text-gray-400"
               fill="none"

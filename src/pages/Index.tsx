@@ -6,11 +6,11 @@ import { PoliChat } from "@/components/PoliChat";
 
 export default function Index() {
   return (
-    <div className="min-h-screen bg-gradient-to-b from-[#F1F1F1] to-white">
+    <div className="min-h-screen bg-gradient-to-b from-[rgba(49,159,67,0.1)] via-[#F1F1F1] to-white">
       <Header />
       
       {/* Hero Section */}
-      <div className="relative bg-[#F1F1F1] py-16 sm:py-20 overflow-hidden">
+      <div className="relative py-16 sm:py-20 overflow-hidden">
         <div className="absolute inset-0">
           <div className="absolute inset-0 bg-gradient-to-r from-[rgba(49,159,67,0.05)] to-transparent" />
           <div className="absolute right-0 bottom-0 transform translate-x-1/3">

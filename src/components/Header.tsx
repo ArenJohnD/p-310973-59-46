@@ -23,9 +23,9 @@ export const Header = () => {
   const navigate = useNavigate();
 
   return (
-    <header className="relative bg-white border-b border-gray-100 shadow-sm z-50">
+    <header className="relative z-50">
       <div className="container mx-auto px-4">
-        <div className="flex items-center justify-between py-4">
+        <div className="flex items-center justify-between py-6">
           {/* Logo and Brand */}
           <Link to="/" className="flex items-center gap-3 group">
             <img
@@ -35,9 +35,9 @@ export const Header = () => {
             />
             <div className="hidden sm:block">
               <h1 className="text-xl font-bold text-gray-900 group-hover:text-[rgba(49,159,67,1)] transition-colors">
-                NEUPoliSeek
+                New Era University
               </h1>
-              <p className="text-sm text-gray-500">
+              <p className="text-sm text-gray-600">
                 Policy Management System
               </p>
             </div>
@@ -50,8 +50,8 @@ export const Header = () => {
               className={cn(
                 "px-4 py-2 rounded-lg transition-all duration-200",
                 location.pathname === "/" 
-                  ? "text-[rgba(49,159,67,1)] bg-[rgba(49,159,67,0.1)] font-medium" 
-                  : "text-gray-600 hover:text-[rgba(49,159,67,1)] hover:bg-[rgba(49,159,67,0.05)]"
+                  ? "text-[rgba(49,159,67,1)] bg-white/90 font-medium shadow-sm" 
+                  : "text-gray-700 hover:text-[rgba(49,159,67,1)] hover:bg-white/90 hover:shadow-sm"
               )}
             >
               Home
@@ -61,8 +61,8 @@ export const Header = () => {
               className={cn(
                 "px-4 py-2 rounded-lg transition-all duration-200",
                 location.pathname === "/about"
-                  ? "text-[rgba(49,159,67,1)] bg-[rgba(49,159,67,0.1)] font-medium"
-                  : "text-gray-600 hover:text-[rgba(49,159,67,1)] hover:bg-[rgba(49,159,67,0.05)]"
+                  ? "text-[rgba(49,159,67,1)] bg-white/90 font-medium shadow-sm"
+                  : "text-gray-700 hover:text-[rgba(49,159,67,1)] hover:bg-white/90 hover:shadow-sm"
               )}
             >
               About Us
@@ -72,8 +72,8 @@ export const Header = () => {
               className={cn(
                 "px-4 py-2 rounded-lg transition-all duration-200",
                 location.pathname === "/contact"
-                  ? "text-[rgba(49,159,67,1)] bg-[rgba(49,159,67,0.1)] font-medium"
-                  : "text-gray-600 hover:text-[rgba(49,159,67,1)] hover:bg-[rgba(49,159,67,0.05)]"
+                  ? "text-[rgba(49,159,67,1)] bg-white/90 font-medium shadow-sm"
+                  : "text-gray-700 hover:text-[rgba(49,159,67,1)] hover:bg-white/90 hover:shadow-sm"
               )}
             >
               Contact
@@ -86,7 +86,7 @@ export const Header = () => {
             <Button
               variant="ghost"
               size="icon"
-              className="relative hidden sm:flex hover:bg-[rgba(49,159,67,0.1)] text-gray-600 hover:text-[rgba(49,159,67,1)]"
+              className="relative hidden sm:flex hover:bg-white/90 text-gray-700 hover:text-[rgba(49,159,67,1)] hover:shadow-sm"
             >
               <Bell className="h-5 w-5" />
               <span className="absolute top-1 right-1 w-2 h-2 bg-[rgba(49,159,67,1)] rounded-full" />
@@ -98,7 +98,7 @@ export const Header = () => {
                 <DropdownMenuTrigger asChild>
                   <Button 
                     variant="ghost" 
-                    className="relative h-10 w-10 rounded-full border-2 border-gray-200 hover:border-[rgba(49,159,67,1)] transition-colors"
+                    className="relative h-10 w-10 rounded-full hover:bg-white/80 transition-colors"
                   >
                     <Avatar className="h-9 w-9">
                       <AvatarImage src={user.user_metadata?.avatar_url} />
@@ -108,30 +108,29 @@ export const Header = () => {
                     </Avatar>
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-56">
-                  <DropdownMenuLabel className="font-normal">
+                <DropdownMenuContent className="w-64 p-2 bg-white/90 backdrop-blur-sm border-gray-100/20">
+                  <DropdownMenuLabel className="font-normal px-2 py-2 border-b border-gray-100/20">
                     <div className="flex flex-col space-y-1">
-                      <p className="text-sm font-medium leading-none">{user.email}</p>
-                      <p className="text-xs leading-none text-gray-500">
+                      <p className="text-sm font-medium leading-none text-gray-900">{user.email}</p>
+                      <p className="text-xs leading-none text-gray-500 mt-1">
                         {isAdmin ? 'Administrator' : 'User'}
                       </p>
                     </div>
                   </DropdownMenuLabel>
-                  <DropdownMenuSeparator />
                   {isAdmin && (
                     <DropdownMenuItem 
                       onClick={() => navigate('/admin')}
-                      className="text-[rgba(49,159,67,1)] hover:text-[rgba(49,159,67,1)] hover:bg-[rgba(49,159,67,0.1)]"
+                      className="gap-2 px-2 py-2 text-sm font-medium text-[rgba(49,159,67,1)] hover:text-[rgba(49,159,67,1)] hover:bg-[rgba(49,159,67,0.1)] rounded-md cursor-pointer mt-1"
                     >
-                      <Settings className="mr-2 h-4 w-4" />
+                      <Settings className="h-4 w-4" />
                       <span>Admin Dashboard</span>
                     </DropdownMenuItem>
                   )}
                   <DropdownMenuItem
                     onClick={() => supabase.auth.signOut()}
-                    className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                    className="gap-2 px-2 py-2 text-sm font-medium text-red-600 hover:text-red-700 hover:bg-red-50 rounded-md cursor-pointer mt-1"
                   >
-                    <LogOut className="mr-2 h-4 w-4" />
+                    <LogOut className="h-4 w-4" />
                     <span>Log out</span>
                   </DropdownMenuItem>
                 </DropdownMenuContent>
@@ -166,7 +165,7 @@ export const Header = () => {
       {/* Mobile menu */}
       <div
         className={cn(
-          "fixed inset-x-0 top-[73px] p-4 bg-white border-t border-b border-gray-100 shadow-sm md:hidden transition-all duration-200 ease-in-out",
+          "fixed inset-x-0 top-[89px] p-4 bg-white/60 backdrop-blur-md md:hidden transition-all duration-200 ease-in-out",
           isMobileMenuOpen ? "translate-y-0 opacity-100" : "-translate-y-full opacity-0"
         )}
       >
@@ -176,8 +175,8 @@ export const Header = () => {
             className={cn(
               "px-4 py-3 rounded-lg transition-all duration-200",
               location.pathname === "/"
-                ? "text-[rgba(49,159,67,1)] bg-[rgba(49,159,67,0.1)] font-medium"
-                : "text-gray-600 hover:text-[rgba(49,159,67,1)] hover:bg-[rgba(49,159,67,0.05)]"
+                ? "text-[rgba(49,159,67,1)] bg-white/90 font-medium shadow-sm"
+                : "text-gray-700 hover:text-[rgba(49,159,67,1)] hover:bg-white/90 hover:shadow-sm"
             )}
             onClick={() => setIsMobileMenuOpen(false)}
           >
@@ -188,8 +187,8 @@ export const Header = () => {
             className={cn(
               "px-4 py-3 rounded-lg transition-all duration-200",
               location.pathname === "/about"
-                ? "text-[rgba(49,159,67,1)] bg-[rgba(49,159,67,0.1)] font-medium"
-                : "text-gray-600 hover:text-[rgba(49,159,67,1)] hover:bg-[rgba(49,159,67,0.05)]"
+                ? "text-[rgba(49,159,67,1)] bg-white/90 font-medium shadow-sm"
+                : "text-gray-700 hover:text-[rgba(49,159,67,1)] hover:bg-white/90 hover:shadow-sm"
             )}
             onClick={() => setIsMobileMenuOpen(false)}
           >
@@ -200,25 +199,13 @@ export const Header = () => {
             className={cn(
               "px-4 py-3 rounded-lg transition-all duration-200",
               location.pathname === "/contact"
-                ? "text-[rgba(49,159,67,1)] bg-[rgba(49,159,67,0.1)] font-medium"
-                : "text-gray-600 hover:text-[rgba(49,159,67,1)] hover:bg-[rgba(49,159,67,0.05)]"
+                ? "text-[rgba(49,159,67,1)] bg-white/90 font-medium shadow-sm"
+                : "text-gray-700 hover:text-[rgba(49,159,67,1)] hover:bg-white/90 hover:shadow-sm"
             )}
             onClick={() => setIsMobileMenuOpen(false)}
           >
             Contact
           </Link>
-          {!user && (
-            <Button
-              variant="default"
-              className="w-full mt-2 bg-[rgba(49,159,67,1)] hover:bg-[rgba(39,139,57,1)] text-white"
-              onClick={() => {
-                navigate('/login');
-                setIsMobileMenuOpen(false);
-              }}
-            >
-              Sign In
-            </Button>
-          )}
         </nav>
       </div>
     </header>

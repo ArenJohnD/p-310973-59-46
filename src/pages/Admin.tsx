@@ -179,10 +179,10 @@ const Admin = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex flex-col bg-gradient-to-b from-[#F1F1F1] to-white">
+      <div className="min-h-screen flex flex-col bg-gradient-to-b from-[rgba(49,159,67,0.1)] via-[#F1F1F1] to-white">
         <Header />
         <main className="container mx-auto px-4 flex-1">
-          <div className="max-w-[1200px] mx-auto bg-white rounded-2xl shadow-sm mt-8 p-8">
+          <div className="max-w-[1200px] mx-auto bg-white/80 backdrop-blur-sm rounded-2xl shadow-sm mt-8 p-8">
             <div className="flex justify-center items-center h-64">
               <Loader2 className="h-8 w-8 animate-spin text-[rgba(49,159,67,1)]" />
               <span className="ml-3 text-gray-600">Loading dashboard...</span>
@@ -195,10 +195,10 @@ const Admin = () => {
 
   if (!isAdmin) {
     return (
-      <div className="min-h-screen flex flex-col bg-gradient-to-b from-[#F1F1F1] to-white">
+      <div className="min-h-screen flex flex-col bg-gradient-to-b from-[rgba(49,159,67,0.1)] via-[#F1F1F1] to-white">
         <Header />
         <main className="container mx-auto px-4 flex-1">
-          <div className="max-w-[1200px] mx-auto bg-white rounded-2xl shadow-sm mt-8 p-8">
+          <div className="max-w-[1200px] mx-auto bg-white/80 backdrop-blur-sm rounded-2xl shadow-sm mt-8 p-8">
             <div className="flex flex-col justify-center items-center h-64">
               <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mb-4">
                 <svg className="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -220,18 +220,18 @@ const Admin = () => {
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-gradient-to-b from-[#F1F1F1] to-white">
+    <div className="min-h-screen flex flex-col bg-gradient-to-b from-[rgba(49,159,67,0.1)] via-[#F1F1F1] to-white">
       <Header />
       <main className="container mx-auto px-4 flex-1">
         <div className="max-w-[1200px] mx-auto">
           {/* Dashboard Header */}
-          <div className="bg-[rgba(49,159,67,0.1)] rounded-2xl shadow-sm mt-8 p-6 sm:p-8 border border-[rgba(49,159,67,0.2)]">
+          <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-sm mt-8 p-6 sm:p-8 border border-[rgba(49,159,67,0.2)]">
             <div className="max-w-2xl">
               <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
                 Admin Dashboard
               </h1>
               <p className="text-gray-600 mt-2">
-                Manage Policy Categories, AI Reference Documents, Users & View Statistics
+                Manage Policy Categories, Users & View Statistics
               </p>
             </div>
           </div>
@@ -239,7 +239,7 @@ const Admin = () => {
           {/* Main Content */}
           <div className="mt-8">
             <Tabs defaultValue="categories" className="space-y-8">
-              <TabsList className="inline-flex h-auto p-1 items-center justify-center gap-4 rounded-lg bg-muted w-full max-w-2xl mx-auto">
+              <TabsList className="inline-flex h-auto p-1.5 items-center justify-start gap-2 rounded-lg bg-white/60 backdrop-blur-sm w-fit">
                 <TabsTrigger 
                   value="categories" 
                   className="inline-flex items-center gap-2 px-4 py-2.5 rounded-md hover:bg-white data-[state=active]:bg-white data-[state=active]:text-[rgba(49,159,67,1)] data-[state=active]:shadow-sm transition-all"
@@ -263,7 +263,7 @@ const Admin = () => {
                 </TabsTrigger>
               </TabsList>
 
-              <div className="bg-white rounded-2xl shadow-sm p-6 sm:p-8 border border-gray-100">
+              <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-sm p-6 sm:p-8 border border-gray-100/20">
                 <TabsContent value="categories" className="mt-0 focus-visible:outline-none focus-visible:ring-0">
                   <AdminCategoryTable 
                     categories={categories}
