@@ -61,20 +61,10 @@ serve(async (req)=>{
       throw new Error(`Failed to get response from OpenRouter: ${response.status} ${errorText}`);
     }
     const data = await response.json();
-    console.log('OpenRouter API response:', JSON.stringify(data));
-    let answer;
-    if (data.choices && data.choices.length > 0 && data.choices[0].message && data.choices[0].message.content) {
-      answer = data.choices[0].message.content;
-    } else if (data.error && data.error.message) {
-      answer = `Sorry, there was an error from the AI provider: ${data.error.message}`;
-    } else {
-      answer = "Sorry, I couldn't generate a response at this time.";
-    }
-    const documentUrl = '/document/New Era University - Policies.pdf';
-    const answerWithLink = `${answer}\n\n[View Policy Document](${documentUrl})`;
+    const answer = data.choices[0].message.content;
     console.log('Received answer from OpenRouter');
     return new Response(JSON.stringify({
-      answer: answerWithLink,
+      answer,
       context: []
     }), {
       headers: {
