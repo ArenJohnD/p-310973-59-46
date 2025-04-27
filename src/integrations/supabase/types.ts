@@ -62,38 +62,6 @@ export type Database = {
         }
         Relationships: []
       }
-      document_embeddings: {
-        Row: {
-          content: string
-          created_at: string
-          document_id: string
-          embedding: string
-          id: string
-        }
-        Insert: {
-          content: string
-          created_at?: string
-          document_id: string
-          embedding: string
-          id?: string
-        }
-        Update: {
-          content?: string
-          created_at?: string
-          document_id?: string
-          embedding?: string
-          id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "document_embeddings_document_id_fkey"
-            columns: ["document_id"]
-            isOneToOne: false
-            referencedRelation: "policy_documents"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       policy_categories: {
         Row: {
           created_at: string

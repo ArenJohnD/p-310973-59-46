@@ -50,7 +50,7 @@ serve(async (req)=>{
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        model: 'deepseek/deepseek-chat-v3-0324:free',
+        model: 'google/gemini-2.5-pro-exp-03-25',
         messages: formattedMessages,
         temperature: 0.7
       })
