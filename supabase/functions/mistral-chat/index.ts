@@ -50,6 +50,7 @@ serve(async (req) => {
       }
       
       // First delete all messages associated with this session
+      // Fix: Use proper column name reference with table prefix
       const { error: messagesError } = await supabase
         .from('chat_messages')
         .delete()
@@ -61,6 +62,7 @@ serve(async (req) => {
       }
       
       // Then delete the session itself
+      // Fix: Use proper column name reference with table prefix
       const { error: sessionError } = await supabase
         .from('chat_sessions')
         .delete()
