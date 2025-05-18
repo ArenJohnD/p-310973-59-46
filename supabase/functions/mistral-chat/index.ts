@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.41.0";
 
@@ -49,8 +48,31 @@ serve(async (req) => {
         throw new Error('Session ID is required for deletion');
       }
       
+      // First check if session exists to avoid errors on non-existent sessions
+      const { data: sessionData, error: checkSessionError } = await supabase
+        .from('chat_sessions')
+        .select('id')
+        .eq('id', sessionId)
+        .single();
+        
+      if (checkSessionError) {
+        console.error('Error checking session:', checkSessionError);
+        if (checkSessionError.code === 'PGRST116') {
+          // Session doesn't exist, so nothing to delete
+          return new Response(JSON.stringify({
+            success: true,
+            message: 'Session not found, nothing to delete'
+          }), {
+            headers: {
+              ...corsHeaders,
+              'Content-Type': 'application/json'
+            }
+          });
+        }
+        throw new Error(`Failed to check chat session: ${checkSessionError.message}`);
+      }
+      
       // First delete all messages associated with this session
-      // Fix: Use proper column name reference with table prefix
       const { error: messagesError } = await supabase
         .from('chat_messages')
         .delete()
@@ -61,8 +83,9 @@ serve(async (req) => {
         throw new Error(`Failed to delete chat messages: ${messagesError.message}`);
       }
       
+      console.log('Successfully deleted chat messages');
+      
       // Then delete the session itself
-      // Fix: Use proper column name reference with table prefix
       const { error: sessionError } = await supabase
         .from('chat_sessions')
         .delete()
@@ -73,7 +96,7 @@ serve(async (req) => {
         throw new Error(`Failed to delete chat session: ${sessionError.message}`);
       }
       
-      console.log('Successfully deleted chat session and messages');
+      console.log('Successfully deleted chat session');
       
       return new Response(JSON.stringify({
         success: true,

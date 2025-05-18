@@ -243,6 +243,15 @@ export function PoliChat() {
       console.log('Deleting chat session:', sessionId);
       setIsLoading(true);
       
+      // Remove from UI immediately for better UX
+      setChatSessions(prev => prev.filter(session => session.id !== sessionId));
+      
+      // Clear current messages if the deleted session was the active one
+      if (currentSessionId === sessionId) {
+        setMessages([]);
+        setCurrentSessionId(null);
+      }
+      
       // Call the Edge Function to delete the session and its messages
       const { data, error } = await supabase.functions.invoke('mistral-chat', {
         body: { 
@@ -258,19 +267,13 @@ export function PoliChat() {
 
       console.log('Delete response:', data);
       
-      // Remove from UI immediately
-      setChatSessions(prev => prev.filter(session => session.id !== sessionId));
-      
-      // Clear current messages if the deleted session was the active one
-      if (currentSessionId === sessionId) {
-        setMessages([]);
-        setCurrentSessionId(null);
-      }
-
       toast({
         title: "Success",
         description: "Chat deleted successfully.",
       });
+      
+      // Refresh chat sessions to ensure UI is up-to-date
+      await fetchChatSessions();
       
     } catch (error) {
       console.error('Error deleting chat session:', error);
