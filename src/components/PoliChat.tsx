@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -77,6 +76,7 @@ export function PoliChat() {
         .order('created_at', { ascending: false });
 
       if (error) {
+        console.error('Error fetching chat sessions:', error);
         throw error;
       }
 
@@ -215,14 +215,26 @@ export function PoliChat() {
     try {
       console.log('Deleting chat session:', sessionId);
       
-      // Delete the chat session and all its messages (cascading delete should be set up in the database)
-      const { error } = await supabase
+      // First delete all messages associated with this session
+      const { error: messagesError } = await supabase
+        .from('chat_messages')
+        .delete()
+        .eq('session_id', sessionId);
+        
+      if (messagesError) {
+        console.error('Error deleting chat messages:', messagesError);
+        throw messagesError;
+      }
+      
+      // Then delete the chat session
+      const { error: sessionError } = await supabase
         .from('chat_sessions')
         .delete()
         .eq('id', sessionId);
 
-      if (error) {
-        throw error;
+      if (sessionError) {
+        console.error('Error deleting chat session:', sessionError);
+        throw sessionError;
       }
 
       // Remove from UI

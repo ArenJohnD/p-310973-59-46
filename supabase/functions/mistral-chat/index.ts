@@ -7,7 +7,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type'
 };
 
-serve(async (req)=>{
+serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, {
       headers: corsHeaders
@@ -40,7 +40,7 @@ serve(async (req)=>{
     console.log('Session ID:', sessionId, 'User ID:', userId);
     
     // Format the conversation for API
-    const formattedMessages = messages.map((msg)=>({
+    const formattedMessages = messages.map((msg) => ({
         role: msg.sender === 'user' ? 'user' : 'assistant',
         content: msg.text
     }));
@@ -73,7 +73,7 @@ serve(async (req)=>{
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          model: 'mistral-large-latest',  // Use Mistral's latest model
+          model: 'mistral-large-latest',
           messages: formattedMessages,
           temperature: 0.7,
           max_tokens: 1024
@@ -149,24 +149,36 @@ serve(async (req)=>{
           }
         }
         
-        // Save the user message
-        const userMessage = messages[messages.length - 1];
-        if (userMessage.sender === 'user') {
-          await supabase.from('chat_messages').insert({
+        // Find the most recent user message
+        const userMessage = messages.find(msg => msg.sender === 'user');
+        
+        // Save the user message if it exists
+        if (userMessage) {
+          console.log('Saving user message:', userMessage.text.substring(0, 20) + '...');
+          const { error: userMsgError } = await supabase.from('chat_messages').insert({
             session_id: sessionId,
             sender: 'user',
             content: userMessage.text,
             timestamp: new Date().toISOString()
           });
+          
+          if (userMsgError) {
+            console.error('Error saving user message:', userMsgError);
+          }
         }
         
         // Save the bot response
-        await supabase.from('chat_messages').insert({
+        console.log('Saving bot response');
+        const { error: botMsgError } = await supabase.from('chat_messages').insert({
           session_id: sessionId,
           sender: 'bot',
           content: answer,
           timestamp: new Date().toISOString()
         });
+        
+        if (botMsgError) {
+          console.error('Error saving bot message:', botMsgError);
+        }
         
         // Update the session's title if it's a new session
         if (sessionId) {
