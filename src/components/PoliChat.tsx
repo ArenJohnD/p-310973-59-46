@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -72,7 +71,7 @@ export function PoliChat() {
         .from('chat_sessions')
         .select('*')
         .eq('user_id', user?.id)
-        .order('updated_at', { ascending: false });
+        .order('created_at', { ascending: false });
 
       if (error) {
         throw error;
@@ -81,8 +80,8 @@ export function PoliChat() {
       const formattedSessions: ChatSession[] = data.map((session) => ({
         id: session.id,
         title: session.title || 'Untitled Chat',
-        lastMessage: session.last_message || '',
-        timestamp: new Date(session.updated_at || session.created_at),
+        lastMessage: '', // Default value since it doesn't exist in the schema
+        timestamp: new Date(session.created_at || new Date()),
         isActive: session.id === currentSessionId,
       }));
 
@@ -106,7 +105,6 @@ export function PoliChat() {
         .insert({
           title: 'New Chat',
           user_id: user?.id,
-          last_message: ''
         })
         .select('*')
         .single();
@@ -160,7 +158,7 @@ export function PoliChat() {
         .from('chat_messages')
         .select('*')
         .eq('session_id', sessionId)
-        .order('created_at', { ascending: true });
+        .order('timestamp', { ascending: true });
 
       if (error) {
         throw error;
@@ -169,8 +167,8 @@ export function PoliChat() {
       // Format messages for the UI
       const formattedMessages: Message[] = data.map(msg => ({
         type: msg.sender === 'user' ? 'user' : 'bot',
-        content: msg.content,
-        timestamp: new Date(msg.created_at)
+        content: msg.content || "",
+        timestamp: new Date(msg.timestamp || new Date())
       }));
 
       setMessages(formattedMessages);

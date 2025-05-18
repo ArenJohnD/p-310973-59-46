@@ -38,7 +38,7 @@ export function ChatWindow({
           .from('chat_messages')
           .select('*')
           .eq('session_id', sessionId)
-          .order('created_at', { ascending: true });
+          .order('timestamp', { ascending: true });
 
         if (error) {
           throw error;
@@ -47,9 +47,9 @@ export function ChatWindow({
         if (data && data.length > 0) {
           const formattedMessages: Message[] = data.map(msg => ({
             id: msg.id,
-            text: msg.content,
+            text: msg.content || "",
             sender: msg.sender === 'user' ? 'user' : 'bot',
-            timestamp: new Date(msg.created_at)
+            timestamp: new Date(msg.timestamp || new Date())
           }));
           
           // Replace the welcome message with the actual chat history

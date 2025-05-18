@@ -129,7 +129,7 @@ serve(async (req)=>{
             session_id: sessionId,
             sender: 'user',
             content: userMessage.text,
-            user_id: userId || null
+            timestamp: new Date().toISOString()
           });
         }
         
@@ -138,14 +138,24 @@ serve(async (req)=>{
           session_id: sessionId,
           sender: 'bot',
           content: answer,
-          user_id: userId || null
+          timestamp: new Date().toISOString()
         });
         
-        // Update the session's last message and timestamp
-        await supabase.from('chat_sessions').update({
-          last_message: answer.substring(0, 100) + (answer.length > 100 ? '...' : ''),
-          updated_at: new Date().toISOString()
-        }).eq('id', sessionId);
+        // Update the session's title if it's a new session
+        if (sessionId) {
+          const { data: sessionData } = await supabase
+            .from('chat_sessions')
+            .select('title')
+            .eq('id', sessionId)
+            .single();
+            
+          if (sessionData && sessionData.title === 'New Chat') {
+            const userQuery = userMessage.text;
+            await supabase.from('chat_sessions').update({
+              title: userQuery.substring(0, 50) + (userQuery.length > 50 ? '...' : ''),
+            }).eq('id', sessionId);
+          }
+        }
         
         console.log('Successfully saved chat messages');
       } catch (error) {
