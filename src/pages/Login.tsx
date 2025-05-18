@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/use-toast";
-import { Loader2, AlertCircle, BookOpen, Shield, Users } from "lucide-react";
+import { Loader2, AlertCircle, BookOpen, Shield, Search } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { motion } from "framer-motion";
@@ -250,11 +250,11 @@ const Login = () => {
                 className="flex items-start gap-4 p-4 bg-white/90 backdrop-blur-sm rounded-xl shadow-md hover:shadow-lg transition-all duration-300"
               >
                 <div className="bg-[rgba(49,159,67,0.1)] p-3 rounded-lg">
-                  <Users className="h-6 w-6 text-[rgba(49,159,67,1)]" />
+                  <Search className="h-6 w-6 text-[rgba(49,159,67,1)]" />
                 </div>
                 <div>
-                  <h3 className="font-semibold text-gray-800">Guest Access Available</h3>
-                  <p className="text-gray-600 text-sm">Limited access for non-university members</p>
+                  <h3 className="font-semibold text-gray-800">Intelligent Search</h3>
+                  <p className="text-gray-600 text-sm">Quickly find the policies you need with advanced search</p>
                 </div>
               </motion.div>
             </div>
@@ -314,23 +314,6 @@ const Login = () => {
                       )}
                       <span>Sign in with Google</span>
                     </div>
-                  </Button>
-
-                  <div className="relative">
-                    <div className="absolute inset-0 flex items-center">
-                      <div className="w-full border-t border-gray-200" />
-                    </div>
-                    <div className="relative flex justify-center text-sm">
-                      <span className="px-2 bg-white text-gray-500">or</span>
-                    </div>
-                  </div>
-
-                  <Button
-                    onClick={handleGuestAccess}
-                    variant="outline"
-                    className="w-full py-6 border-2 border-gray-200 hover:border-[rgba(49,159,67,1)] hover:bg-[rgba(49,159,67,0.05)] text-[rgba(49,159,67,1)] font-semibold transition-colors duration-200 rounded-xl"
-                  >
-                    Continue as Guest
                   </Button>
                 </motion.div>
               </CardContent>
