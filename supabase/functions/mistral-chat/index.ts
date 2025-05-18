@@ -38,8 +38,54 @@ serve(async (req) => {
   }
 
   try {
-    const { messages, context, sessionId, userId } = await req.json();
-    console.log('Received chat request with', messages.length, 'messages');
+    const requestData = await req.json();
+    
+    // Check if this is a delete request
+    if (requestData.action === 'delete_session') {
+      const { sessionId } = requestData;
+      console.log('Deleting chat session:', sessionId);
+      
+      if (!sessionId) {
+        throw new Error('Session ID is required for deletion');
+      }
+      
+      // First delete all messages associated with this session
+      const { error: messagesError } = await supabase
+        .from('chat_messages')
+        .delete()
+        .eq('session_id', sessionId);
+      
+      if (messagesError) {
+        console.error('Error deleting chat messages:', messagesError);
+        throw new Error(`Failed to delete chat messages: ${messagesError.message}`);
+      }
+      
+      // Then delete the session itself
+      const { error: sessionError } = await supabase
+        .from('chat_sessions')
+        .delete()
+        .eq('id', sessionId);
+        
+      if (sessionError) {
+        console.error('Error deleting chat session:', sessionError);
+        throw new Error(`Failed to delete chat session: ${sessionError.message}`);
+      }
+      
+      console.log('Successfully deleted chat session and messages');
+      
+      return new Response(JSON.stringify({
+        success: true,
+        message: 'Chat session and messages deleted successfully'
+      }), {
+        headers: {
+          ...corsHeaders,
+          'Content-Type': 'application/json'
+        }
+      });
+    }
+    
+    const { messages, context, sessionId, userId } = requestData;
+    console.log('Received chat request with', messages?.length, 'messages');
     console.log('Session ID:', sessionId, 'User ID:', userId);
     
     // Format the conversation for API

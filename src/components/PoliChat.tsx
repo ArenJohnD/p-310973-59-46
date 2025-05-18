@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -240,30 +241,24 @@ export function PoliChat() {
     
     try {
       console.log('Deleting chat session:', sessionId);
+      setIsLoading(true);
       
-      // First delete all messages associated with this session
-      const { error: messagesError } = await supabase
-        .from('chat_messages')
-        .delete()
-        .eq('session_id', sessionId);
-        
-      if (messagesError) {
-        console.error('Error deleting chat messages:', messagesError);
-        throw messagesError;
-      }
+      // Call the Edge Function to delete the session and its messages
+      const { data, error } = await supabase.functions.invoke('mistral-chat', {
+        body: { 
+          action: 'delete_session',
+          sessionId: sessionId
+        }
+      });
       
-      // Then delete the chat session
-      const { error: sessionError } = await supabase
-        .from('chat_sessions')
-        .delete()
-        .eq('id', sessionId);
-
-      if (sessionError) {
-        console.error('Error deleting chat session:', sessionError);
-        throw sessionError;
+      if (error) {
+        console.error('Error deleting chat session via edge function:', error);
+        throw error;
       }
 
-      // Remove from UI
+      console.log('Delete response:', data);
+      
+      // Remove from UI immediately
       setChatSessions(prev => prev.filter(session => session.id !== sessionId));
       
       // Clear current messages if the deleted session was the active one
@@ -274,19 +269,21 @@ export function PoliChat() {
 
       toast({
         title: "Success",
-        description: "Chat history deleted successfully.",
+        description: "Chat deleted successfully.",
       });
-      
-      // Refresh the chat sessions list to ensure it's up to date
-      fetchChatSessions();
       
     } catch (error) {
       console.error('Error deleting chat session:', error);
       toast({
         title: "Error",
-        description: "Failed to delete chat history.",
+        description: "Failed to delete chat. Please try again.",
         variant: "destructive",
       });
+      
+      // Refresh the chat sessions list to ensure it's up to date despite the error
+      fetchChatSessions();
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -484,6 +481,7 @@ export function PoliChat() {
                                   size="icon"
                                   className="h-6 w-6 p-0 absolute top-2 right-2 text-gray-400 hover:text-red-500 hover:bg-transparent"
                                   onClick={(e) => deleteChatSession(session.id, e)}
+                                  disabled={isLoading}
                                 >
                                   <Trash2 className="h-4 w-4" />
                                 </Button>
@@ -497,6 +495,7 @@ export function PoliChat() {
                           variant="outline" 
                           className="w-full border-[rgba(49,159,67,1)] text-[rgba(49,159,67,1)] hover:bg-[rgba(49,159,67,0.1)] hover:text-[rgba(49,159,67,1)]"
                           onClick={createNewChatSession}
+                          disabled={isLoading}
                         >
                           <PlusCircle className="h-4 w-4 mr-2" />
                           New Chat
@@ -577,6 +576,7 @@ export function PoliChat() {
                           size="sm"
                           className="h-6 w-6 p-0 rounded-full hover:bg-[rgba(49,159,67,0.1)] text-[rgba(49,159,67,1)]"
                           onClick={createNewChatSession}
+                          disabled={isLoading}
                         >
                           <PlusCircle className="h-4 w-4" />
                           <span className="sr-only">New Chat</span>
@@ -610,6 +610,7 @@ export function PoliChat() {
                                   size="icon"
                                   className="h-5 w-5 p-0 absolute top-1 right-1 text-gray-400 hover:text-red-500 hover:bg-transparent"
                                   onClick={(e) => deleteChatSession(session.id, e)}
+                                  disabled={isLoading}
                                 >
                                   <Trash2 className="h-3 w-3" />
                                 </Button>
