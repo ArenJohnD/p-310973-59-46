@@ -7,6 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/components/ui/use-toast";
 import { Loader2 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
+import { v4 as uuidv4 } from "uuid";
 
 interface ChatWindowProps {
   welcomeMessage?: string;
@@ -86,22 +87,10 @@ export function ChatWindow({
       // Check if we need to create a new session
       let currentSessionId = sessionId;
       if (!currentSessionId && user) {
-        const { data, error } = await supabase
-          .from('chat_sessions')
-          .insert({
-            title: text.substring(0, 50) + (text.length > 50 ? '...' : ''),
-            user_id: user.id,
-            last_message: ''
-          })
-          .select('id')
-          .single();
-          
-        if (error) {
-          console.error('Error creating chat session:', error);
-        } else {
-          currentSessionId = data.id;
-          setSessionId(currentSessionId);
-        }
+        // Generate UUID for new session to ensure it's consistent on both client and server
+        currentSessionId = uuidv4();
+        setSessionId(currentSessionId);
+        console.log('Created new session ID:', currentSessionId);
       }
 
       // Call the Mistral chat edge function with all previous messages

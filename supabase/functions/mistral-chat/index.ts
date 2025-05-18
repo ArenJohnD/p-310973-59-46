@@ -122,6 +122,33 @@ serve(async (req)=>{
       try {
         console.log('Saving messages to chat history');
         
+        // Create or update session as needed
+        if (userId) {
+          // Check if session already exists
+          const { data: sessionExists } = await supabase
+            .from('chat_sessions')
+            .select('id')
+            .eq('id', sessionId)
+            .single();
+            
+          if (!sessionExists) {
+            console.log('Creating new chat session');
+            // Create the session if it doesn't exist
+            const userMessage = messages[messages.length - 1];
+            const sessionTitle = userMessage.sender === 'user' 
+              ? userMessage.text.substring(0, 50) + (userMessage.text.length > 50 ? '...' : '')
+              : 'New Chat';
+              
+            await supabase
+              .from('chat_sessions')
+              .insert({
+                id: sessionId,
+                title: sessionTitle,
+                user_id: userId
+              });
+          }
+        }
+        
         // Save the user message
         const userMessage = messages[messages.length - 1];
         if (userMessage.sender === 'user') {

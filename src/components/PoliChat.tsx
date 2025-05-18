@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -22,6 +23,7 @@ import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/components/ui/use-toast";
 import { useAuth } from "@/context/AuthContext";
+import { v4 as uuidv4 } from "uuid";
 
 interface Message {
   type: "user" | "bot";
@@ -50,7 +52,7 @@ export function PoliChat() {
   const { toast } = useToast();
   const { user } = useAuth();
 
-  // Fetch chat sessions when component mounts
+  // Fetch chat sessions when component mounts or user changes
   useEffect(() => {
     if (isOpen && user) {
       fetchChatSessions();
@@ -67,6 +69,7 @@ export function PoliChat() {
   // Fetch chat sessions from Supabase
   const fetchChatSessions = async () => {
     try {
+      console.log('Fetching chat sessions for user:', user?.id);
       const { data, error } = await supabase
         .from('chat_sessions')
         .select('*')
@@ -77,6 +80,7 @@ export function PoliChat() {
         throw error;
       }
 
+      console.log('Retrieved sessions:', data?.length || 0);
       const formattedSessions: ChatSession[] = data.map((session) => ({
         id: session.id,
         title: session.title || 'Untitled Chat',
@@ -99,12 +103,25 @@ export function PoliChat() {
   // Create a new chat session
   const createNewChatSession = async () => {
     try {
+      if (!user) {
+        toast({
+          title: "Error",
+          description: "You need to be logged in to create a chat session.",
+          variant: "destructive",
+        });
+        return;
+      }
+      
+      // Generate a unique ID for the session
+      const newSessionId = uuidv4();
+      
       // Create a new chat session in the database
       const { data, error } = await supabase
         .from('chat_sessions')
         .insert({
+          id: newSessionId,
           title: 'New Chat',
-          user_id: user?.id,
+          user_id: user.id,
         })
         .select('*')
         .single();
@@ -130,6 +147,8 @@ export function PoliChat() {
         const updated = prev.map(s => ({ ...s, isActive: false }));
         return [newSession, ...updated];
       });
+      
+      console.log('Created new chat session:', data.id);
     } catch (error) {
       console.error('Error creating new chat session:', error);
       toast({
@@ -153,6 +172,8 @@ export function PoliChat() {
         }))
       );
       
+      console.log('Loading chat session:', sessionId);
+      
       // Fetch messages for this session
       const { data, error } = await supabase
         .from('chat_messages')
@@ -164,6 +185,8 @@ export function PoliChat() {
         throw error;
       }
 
+      console.log('Loaded messages:', data?.length || 0);
+      
       // Format messages for the UI
       const formattedMessages: Message[] = data.map(msg => ({
         type: msg.sender === 'user' ? 'user' : 'bot',
@@ -190,6 +213,8 @@ export function PoliChat() {
     e.stopPropagation(); // Prevent triggering the parent button click
     
     try {
+      console.log('Deleting chat session:', sessionId);
+      
       // Delete the chat session and all its messages (cascading delete should be set up in the database)
       const { error } = await supabase
         .from('chat_sessions')
@@ -232,35 +257,20 @@ export function PoliChat() {
     setInput("");
     
     try {
-      // If no active session, create one
-      if (!sessionId && user) {
-        const { data, error } = await supabase
-          .from('chat_sessions')
-          .insert({
-            title: userMessage.substring(0, 50) + (userMessage.length > 50 ? '...' : ''),
-            user_id: user.id,
-            last_message: ''
-          })
-          .select('*')
-          .single();
-          
-        if (error) throw error;
-        sessionId = data.id;
-        setCurrentSessionId(data.id);
-        
-        // Add to chat sessions list
-        const newSession: ChatSession = {
-          id: data.id,
-          title: userMessage.substring(0, 50) + (userMessage.length > 50 ? '...' : ''),
-          lastMessage: '',
-          timestamp: new Date(),
-          isActive: true,
-        };
-        
-        setChatSessions(prev => {
-          const updated = prev.map(s => ({ ...s, isActive: false }));
-          return [newSession, ...updated];
+      if (!user) {
+        toast({
+          title: "Error",
+          description: "You need to be logged in to send messages.",
+          variant: "destructive",
         });
+        return;
+      }
+      
+      // If no active session, create one
+      if (!sessionId) {
+        sessionId = uuidv4();
+        setCurrentSessionId(sessionId);
+        console.log('Created new session ID on send:', sessionId);
       }
       
       // Add user message to chat
@@ -289,6 +299,8 @@ export function PoliChat() {
         timestamp: new Date()
       });
 
+      console.log('Sending message with session:', sessionId);
+      
       // Call the Mistral chat edge function
       const response = await supabase.functions.invoke('mistral-chat', {
         body: { 
@@ -306,21 +318,6 @@ export function PoliChat() {
 
       const { answer } = response.data;
       
-      // Update the chat session title if it's a new session
-      if (chatSessions.find(s => s.id === sessionId)?.title === 'New Chat') {
-        const updatedTitle = userMessage.substring(0, 50) + (userMessage.length > 50 ? '...' : '');
-        await supabase
-          .from('chat_sessions')
-          .update({ title: updatedTitle })
-          .eq('id', sessionId);
-
-        setChatSessions(prev => prev.map(session => 
-          session.id === sessionId 
-            ? { ...session, title: updatedTitle }
-            : session
-        ));
-      }
-      
       // Add bot response to chat
       const botResponse = {
         type: "bot" as const,
@@ -329,16 +326,9 @@ export function PoliChat() {
       };
       setMessages((prev) => [...prev, botResponse]);
 
-      // Update session in the list with new last message
-      setChatSessions(prev => prev.map(session => 
-        session.id === sessionId 
-          ? { 
-              ...session,
-              lastMessage: answer.substring(0, 100) + (answer.length > 100 ? '...' : ''),
-              timestamp: new Date()
-            }
-          : session
-      ));
+      // Refresh chat sessions to get the latest data
+      fetchChatSessions();
+      
     } catch (error) {
       console.error('Chat error:', error);
       toast({
