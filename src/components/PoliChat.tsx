@@ -68,8 +68,13 @@ export function PoliChat() {
   // Fetch chat sessions from Supabase
   const fetchChatSessions = async () => {
     try {
-      console.log('Fetching chat sessions for user:', user?.id);
-      const { data, error } = await supabase
+      if (!user) {
+        console.log('PoliChat: No user, skipping fetchChatSessions');
+        return;
+      }
+      
+      console.log('PoliChat: Fetching chat sessions for user:', user?.id);
+      const { data: sessionsData, error } = await supabase
         .from('chat_sessions')
         .select('*')
         .eq('user_id', user?.id)
@@ -80,16 +85,37 @@ export function PoliChat() {
         throw error;
       }
 
-      console.log('Retrieved sessions:', data?.length || 0);
-      const formattedSessions: ChatSession[] = data.map((session) => ({
-        id: session.id,
-        title: session.title || 'Untitled Chat',
-        lastMessage: '', // Default value since it doesn't exist in the schema
-        timestamp: new Date(session.created_at || new Date()),
-        isActive: session.id === currentSessionId,
+      console.log('Retrieved sessions:', sessionsData?.length || 0);
+      
+      if (!sessionsData || sessionsData.length === 0) {
+        setChatSessions([]);
+        return;
+      }
+      
+      // For each session, get the last message
+      const sessionsWithMessages = await Promise.all(sessionsData.map(async (session) => {
+        // Get the last message for this session
+        const { data: messagesData } = await supabase
+          .from('chat_messages')
+          .select('*')
+          .eq('session_id', session.id)
+          .order('timestamp', { ascending: false })
+          .limit(1);
+          
+        const lastMessage = messagesData && messagesData.length > 0 
+          ? messagesData[0].content.substring(0, 30) + (messagesData[0].content.length > 30 ? '...' : '') 
+          : '';
+          
+        return {
+          id: session.id,
+          title: session.title || 'Untitled Chat',
+          lastMessage: lastMessage,
+          timestamp: new Date(session.created_at || new Date()),
+          isActive: session.id === currentSessionId,
+        };
       }));
 
-      setChatSessions(formattedSessions);
+      setChatSessions(sessionsWithMessages);
     } catch (error) {
       console.error('Error fetching chat sessions:', error);
       toast({
@@ -188,11 +214,11 @@ export function PoliChat() {
       console.log('Loaded messages:', data?.length || 0);
       
       // Format messages for the UI
-      const formattedMessages: Message[] = data.map(msg => ({
+      const formattedMessages: Message[] = data?.map(msg => ({
         type: msg.sender === 'user' ? 'user' : 'bot',
         content: msg.content || "",
         timestamp: new Date(msg.timestamp || new Date())
-      }));
+      })) || [];
 
       setMessages(formattedMessages);
       setCurrentSessionId(sessionId);
@@ -250,6 +276,10 @@ export function PoliChat() {
         title: "Success",
         description: "Chat history deleted successfully.",
       });
+      
+      // Refresh the chat sessions list to ensure it's up to date
+      fetchChatSessions();
+      
     } catch (error) {
       console.error('Error deleting chat session:', error);
       toast({

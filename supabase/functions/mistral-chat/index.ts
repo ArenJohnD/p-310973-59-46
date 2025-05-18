@@ -17,7 +17,10 @@ serve(async (req) => {
   // Initialize Supabase client
   const supabaseUrl = Deno.env.get("SUPABASE_URL") as string;
   const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY") as string;
-  const supabase = createClient(supabaseUrl, supabaseAnonKey);
+  const supabaseServiceRole = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") as string;
+  
+  // Use service role key for admin privileges to bypass RLS
+  const supabase = createClient(supabaseUrl, supabaseServiceRole || supabaseAnonKey);
   
   const openrouterApiKey = Deno.env.get('OPENROUTER_API_KEY');
   const mistralApiKey = Deno.env.get('MISTRAL_API_KEY');
@@ -133,10 +136,11 @@ serve(async (req) => {
             
           if (!sessionExists) {
             console.log('Creating new chat session');
-            // Create the session if it doesn't exist
-            const userMessage = messages[messages.length - 1];
-            const sessionTitle = userMessage.sender === 'user' 
-              ? userMessage.text.substring(0, 50) + (userMessage.text.length > 50 ? '...' : '')
+            // Get the most recent user message for the title
+            const userMessages = messages.filter(msg => msg.sender === 'user');
+            const latestUserMsg = userMessages[userMessages.length - 1];
+            const sessionTitle = latestUserMsg 
+              ? latestUserMsg.text.substring(0, 50) + (latestUserMsg.text.length > 50 ? '...' : '')
               : 'New Chat';
               
             await supabase
@@ -149,16 +153,17 @@ serve(async (req) => {
           }
         }
         
-        // Find the most recent user message
-        const userMessage = messages.find(msg => msg.sender === 'user');
+        // Get the last user message (the one being responded to)
+        const userMessages = messages.filter(msg => msg.sender === 'user');
+        const latestUserMsg = userMessages[userMessages.length - 1];
         
         // Save the user message if it exists
-        if (userMessage) {
-          console.log('Saving user message:', userMessage.text.substring(0, 20) + '...');
+        if (latestUserMsg) {
+          console.log('Saving user message:', latestUserMsg.text.substring(0, 20) + '...');
           const { error: userMsgError } = await supabase.from('chat_messages').insert({
             session_id: sessionId,
             sender: 'user',
-            content: userMessage.text,
+            content: latestUserMsg.text,
             timestamp: new Date().toISOString()
           });
           
@@ -181,7 +186,7 @@ serve(async (req) => {
         }
         
         // Update the session's title if it's a new session
-        if (sessionId) {
+        if (sessionId && latestUserMsg) {
           const { data: sessionData } = await supabase
             .from('chat_sessions')
             .select('title')
@@ -189,7 +194,7 @@ serve(async (req) => {
             .single();
             
           if (sessionData && sessionData.title === 'New Chat') {
-            const userQuery = userMessage.text;
+            const userQuery = latestUserMsg.text;
             await supabase.from('chat_sessions').update({
               title: userQuery.substring(0, 50) + (userQuery.length > 50 ? '...' : ''),
             }).eq('id', sessionId);
