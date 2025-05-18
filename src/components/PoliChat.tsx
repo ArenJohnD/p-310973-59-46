@@ -1,4 +1,5 @@
-import { useState } from "react";
+
+import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   MessageCircle,
@@ -12,6 +13,8 @@ import {
   ChevronRight,
   ChevronDown,
   ChevronUp,
+  PlusCircle,
+  Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,6 +22,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/components/ui/use-toast";
+import { useAuth } from "@/context/AuthContext";
 
 interface Message {
   type: "user" | "bot";
@@ -31,6 +35,7 @@ interface ChatSession {
   title: string;
   lastMessage: string;
   timestamp: Date;
+  isActive?: boolean;
 }
 
 export function PoliChat() {
@@ -38,39 +43,238 @@ export function PoliChat() {
   const [isMaximized, setIsMaximized] = useState(false);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
-  const [chatSessions, setChatSessions] = useState<ChatSession[]>([
-    {
-      id: "1",
-      title: "Policy Discussion",
-      lastMessage: "Here are the academic policies you requested...",
-      timestamp: new Date(Date.now() - 1000 * 60 * 5), // 5 minutes ago
-    },
-    {
-      id: "2",
-      title: "Admission Requirements",
-      lastMessage: "The admission requirements include...",
-      timestamp: new Date(Date.now() - 1000 * 60 * 60), // 1 hour ago
-    },
-  ]);
+  const [chatSessions, setChatSessions] = useState<ChatSession[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
+  const { user } = useAuth();
 
+  // Fetch chat sessions when component mounts
+  useEffect(() => {
+    if (isOpen && user) {
+      fetchChatSessions();
+    }
+  }, [isOpen, user]);
+
+  // Auto-scroll to bottom when messages change
+  useEffect(() => {
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [messages]);
+
+  // Fetch chat sessions from Supabase
+  const fetchChatSessions = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('chat_sessions')
+        .select('*')
+        .eq('user_id', user?.id)
+        .order('updated_at', { ascending: false });
+
+      if (error) {
+        throw error;
+      }
+
+      const formattedSessions: ChatSession[] = data.map((session) => ({
+        id: session.id,
+        title: session.title || 'Untitled Chat',
+        lastMessage: session.last_message || '',
+        timestamp: new Date(session.updated_at || session.created_at),
+        isActive: session.id === currentSessionId,
+      }));
+
+      setChatSessions(formattedSessions);
+    } catch (error) {
+      console.error('Error fetching chat sessions:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load chat history.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Create a new chat session
+  const createNewChatSession = async () => {
+    try {
+      // Create a new chat session in the database
+      const { data, error } = await supabase
+        .from('chat_sessions')
+        .insert({
+          title: 'New Chat',
+          user_id: user?.id,
+          last_message: ''
+        })
+        .select('*')
+        .single();
+
+      if (error) {
+        throw error;
+      }
+
+      // Set as current session and clear messages
+      setCurrentSessionId(data.id);
+      setMessages([]);
+      
+      // Add to chat sessions list
+      const newSession: ChatSession = {
+        id: data.id,
+        title: 'New Chat',
+        lastMessage: '',
+        timestamp: new Date(),
+        isActive: true,
+      };
+
+      setChatSessions((prev) => {
+        const updated = prev.map(s => ({ ...s, isActive: false }));
+        return [newSession, ...updated];
+      });
+    } catch (error) {
+      console.error('Error creating new chat session:', error);
+      toast({
+        title: "Error",
+        description: "Failed to create a new chat.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Load messages for a specific chat session
+  const loadChatSession = async (sessionId: string) => {
+    try {
+      setIsLoading(true);
+
+      // Update active session in UI immediately
+      setChatSessions(prev => 
+        prev.map(session => ({
+          ...session,
+          isActive: session.id === sessionId
+        }))
+      );
+      
+      // Fetch messages for this session
+      const { data, error } = await supabase
+        .from('chat_messages')
+        .select('*')
+        .eq('session_id', sessionId)
+        .order('created_at', { ascending: true });
+
+      if (error) {
+        throw error;
+      }
+
+      // Format messages for the UI
+      const formattedMessages: Message[] = data.map(msg => ({
+        type: msg.sender === 'user' ? 'user' : 'bot',
+        content: msg.content,
+        timestamp: new Date(msg.created_at)
+      }));
+
+      setMessages(formattedMessages);
+      setCurrentSessionId(sessionId);
+    } catch (error) {
+      console.error('Error loading chat session:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load chat messages.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Delete a chat session
+  const deleteChatSession = async (sessionId: string, e: React.MouseEvent) => {
+    e.stopPropagation(); // Prevent triggering the parent button click
+    
+    try {
+      // Delete the chat session and all its messages (cascading delete should be set up in the database)
+      const { error } = await supabase
+        .from('chat_sessions')
+        .delete()
+        .eq('id', sessionId);
+
+      if (error) {
+        throw error;
+      }
+
+      // Remove from UI
+      setChatSessions(prev => prev.filter(session => session.id !== sessionId));
+      
+      // Clear current messages if the deleted session was the active one
+      if (currentSessionId === sessionId) {
+        setMessages([]);
+        setCurrentSessionId(null);
+      }
+
+      toast({
+        title: "Success",
+        description: "Chat history deleted successfully.",
+      });
+    } catch (error) {
+      console.error('Error deleting chat session:', error);
+      toast({
+        title: "Error",
+        description: "Failed to delete chat history.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Handle sending a message
   const handleSend = async () => {
     if (!input.trim()) return;
-
+    
+    let sessionId = currentSessionId;
     const userMessage = input.trim();
     setInput("");
     
-    // Add user message to chat
-    setMessages((prev) => [
-      ...prev,
-      { type: "user", content: userMessage, timestamp: new Date() },
-    ]);
-    
-    setIsLoading(true);
-
     try {
+      // If no active session, create one
+      if (!sessionId && user) {
+        const { data, error } = await supabase
+          .from('chat_sessions')
+          .insert({
+            title: userMessage.substring(0, 50) + (userMessage.length > 50 ? '...' : ''),
+            user_id: user.id,
+            last_message: ''
+          })
+          .select('*')
+          .single();
+          
+        if (error) throw error;
+        sessionId = data.id;
+        setCurrentSessionId(data.id);
+        
+        // Add to chat sessions list
+        const newSession: ChatSession = {
+          id: data.id,
+          title: userMessage.substring(0, 50) + (userMessage.length > 50 ? '...' : ''),
+          lastMessage: '',
+          timestamp: new Date(),
+          isActive: true,
+        };
+        
+        setChatSessions(prev => {
+          const updated = prev.map(s => ({ ...s, isActive: false }));
+          return [newSession, ...updated];
+        });
+      }
+      
+      // Add user message to chat
+      const newUserMessage = {
+        type: "user" as const,
+        content: userMessage,
+        timestamp: new Date()
+      };
+      
+      setMessages((prev) => [...prev, newUserMessage]);
+      setIsLoading(true);
+
       // Format messages for Mistral API
       const formattedMessages = messages.map(msg => ({
         id: Date.now().toString() + Math.random().toString(),
@@ -91,7 +295,9 @@ export function PoliChat() {
       const response = await supabase.functions.invoke('mistral-chat', {
         body: { 
           messages: formattedMessages,
-          context: "" 
+          context: "",
+          sessionId,
+          userId: user?.id
         }
       });
 
@@ -102,15 +308,39 @@ export function PoliChat() {
 
       const { answer } = response.data;
       
+      // Update the chat session title if it's a new session
+      if (chatSessions.find(s => s.id === sessionId)?.title === 'New Chat') {
+        const updatedTitle = userMessage.substring(0, 50) + (userMessage.length > 50 ? '...' : '');
+        await supabase
+          .from('chat_sessions')
+          .update({ title: updatedTitle })
+          .eq('id', sessionId);
+
+        setChatSessions(prev => prev.map(session => 
+          session.id === sessionId 
+            ? { ...session, title: updatedTitle }
+            : session
+        ));
+      }
+      
       // Add bot response to chat
-      setMessages((prev) => [
-        ...prev,
-        {
-          type: "bot",
-          content: answer,
-          timestamp: new Date(),
-        },
-      ]);
+      const botResponse = {
+        type: "bot" as const,
+        content: answer,
+        timestamp: new Date(),
+      };
+      setMessages((prev) => [...prev, botResponse]);
+
+      // Update session in the list with new last message
+      setChatSessions(prev => prev.map(session => 
+        session.id === sessionId 
+          ? { 
+              ...session,
+              lastMessage: answer.substring(0, 100) + (answer.length > 100 ? '...' : ''),
+              timestamp: new Date()
+            }
+          : session
+      ));
     } catch (error) {
       console.error('Chat error:', error);
       toast({
@@ -162,7 +392,7 @@ export function PoliChat() {
               maxHeight: "90vh",
               zIndex: 50,
               ...(isMaximized
-                ? { top: "2rem", left: "12.5%", transform: "translateX(-50%)" }
+                ? { top: "2rem", left: "50%", transform: "translateX(-50%)" }
                 : { bottom: "6rem", right: "2.5rem" }),
             }}
             className="bg-white rounded-xl shadow-2xl border border-gray-200 overflow-hidden flex flex-col"
@@ -186,23 +416,62 @@ export function PoliChat() {
                           <History className="h-5 w-5 text-[rgba(49,159,67,1)]" />
                           Chat History
                         </h3>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 w-8 p-0 rounded-full hover:bg-[rgba(49,159,67,0.1)] text-[rgba(49,159,67,1)]"
+                          onClick={createNewChatSession}
+                        >
+                          <PlusCircle className="h-4 w-4" />
+                          <span className="sr-only">New Chat</span>
+                        </Button>
                       </div>
                       <ScrollArea className="flex-1">
                         <div className="p-2 space-y-2">
-                          {chatSessions.map((session) => (
-                            <button
-                              key={session.id}
-                              className="w-full p-3 rounded-lg hover:bg-white text-left transition-colors border border-transparent hover:border-gray-200"
-                            >
-                              <div className="flex flex-col gap-1">
-                                <span className="font-medium text-gray-900 truncate">{session.title}</span>
-                                <span className="text-sm text-gray-500 truncate">{session.lastMessage}</span>
-                                <span className="text-xs text-gray-400">{session.timestamp.toLocaleString()}</span>
-                              </div>
-                            </button>
-                          ))}
+                          {chatSessions.length === 0 ? (
+                            <div className="p-4 text-center text-gray-500 text-sm">
+                              No chat history yet
+                            </div>
+                          ) : (
+                            chatSessions.map((session) => (
+                              <button
+                                key={session.id}
+                                onClick={() => loadChatSession(session.id)}
+                                className={cn(
+                                  "w-full p-3 rounded-lg text-left transition-colors relative border",
+                                  session.isActive
+                                    ? "bg-[rgba(49,159,67,0.1)] border-[rgba(49,159,67,0.3)]"
+                                    : "hover:bg-white border-transparent hover:border-gray-200"
+                                )}
+                              >
+                                <div className="flex flex-col gap-1 pr-7">
+                                  <span className="font-medium text-gray-900 truncate">{session.title}</span>
+                                  <span className="text-sm text-gray-500 truncate">{session.lastMessage}</span>
+                                  <span className="text-xs text-gray-400">{session.timestamp.toLocaleString()}</span>
+                                </div>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-6 w-6 p-0 absolute top-2 right-2 text-gray-400 hover:text-red-500 hover:bg-transparent"
+                                  onClick={(e) => deleteChatSession(session.id, e)}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </button>
+                            ))
+                          )}
                         </div>
                       </ScrollArea>
+                      <div className="p-3 border-t border-gray-200">
+                        <Button
+                          variant="outline" 
+                          className="w-full border-[rgba(49,159,67,1)] text-[rgba(49,159,67,1)] hover:bg-[rgba(49,159,67,0.1)] hover:text-[rgba(49,159,67,1)]"
+                          onClick={createNewChatSession}
+                        >
+                          <PlusCircle className="h-4 w-4 mr-2" />
+                          New Chat
+                        </Button>
+                      </div>
                     </motion.div>
                   )}
                 </AnimatePresence>
@@ -271,20 +540,52 @@ export function PoliChat() {
                       transition={{ duration: 0.2 }}
                       className="border-b border-gray-200 bg-gray-50 overflow-hidden flex-shrink-0"
                     >
+                      <div className="p-2 flex justify-between items-center">
+                        <h3 className="text-sm font-medium">Recent Chats</h3>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 w-6 p-0 rounded-full hover:bg-[rgba(49,159,67,0.1)] text-[rgba(49,159,67,1)]"
+                          onClick={createNewChatSession}
+                        >
+                          <PlusCircle className="h-4 w-4" />
+                          <span className="sr-only">New Chat</span>
+                        </Button>
+                      </div>
                       <ScrollArea className="max-h-[150px]">
                         <div className="p-2 space-y-1">
-                          {chatSessions.map((session) => (
-                            <button
-                              key={session.id}
-                              className="w-full p-2 rounded-md hover:bg-white text-left transition-colors border border-transparent hover:border-gray-200 text-xs"
-                            >
-                              <div className="flex flex-col gap-0.5">
-                                <span className="font-medium text-gray-900 truncate">{session.title}</span>
-                                <span className="text-gray-500 truncate">{session.lastMessage}</span>
-                                <span className="text-gray-400">{session.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                              </div>
-                            </button>
-                          ))}
+                          {chatSessions.length === 0 ? (
+                            <div className="p-2 text-center text-gray-500 text-xs">
+                              No chat history yet
+                            </div>
+                          ) : (
+                            chatSessions.map((session) => (
+                              <button
+                                key={session.id}
+                                onClick={() => loadChatSession(session.id)}
+                                className={cn(
+                                  "w-full p-2 rounded-md text-left transition-colors border text-xs relative",
+                                  session.isActive
+                                    ? "bg-[rgba(49,159,67,0.1)] border-[rgba(49,159,67,0.3)]"
+                                    : "hover:bg-white border-transparent hover:border-gray-200"
+                                )}
+                              >
+                                <div className="flex flex-col gap-0.5 pr-6">
+                                  <span className="font-medium text-gray-900 truncate">{session.title}</span>
+                                  <span className="text-gray-500 truncate">{session.lastMessage}</span>
+                                  <span className="text-gray-400">{session.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                                </div>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-5 w-5 p-0 absolute top-1 right-1 text-gray-400 hover:text-red-500 hover:bg-transparent"
+                                  onClick={(e) => deleteChatSession(session.id, e)}
+                                >
+                                  <Trash2 className="h-3 w-3" />
+                                </Button>
+                              </button>
+                            ))
+                          )}
                         </div>
                       </ScrollArea>
                     </motion.div>
@@ -318,6 +619,7 @@ export function PoliChat() {
                         </div>
                       </div>
                     )}
+                    <div ref={messagesEndRef} />
                   </div>
                 </ScrollArea>
 
@@ -331,7 +633,11 @@ export function PoliChat() {
                       className="flex-1 text-sm h-9"
                       disabled={isLoading}
                     />
-                    <Button type="submit" disabled={!input.trim() || isLoading} className="bg-[rgba(49,159,67,1)] hover:bg-[rgba(39,139,57,1)] h-9 px-3 disabled:opacity-50">
+                    <Button 
+                      type="submit" 
+                      disabled={!input.trim() || isLoading} 
+                      className="bg-[rgba(49,159,67,1)] hover:bg-[rgba(39,139,57,1)] h-9 px-3 disabled:opacity-50"
+                    >
                       {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                     </Button>
                   </form>

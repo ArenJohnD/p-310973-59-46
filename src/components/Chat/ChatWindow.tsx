@@ -1,23 +1,76 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Message } from "@/types/chat";
 import { ChatMessage } from "./ChatMessage";
 import { ChatInput } from "./ChatInput";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/components/ui/use-toast";
 import { Loader2 } from "lucide-react";
+import { useAuth } from "@/context/AuthContext";
 
 interface ChatWindowProps {
   welcomeMessage?: string;
+  sessionId?: string;
 }
 
-export function ChatWindow({ welcomeMessage = "Hello! How can I help you?" }: ChatWindowProps) {
+export function ChatWindow({ 
+  welcomeMessage = "Hello! How can I help you?", 
+  sessionId: initialSessionId 
+}: ChatWindowProps) {
   const [messages, setMessages] = useState<Message[]>([
     { id: "0", text: welcomeMessage, sender: "bot", timestamp: new Date() }
   ]);
   const [isLoading, setIsLoading] = useState(false);
   const [citations, setCitations] = useState<Array<{ content: string; similarity: number }>>([]);
+  const [sessionId, setSessionId] = useState<string | undefined>(initialSessionId);
   const { toast } = useToast();
+  const { user } = useAuth();
+
+  // Load previous messages if sessionId is provided
+  useEffect(() => {
+    const loadChatSession = async () => {
+      if (!sessionId) return;
+
+      try {
+        setIsLoading(true);
+        
+        const { data, error } = await supabase
+          .from('chat_messages')
+          .select('*')
+          .eq('session_id', sessionId)
+          .order('created_at', { ascending: true });
+
+        if (error) {
+          throw error;
+        }
+
+        if (data && data.length > 0) {
+          const formattedMessages: Message[] = data.map(msg => ({
+            id: msg.id,
+            text: msg.content,
+            sender: msg.sender === 'user' ? 'user' : 'bot',
+            timestamp: new Date(msg.created_at)
+          }));
+          
+          // Replace the welcome message with the actual chat history
+          setMessages(formattedMessages);
+        }
+      } catch (error) {
+        console.error('Error loading chat session:', error);
+        toast({
+          title: "Error",
+          description: "Failed to load chat messages.",
+          variant: "destructive",
+        });
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    if (sessionId) {
+      loadChatSession();
+    }
+  }, [sessionId, toast]);
 
   const handleSend = async (text: string) => {
     try {
@@ -30,10 +83,33 @@ export function ChatWindow({ welcomeMessage = "Hello! How can I help you?" }: Ch
       };
       setMessages(prev => [...prev, userMessage]);
 
+      // Check if we need to create a new session
+      let currentSessionId = sessionId;
+      if (!currentSessionId && user) {
+        const { data, error } = await supabase
+          .from('chat_sessions')
+          .insert({
+            title: text.substring(0, 50) + (text.length > 50 ? '...' : ''),
+            user_id: user.id,
+            last_message: ''
+          })
+          .select('id')
+          .single();
+          
+        if (error) {
+          console.error('Error creating chat session:', error);
+        } else {
+          currentSessionId = data.id;
+          setSessionId(currentSessionId);
+        }
+      }
+
       // Call the Mistral chat edge function with all previous messages
       const response = await supabase.functions.invoke('mistral-chat', {
         body: { 
-          messages: [...messages, userMessage]
+          messages: [...messages, userMessage],
+          sessionId: currentSessionId,
+          userId: user?.id
         }
       });
 
