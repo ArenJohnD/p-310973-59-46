@@ -198,8 +198,79 @@ export type Database = {
         }
         Relationships: []
       }
+      user_activity: {
+        Row: {
+          created_at: string | null
+          id: string
+          is_active: boolean | null
+          last_active_at: string | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          last_active_at?: string | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          last_active_at?: string | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_blocks: {
+        Row: {
+          blocked_at: string | null
+          created_at: string | null
+          id: string
+          is_blocked: boolean | null
+          reason: string | null
+          unblocked_at: string | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          blocked_at?: string | null
+          created_at?: string | null
+          id?: string
+          is_blocked?: boolean | null
+          reason?: string | null
+          unblocked_at?: string | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          blocked_at?: string | null
+          created_at?: string | null
+          id?: string
+          is_blocked?: boolean | null
+          reason?: string | null
+          unblocked_at?: string | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
+      auth_debug_info: {
+        Row: {
+          email: string | null
+          has_select_policies: boolean | null
+          has_update_policies: boolean | null
+          id: string | null
+          is_blocked: boolean | null
+          role: Database["public"]["Enums"]["app_role"] | null
+        }
+        Relationships: []
+      }
       policy_view_stats: {
         Row: {
           category_id: string | null
@@ -228,6 +299,10 @@ export type Database = {
       }
     }
     Functions: {
+      custom_access_token_hook: {
+        Args: { event: Json }
+        Returns: Json
+      }
       delete_user: {
         Args: { user_id: string }
         Returns: undefined
@@ -244,6 +319,21 @@ export type Database = {
           is_blocked: boolean
           profile_last_sign_in_at: string
           is_active: boolean
+        }[]
+      }
+      get_users_with_activity: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          id: string
+          email: string
+          full_name: string
+          role: string
+          created_at: string
+          last_sign_in_at: string
+          profile_last_sign_in_at: string
+          is_blocked: boolean
+          is_active: boolean
+          last_active_at: string
         }[]
       }
       has_role: {
@@ -271,6 +361,23 @@ export type Database = {
       }
       toggle_user_block_status: {
         Args: { user_id: string; is_blocked: boolean }
+        Returns: boolean
+      }
+      toggle_user_block_status_v2: {
+        Args: { p_user_id: string; p_is_blocked: boolean }
+        Returns: {
+          blocked_at: string | null
+          created_at: string | null
+          id: string
+          is_blocked: boolean | null
+          reason: string | null
+          unblocked_at: string | null
+          updated_at: string | null
+          user_id: string
+        }[]
+      }
+      toggle_user_blocking: {
+        Args: { target_user_id: string; should_block: boolean }
         Returns: boolean
       }
       update_user_activity_status: {
