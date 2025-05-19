@@ -8,23 +8,24 @@ import { HelpCircle } from "lucide-react";
 
 const faqs = [
   {
-    question:
-      "What is the attendance policy, and how many absences are allowed?",
-    answer: "Details about attendance policy will be displayed here.",
+    question: "What are the dress code rules?",
+    answer: "Students must wear the prescribed uniform during school days. Civilian attire is allowed only on Saturdays/summer terms if decent. Violations may lead to warnings or disciplinary action.",
   },
   {
-    question: "What are the consequences of violating the dress code policy?",
-    answer: "Information about dress code violations will be shown here.",
+    question: "Can students form organizations?",
+    answer: "Yes, but only approved groups. Unauthorized fraternities/sororities or hazing may result in expulsion.",
   },
   {
-    question:
-      "Can I appeal a disciplinary decision made under the school's policies?",
-    answer: "Appeal process information will be provided here.",
+    question: "Is smoking allowed on campus?",
+    answer: "No. First-time offenders face student service hours; repeat offenders risk suspension or exclusion.",
   },
   {
-    question:
-      "What is the school's policy on academic integrity and plagiarism?",
-    answer: "Academic integrity guidelines will be displayed here.",
+    question: "What happens if I lose my student ID?",
+    answer: "You must immediately apply for a replacement at the Registrar's Office. Using a defaced or tampered ID is prohibited and may result in disciplinary action.",
+  },
+  {
+    question: "What happens if I exceed the allowed number of absences?",
+    answer: "Students who miss more than 20% of class meetings may automatically fail the course, unless they receive special approval from school authorities with valid reasons.",
   },
 ];
 
