@@ -27,20 +27,13 @@ export function StatisticsChart({ data }: StatisticsChartProps) {
     return [...data].sort((a, b) => b.viewCount - a.viewCount);
   }, [data]);
 
-  // Chart configuration
+  // Chart configuration - removed uniqueViewers from config
   const chartConfig = {
     views: {
       label: "Views",
       theme: {
         light: '#319F43',
         dark: '#319F43',
-      }
-    },
-    uniqueViewers: {
-      label: "Unique Viewers",
-      theme: {
-        light: '#4CAF50',
-        dark: '#4CAF50',
       }
     }
   };
@@ -74,7 +67,6 @@ export function StatisticsChart({ data }: StatisticsChartProps) {
             <Tooltip content={<ChartTooltipContent />} />
             <Legend />
             <Bar dataKey="viewCount" name="views" fill="var(--color-views)" />
-            <Bar dataKey="uniqueViewers" name="uniqueViewers" fill="var(--color-uniqueViewers)" />
           </RechartsBarChart>
         </ChartContainer>
       </div>
