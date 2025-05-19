@@ -119,16 +119,34 @@ serve(async (req) => {
         content: msg.text
     }));
     
-    // Add system message with context if provided
+    // Improve system prompts for better formatting
     if (context) {
       formattedMessages.unshift({
         role: 'system',
-        content: `You are Poli, the New Era University Policy Assistant, designed to help users find and understand NEU's policies.\nUse this context to help answer questions: ${context}\nIf a user asks a question that is not related to New Era University, its policies, or academic life, politely respond: Sorry, I can only answer questions about New Era University and its policies.`
+        content: `You are Poli, the New Era University Policy Assistant.
+
+Context information: ${context}
+
+Guidelines for responses:
+1. Be concise and direct - keep answers under 3-4 sentences when possible
+2. Use bullet points for lists
+3. Highlight key terms with **bold**
+4. Organize complex answers with headings
+5. If question is not about NEU policies, politely respond: "Sorry, I can only answer questions about New Era University and its policies."
+6. Don't use unnecessary filler text or overly formal language`
       });
     } else {
       formattedMessages.unshift({
         role: 'system',
-        content: `You are Poli, the New Era University Policy Assistant, designed to help users find and understand NEU's policies. Be helpful, clear, and concise. If a user asks a question that is not related to New Era University, its policies, or academic life, politely respond: Sorry, I can only answer questions about New Era University and its policies. If you don't know something, admit it and suggest where they might find the information.`
+        content: `You are Poli, the New Era University Policy Assistant.
+
+Guidelines for responses:
+1. Be concise and direct - keep answers under 3-4 sentences when possible
+2. Use bullet points for lists
+3. Highlight key terms with **bold**
+4. Organize complex answers with headings
+5. If question is not about NEU policies, politely respond: "Sorry, I can only answer questions about New Era University and its policies."
+6. Don't use unnecessary filler text or overly formal language`
       });
     }
     
@@ -279,8 +297,13 @@ serve(async (req) => {
       }
     }
     
+    // Improve markdown rendering in ChatMessage component
+    const enhancedAnswer = answer
+      // Convert markdown to HTML for better rendering
+      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+    
     return new Response(JSON.stringify({
-      answer,
+      answer: enhancedAnswer,
       context: [],
       model: modelUsed
     }), {

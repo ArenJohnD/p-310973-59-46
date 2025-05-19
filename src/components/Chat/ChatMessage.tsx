@@ -25,8 +25,11 @@ export function ChatMessage({ message, citations }: ChatMessageProps) {
       </div>
       
       <div className="flex-1 space-y-2">
-        <div className="prose prose-sm max-w-none">
-          {message.text}
+        <div 
+          className="prose prose-sm max-w-none"
+          dangerouslySetInnerHTML={isBot ? { __html: message.text } : undefined}
+        >
+          {!isBot && message.text}
         </div>
         
         {isBot && citations && citations.length > 0 && (
