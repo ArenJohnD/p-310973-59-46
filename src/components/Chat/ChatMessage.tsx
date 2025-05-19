@@ -11,6 +11,11 @@ interface ChatMessageProps {
 export function ChatMessage({ message, citations }: ChatMessageProps) {
   const isBot = message.sender === 'bot';
 
+  // Function to convert markdown-style bold (**text**) to HTML bold tags
+  const formatMarkdownText = (text: string) => {
+    return text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+  };
+
   return (
     <div className={cn(
       "flex gap-3 p-4",
@@ -27,7 +32,7 @@ export function ChatMessage({ message, citations }: ChatMessageProps) {
       <div className="flex-1 space-y-2">
         <div 
           className="prose prose-sm max-w-none"
-          dangerouslySetInnerHTML={isBot ? { __html: message.text } : undefined}
+          dangerouslySetInnerHTML={isBot ? { __html: formatMarkdownText(message.text) } : undefined}
         >
           {!isBot && message.text}
         </div>
