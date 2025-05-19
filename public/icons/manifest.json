@@ -1,0 +1,17 @@
+{
+  "name": "NEUPoliSeek",
+  "short_name": "NEUPoliSeek",
+  "description": "New Era University Policy Management System",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#008000",
+  "icons": [
+    {
+      "src": "/img/neu-logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+} 
