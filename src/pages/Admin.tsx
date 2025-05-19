@@ -222,7 +222,7 @@ const Admin = () => {
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-b from-[rgba(49,159,67,0.1)] via-[#F1F1F1] to-white">
       <Header />
-      <main className="container mx-auto px-4 flex-1">
+      <main className="container mx-auto px-4 flex-1 pb-12">
         <div className="max-w-[1200px] mx-auto">
           {/* Dashboard Header */}
           <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-sm mt-8 p-6 sm:p-8 border border-[rgba(49,159,67,0.2)]">
@@ -238,7 +238,7 @@ const Admin = () => {
           </div>
 
           {/* Main Content */}
-          <div className="mt-8">
+          <div className="mt-8 mb-8">
             <Tabs defaultValue="categories" className="space-y-8">
               <TabsList className="inline-flex h-auto p-1.5 items-center justify-start gap-2 rounded-lg bg-white/60 backdrop-blur-sm w-fit">
                 <TabsTrigger 
