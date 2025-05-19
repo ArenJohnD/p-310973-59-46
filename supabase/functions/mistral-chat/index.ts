@@ -130,7 +130,7 @@ Context information: ${context}
 Guidelines for responses:
 1. Be concise and direct - keep answers under 3-4 sentences when possible
 2. Use bullet points for lists
-3. Highlight key terms with **bold**
+3. Use markdown bold syntax for key terms (**term**)
 4. Organize complex answers with headings
 5. If question is not about NEU policies, politely respond: "Sorry, I can only answer questions about New Era University and its policies."
 6. Don't use unnecessary filler text or overly formal language`
@@ -143,7 +143,7 @@ Guidelines for responses:
 Guidelines for responses:
 1. Be concise and direct - keep answers under 3-4 sentences when possible
 2. Use bullet points for lists
-3. Highlight key terms with **bold**
+3. Use markdown bold syntax for key terms (**term**)
 4. Organize complex answers with headings
 5. If question is not about NEU policies, politely respond: "Sorry, I can only answer questions about New Era University and its policies."
 6. Don't use unnecessary filler text or overly formal language`
@@ -297,10 +297,11 @@ Guidelines for responses:
       }
     }
     
-    // Improve markdown rendering in ChatMessage component
+    // Process the response to handle markdown formatting
     const enhancedAnswer = answer
-      // Convert markdown to HTML for better rendering
-      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+      .replace(/<strong>/g, "**")
+      .replace(/<\/strong>/g, "**");
     
     return new Response(JSON.stringify({
       answer: enhancedAnswer,
