@@ -7,7 +7,7 @@ import { UserManagement } from "@/components/UserManagement";
 import { PolicyStatistics } from "@/components/PolicyStatistics";
 import { useAuth } from "@/context/AuthContext";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Loader2, LayoutGrid, BookOpen, Users, BarChart } from "lucide-react";
+import { Loader2, LayoutGrid, BookOpen, Users, BarChart, ShieldCheck } from "lucide-react";
 
 interface PolicyCategory {
   id: string;
@@ -227,7 +227,8 @@ const Admin = () => {
           {/* Dashboard Header */}
           <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-sm mt-8 p-6 sm:p-8 border border-[rgba(49,159,67,0.2)]">
             <div className="max-w-2xl">
-              <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
+              <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 flex items-center gap-3">
+                <ShieldCheck className="h-8 w-8 text-[rgba(49,159,67,1)]" />
                 Admin Dashboard
               </h1>
               <p className="text-gray-600 mt-2">
