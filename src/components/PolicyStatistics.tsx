@@ -17,6 +17,7 @@ import {
 import { DatePickerWithRange } from "./DatePickerWithRange";
 import { Badge } from "@/components/ui/badge";
 import { RefreshCw, Loader2 } from "lucide-react";
+import { StatisticsChart } from "./StatisticsChart";
 
 interface ViewStats {
   currentPeriodData: Array<{
@@ -385,6 +386,30 @@ export function PolicyStatistics() {
             )}
           </div>
         </div>
+      </div>
+
+      {/* Statistics Chart Section - New Addition */}
+      <div className="bg-white border border-gray-200 rounded-lg p-6">
+        {isLoading ? (
+          <div className="flex items-center justify-center h-64">
+            <div className="flex flex-col items-center gap-3">
+              <Loader2 className="h-8 w-8 animate-spin text-[rgba(49,159,67,1)]" />
+              <p className="text-sm text-gray-600">Loading chart data...</p>
+            </div>
+          </div>
+        ) : processedStats.length > 0 ? (
+          <StatisticsChart data={processedStats} />
+        ) : (
+          <div className="flex flex-col items-center justify-center h-64 text-center">
+            <div className="p-4 bg-gray-50 rounded-full mb-4">
+              <BarChart className="h-8 w-8 text-gray-400" />
+            </div>
+            <h3 className="text-lg font-medium text-gray-900">No Chart Data Available</h3>
+            <p className="text-sm text-gray-500 max-w-sm mt-2">
+              There are no policy views recorded for this time period to display in the chart.
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Statistics Grid */}
