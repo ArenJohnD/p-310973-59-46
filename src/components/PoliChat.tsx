@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -65,6 +64,12 @@ export function PoliChat() {
       messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
     }
   }, [messages]);
+
+  // Force rerender when maximized state changes to ensure proper positioning
+  useEffect(() => {
+    // This empty effect will cause a rerender when isMaximized changes
+    // which will update the position styles appropriately
+  }, [isMaximized]);
 
   // Fetch chat sessions from Supabase
   const fetchChatSessions = async () => {
@@ -384,7 +389,7 @@ export function PoliChat() {
   };
 
   const toggleMaximize = () => {
-    setIsMaximized(!isMaximized);
+    setIsMaximized(prev => !prev);
   };
 
   const toggleHistory = () => {
@@ -410,8 +415,26 @@ export function PoliChat() {
       <AnimatePresence>
         {isOpen && (
           <motion.div
-            initial={{ opacity: 0, y: 20, scale: 0.95 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
+            initial={{ 
+              opacity: 0, 
+              y: isMaximized ? 0 : 20, 
+              scale: 0.95,
+              top: isMaximized ? "50%" : "auto",
+              left: isMaximized ? "50%" : "auto",
+              bottom: isMaximized ? "auto" : "6rem",
+              right: isMaximized ? "auto" : "2.5rem",
+              transform: isMaximized ? "translate(-50%, -50%)" : "none"
+            }}
+            animate={{ 
+              opacity: 1, 
+              y: 0, 
+              scale: 1,
+              top: isMaximized ? "50%" : "auto",
+              left: isMaximized ? "50%" : "auto", 
+              bottom: isMaximized ? "auto" : "6rem",
+              right: isMaximized ? "auto" : "2.5rem",
+              transform: isMaximized ? "translate(-50%, -50%)" : "none"
+            }}
             exit={{ opacity: 0, y: 20, scale: 0.95 }}
             transition={{ duration: 0.2 }}
             style={{
@@ -419,11 +442,8 @@ export function PoliChat() {
               width: isMaximized ? "calc(100vw - 4rem)" : "380px",
               height: isMaximized ? "calc(100vh - 4rem)" : "600px",
               maxWidth: isMaximized ? "1400px" : "380px",
-              maxHeight: "90vh",
+              maxHeight: isMaximized ? "90vh" : "600px",
               zIndex: 50,
-              ...(isMaximized
-                ? { top: "2rem", left: "50%", transform: "translateX(-50%)" }
-                : { bottom: "6rem", right: "2.5rem" }),
             }}
             className="bg-white rounded-xl shadow-2xl border border-gray-200 overflow-hidden flex flex-col"
           >
@@ -493,17 +513,6 @@ export function PoliChat() {
                           )}
                         </div>
                       </ScrollArea>
-                      <div className="p-3 border-t border-gray-200">
-                        <Button
-                          variant="outline" 
-                          className="w-full border-[rgba(49,159,67,1)] text-[rgba(49,159,67,1)] hover:bg-[rgba(49,159,67,0.1)] hover:text-[rgba(49,159,67,1)]"
-                          onClick={createNewChatSession}
-                          disabled={isLoading}
-                        >
-                          <PlusCircle className="h-4 w-4 mr-2" />
-                          New Chat
-                        </Button>
-                      </div>
                     </motion.div>
                   )}
                 </AnimatePresence>
@@ -567,12 +576,13 @@ export function PoliChat() {
                     <motion.div
                       key="history-default"
                       initial={{ height: 0, opacity: 0 }}
-                      animate={{ height: 'auto', opacity: 1 }}
+                      animate={{ height: '180px', opacity: 1 }}
                       exit={{ height: 0, opacity: 0 }}
                       transition={{ duration: 0.2 }}
                       className="border-b border-gray-200 bg-gray-50 overflow-hidden flex-shrink-0"
+                      style={{ height: '180px', maxHeight: '180px', flexShrink: 0 }}
                     >
-                      <div className="p-2 flex justify-between items-center">
+                      <div className="p-2 flex justify-between items-center border-b border-gray-200">
                         <h3 className="text-sm font-medium">Recent Chats</h3>
                         <Button
                           variant="ghost"
@@ -585,8 +595,16 @@ export function PoliChat() {
                           <span className="sr-only">New Chat</span>
                         </Button>
                       </div>
-                      <ScrollArea className="max-h-[150px]">
-                        <div className="p-2 space-y-1">
+                      <ScrollArea 
+                        className="h-[142px]" 
+                        type="always" 
+                        scrollHideDelay={0}
+                        style={{ 
+                          '--scrollbar-size': '8px',
+                          '--scrollbar-thumb-color': 'rgba(49,159,67,0.3)'
+                        } as React.CSSProperties}
+                      >
+                        <div className="p-2 space-y-2 pr-4">
                           {chatSessions.length === 0 ? (
                             <div className="p-2 text-center text-gray-500 text-xs">
                               No chat history yet
@@ -604,9 +622,11 @@ export function PoliChat() {
                                 )}
                               >
                                 <div className="flex flex-col gap-0.5 pr-6">
-                                  <span className="font-medium text-gray-900 truncate">{session.title}</span>
+                                  <div className="flex justify-between items-center">
+                                    <span className="font-medium text-gray-900 truncate">{session.title}</span>
+                                    <span className="text-gray-400 text-[10px] flex-shrink-0">{session.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                                  </div>
                                   <span className="text-gray-500 truncate">{session.lastMessage}</span>
-                                  <span className="text-gray-400">{session.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                                 </div>
                                 <Button
                                   variant="ghost"
@@ -627,7 +647,7 @@ export function PoliChat() {
                 </AnimatePresence>
 
                 {/* Chat Messages */}
-                <ScrollArea className="flex-1 min-h-0">
+                <ScrollArea className="flex-1 min-h-0 overflow-y-auto">
                   <div className="space-y-4 p-4">
                     {messages.length === 0 && !isLoading && (
                       <div className="flex flex-col items-center justify-center h-full text-center text-gray-500 space-y-4 py-12">
@@ -687,7 +707,15 @@ export function PoliChat() {
         <motion.button
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
-          onClick={() => { setIsOpen(!isOpen); if (!isOpen) { setIsMaximized(false); setIsHistoryOpen(false); } }}
+          onClick={() => { 
+            if (isOpen) {
+              setIsOpen(false);
+            } else {
+              setIsOpen(true);
+              setIsMaximized(false);
+              setIsHistoryOpen(false);
+            }
+          }}
           className="bg-[rgba(49,159,67,1)] hover:bg-[rgba(39,139,57,1)] text-white rounded-full p-3 shadow-lg flex items-center gap-2 text-sm"
           aria-label={isOpen ? "Close Chat" : "Open Chat"}
         >
